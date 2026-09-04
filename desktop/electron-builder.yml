@@ -1,0 +1,41 @@
+# electron-builder.yml
+appId: com.coagent.audio-capture
+productName: AI面试助手
+directories:
+  output: release
+files:
+  - dist-electron/**/*
+  - dist-renderer/**/*
+  - package.json
+asar:
+  smartUnpack: true
+asarUnpack:
+  # WASAPI native addon：asar 内的 .node 无法加载，必须解包
+  - dist-electron/audio/native/**/*
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: assets/icon.ico
+  signAndEditExecutable: false
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: assets/icon.icns
+  category: public.app-category.productivity
+  # 打包后 macOS 强制要求麦克风 usage description，否则 getUserMedia 直接崩溃
+  # （屏幕录制 TCC 无对应 Info.plist key，系统选择器自带授权文案）
+  extendInfo:
+    NSMicrophoneUsageDescription: 需要访问麦克风以采集您的声音用于实时转写
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  include: installer/install.nsh
+publish:
+  provider: generic
+  url: https://update.coagent.example.com

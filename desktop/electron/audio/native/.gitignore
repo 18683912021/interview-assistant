@@ -1,0 +1,2 @@
+# node-gyp 编译产物（.node / obj / vcxproj 等）不入库
+build/

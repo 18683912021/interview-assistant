@@ -1,0 +1,12 @@
+node_modules/
+dist-renderer/
+dist-electron/
+release/
+coverage/
+*.tsbuildinfo
+*.log
+.env.local
+.DS_Store
+Thumbs.db
+# pnpm 项目，npm 的锁文件不纳入版本管理
+package-lock.json

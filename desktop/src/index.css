@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS 变量默认值（Light 模式，确保无闪烁） ── */
+:root {
+  --color-bg: #F7F8FA;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-header: rgba(255,255,255,0.85);
+  --color-text-primary: #1A1D26;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+  --color-text-inverse: #FFFFFF;
+  --color-accent: #4F46E5;
+  --color-accent-light: #EEF2FF;
+  --color-accent-soft: #E0E7FF;
+  --color-danger: #EF4444;
+  --color-danger-light: #FEF2F2;
+  --color-success: #10B981;
+  --color-success-light: #ECFDF5;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FFFBEB;
+  --color-bubble-interviewer: #F3F4F6;
+  --color-bubble-user: #DCFCE7;
+  --color-bubble-user-border: #BBF7D0;
+  --color-bubble-ai: #F0F4FF;
+  --color-bubble-ai-border: #C7D2FE;
+  --color-divider: #E5E7EB;
+  --color-divider-strong: #D1D5DB;
+  --color-skeleton: #E5E7EB;
+  --color-skeleton-shimmer: #F3F4F6;
+  --color-backdrop: rgba(0,0,0,0.35);
+}
+
+/* ── Dark ── */
+.dark {
+  --color-bg: #0F1117;
+  --color-bg-surface: #1A1D28;
+  --color-bg-elevated: #242734;
+  --color-bg-header: rgba(15,17,23,0.9);
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #94A3B8;
+  --color-text-tertiary: #64748B;
+  --color-text-inverse: #0F1117;
+  --color-accent: #818CF8;
+  --color-accent-light: #1E1B4B;
+  --color-accent-soft: #312E81;
+  --color-danger: #F87171;
+  --color-danger-light: #451A1A;
+  --color-success: #34D399;
+  --color-success-light: #064E3B;
+  --color-warning: #FBBF24;
+  --color-warning-light: #451A03;
+  --color-bubble-interviewer: #1E293B;
+  --color-bubble-user: #14532D;
+  --color-bubble-user-border: #166534;
+  --color-bubble-ai: #1E1B4B;
+  --color-bubble-ai-border: #3730A3;
+  --color-divider: #272A36;
+  --color-divider-strong: #374151;
+  --color-skeleton: #272A36;
+  --color-skeleton-shimmer: #32364A;
+  --color-backdrop: rgba(0,0,0,0.6);
+}
+
+/* ── Base ── */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 禁止文本选中（桌面端 App 风格） */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 允许输入框内选中 */
+input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ── 滚动条 ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-divider-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* ── 动画 ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}

@@ -1,0 +1,1155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前端 + Electron + AI 岗位 · JD 压题与参考答案（小白白话版）</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --sb-bg:#f4f4f7; --sb-border:#e2e2e8; --sb-text:#333; --sb-hover:#e8e8ee;
+  --accent:#1d4ed8; --accent-bg:#dbe7ff;
+  --page-bg:#ffffff; --text:#24292f; --text-soft:#57606a;
+  --code-bg:#f0f0f4; --pre-bg:#f6f8fa; --pre-border:#e5e7eb;
+  --th-bg:#f3f4f6; --td-border:#e2e2e8; --quote-bg:#f8faff; --quote-border:#3b82f6;
+  --hr:#ececec;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --sb-bg:#202024; --sb-border:#333; --sb-text:#d4d4d8; --sb-hover:#2b2b31;
+    --accent:#7aa2ff; --accent-bg:#2c3a5e;
+    --page-bg:#1b1b1e; --text:#dcdcde; --text-soft:#9b9ba3;
+    --code-bg:#2b2b31; --pre-bg:#202024; --pre-border:#3a3a40;
+    --th-bg:#26262b; --td-border:#3a3a40; --quote-bg:#1f2937; --quote-border:#3b82f6;
+    --hr:#333;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:16px;line-height:1.85;color:var(--text);background:var(--page-bg);}
+#sidebar{position:fixed;top:0;left:0;bottom:0;width:320px;overflow-y:auto;
+  background:var(--sb-bg);border-right:1px solid var(--sb-border);
+  padding:16px 10px 40px;z-index:20;transition:transform .25s ease;}
+.sb-title{font-weight:700;font-size:14px;color:var(--sb-text);padding:2px 8px 10px;line-height:1.5;}
+#filter{width:100%;padding:8px 10px;margin-bottom:10px;border:1px solid var(--sb-border);border-radius:8px;
+  font-size:13px;background:var(--page-bg);color:var(--text);outline:none;}
+#filter:focus{border-color:var(--accent);}
+.toc ul{list-style:none;margin:0;padding:0;}
+.toc .sub{padding-left:12px;}
+.toc li{margin:1px 0;}
+.toc a.toc-link{display:block;padding:4px 8px;border-radius:6px;color:var(--sb-text);
+  text-decoration:none;font-size:13px;line-height:1.55;border-left:3px solid transparent;}
+.toc-chapter > .ch-row{display:flex;align-items:center;}
+.toc-chapter > .ch-row a{flex:1;font-weight:700;font-size:13.5px;}
+.ch-toggle{flex:0 0 22px;text-align:center;cursor:pointer;color:var(--text-soft);font-size:11px;
+  padding:4px 0;user-select:none;border-radius:6px;transition:transform .15s;}
+.ch-toggle:hover{background:var(--sb-hover);}
+.toc-chapter.collapsed > .sub{display:none;}
+.toc-chapter.collapsed .ch-toggle{transform:rotate(-90deg);}
+.toc a:hover{background:var(--sb-hover);}
+.toc a.active{background:var(--accent-bg);color:var(--accent);font-weight:600;}
+main.content{margin-left:320px;padding:32px 48px 96px;max-width:900px;}
+#menuBtn{display:none;position:fixed;top:12px;left:12px;z-index:30;width:40px;height:40px;border-radius:10px;
+  border:1px solid var(--sb-border);background:var(--sb-bg);color:var(--sb-text);font-size:18px;cursor:pointer;}
+h1,h2,h3{scroll-margin-top:20px;}
+h1{font-size:1.9em;line-height:1.4;margin:0 0 .6em;padding-bottom:.3em;border-bottom:2px solid var(--accent);}
+h2{font-size:1.45em;margin:3em 0 .8em;padding-bottom:.35em;border-bottom:1px solid var(--td-border);}
+h3{font-size:1.15em;margin:2.2em 0 .6em;}
+p{margin:.9em 0;}
+a{color:var(--accent);}
+code{background:var(--code-bg);padding:2px 6px;border-radius:4px;
+  font-family:Consolas,Menlo,monospace;font-size:.88em;}
+pre{background:var(--pre-bg);border:1px solid var(--pre-border);border-radius:8px;
+  padding:14px 16px;overflow-x:auto;line-height:1.6;}
+pre code{background:none;padding:0;font-size:.9em;}
+table{border-collapse:collapse;width:100%;margin:1.1em 0;font-size:.94em;}
+th,td{border:1px solid var(--td-border);padding:8px 12px;text-align:left;vertical-align:top;}
+th{background:var(--th-bg);font-weight:600;white-space:nowrap;}
+blockquote{margin:1.1em 0;padding:10px 18px;border-left:4px solid var(--quote-border);
+  background:var(--quote-bg);border-radius:0 8px 8px 0;color:var(--text-soft);}
+blockquote p{margin:.35em 0;}
+hr{border:none;border-top:1px solid var(--hr);margin:2.5em 0;}
+@media (max-width:900px){
+  #sidebar{transform:translateX(-105%);box-shadow:4px 0 24px rgba(0,0,0,.25);}
+  body.sidebar-open #sidebar{transform:translateX(0);}
+  main.content{margin-left:0;padding:20px 18px 80px;}
+  #menuBtn{display:block;}
+}
+</style>
+</head>
+<body>
+<button id="menuBtn" title="目录">☰</button>
+<nav id="sidebar">
+  <div class="sb-title">前端 + Electron + AI 岗位 · JD 压题与参考答案（小白白话版）</div>
+  <input id="filter" type="text" placeholder="搜题号 / 关键词（如 Q40、TSFN）">
+  <div id="toc" class="toc"><ul class="root"><li class="toc-chapter" data-t="JD 考点拆解总览"><div class="ch-row"><a class="toc-link" href="#jd-考点拆解总览">JD 考点拆解总览</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"></ul></li><li class="toc-chapter" data-t="一、前端基础"><div class="ch-row"><a class="toc-link" href="#一前端基础">一、前端基础</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q1. 讲讲事件循环：宏任务、微任务、渲染时机"><a class="toc-link" href="#q1-讲讲事件循环宏任务微任务渲染时机">Q1. 讲讲事件循环：宏任务、微任务、渲染时机</a></li><li class="toc-q" data-t="Q2. 闭包是什么？有什么用？有什么坑？"><a class="toc-link" href="#q2-闭包是什么有什么用有什么坑">Q2. 闭包是什么？有什么用？有什么坑？</a></li><li class="toc-q" data-t="Q3. Promise 的原理和 async/await 的关系"><a class="toc-link" href="#q3-promise-的原理和-asyncawait-的关系">Q3. Promise 的原理和 async/await 的关系</a></li><li class="toc-q" data-t="Q4. V8 的内存结构与垃圾回收"><a class="toc-link" href="#q4-v8-的内存结构与垃圾回收">Q4. V8 的内存结构与垃圾回收</a></li><li class="toc-q" data-t="Q5. TypeScript 的类型系统：unknown / any / never，interface vs type"><a class="toc-link" href="#q5-typescript-的类型系统unknown--any--neverinterface-vs-type">Q5. TypeScript 的类型系统：unknown / any / never，interface vs type</a></li><li class="toc-q" data-t="Q6. 浏览器渲染管线：从 HTML 到像素，回流与重绘"><a class="toc-link" href="#q6-浏览器渲染管线从-html-到像素回流与重绘">Q6. 浏览器渲染管线：从 HTML 到像素，回流与重绘</a></li><li class="toc-q" data-t="Q7. 事件冒泡/捕获与事件委托"><a class="toc-link" href="#q7-事件冒泡捕获与事件委托">Q7. 事件冒泡/捕获与事件委托</a></li></ul></li><li class="toc-chapter" data-t="二、React 技术栈"><div class="ch-row"><a class="toc-link" href="#二react-技术栈">二、React 技术栈</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q8. 组件化设计的原则"><a class="toc-link" href="#q8-组件化设计的原则">Q8. 组件化设计的原则</a></li><li class="toc-q" data-t="Q9. Hooks 的原理：为什么不能写在条件语句里？"><a class="toc-link" href="#q9-hooks-的原理为什么不能写在条件语句里">Q9. Hooks 的原理：为什么不能写在条件语句里？</a></li><li class="toc-q" data-t="Q10. 状态管理怎么选型？为什么你项目用 useReducer？"><a class="toc-link" href="#q10-状态管理怎么选型为什么你项目用-usereducer">Q10. 状态管理怎么选型？为什么你项目用 useReducer？</a></li><li class="toc-q" data-t="Q11. 虚拟 DOM 是什么？diff 为什么不是 O(n³)？"><a class="toc-link" href="#q11-虚拟-dom-是什么diff-为什么不是-on³">Q11. 虚拟 DOM 是什么？diff 为什么不是 O(n³)？</a></li><li class="toc-q" data-t="Q12. Fiber 架构解决什么问题？"><a class="toc-link" href="#q12-fiber-架构解决什么问题">Q12. Fiber 架构解决什么问题？</a></li><li class="toc-q" data-t="Q13. 路由原理与 React Router 7"><a class="toc-link" href="#q13-路由原理与-react-router-7">Q13. 路由原理与 React Router 7</a></li><li class="toc-q" data-t="Q14. memo / useMemo / useCallback 的原理和滥用问题"><a class="toc-link" href="#q14-memo--usememo--usecallback-的原理和滥用问题">Q14. memo / useMemo / useCallback 的原理和滥用问题</a></li></ul></li><li class="toc-chapter" data-t="三、工程化"><div class="ch-row"><a class="toc-link" href="#三工程化">三、工程化</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q15. Vite 为什么快？原理是什么？"><a class="toc-link" href="#q15-vite-为什么快原理是什么">Q15. Vite 为什么快？原理是什么？</a></li><li class="toc-q" data-t="Q16. Webpack 的原理：loader 和 plugin 的区别"><a class="toc-link" href="#q16-webpack-的原理loader-和-plugin-的区别">Q16. Webpack 的原理：loader 和 plugin 的区别</a></li><li class="toc-q" data-t="Q17. pnpm 的原理：为什么快、为什么严格？"><a class="toc-link" href="#q17-pnpm-的原理为什么快为什么严格">Q17. pnpm 的原理：为什么快、为什么严格？</a></li><li class="toc-q" data-t="Q18. monorepo 怎么治理？你项目怎么做的？"><a class="toc-link" href="#q18-monorepo-怎么治理你项目怎么做的">Q18. monorepo 怎么治理？你项目怎么做的？</a></li><li class="toc-q" data-t="Q19. ESLint 9 和 typescript-eslint 的工程实践"><a class="toc-link" href="#q19-eslint-9-和-typescript-eslint-的工程实践">Q19. ESLint 9 和 typescript-eslint 的工程实践</a></li><li class="toc-q" data-t="Q20. TypeScript 工程治理：你项目的类型边界怎么设计？"><a class="toc-link" href="#q20-typescript-工程治理你项目的类型边界怎么设计">Q20. TypeScript 工程治理：你项目的类型边界怎么设计？</a></li><li class="toc-q" data-t="Q21. 环境与构建链治理：讲一个你踩过的坑和固化方案"><a class="toc-link" href="#q21-环境与构建链治理讲一个你踩过的坑和固化方案">Q21. 环境与构建链治理：讲一个你踩过的坑和固化方案</a></li><li class="toc-q" data-t="Q22. Git 协作流程与 commit 规范"><a class="toc-link" href="#q22-git-协作流程与-commit-规范">Q22. Git 协作流程与 commit 规范</a></li></ul></li><li class="toc-chapter" data-t="四、浏览器运行机制 / 网络 / 性能"><div class="ch-row"><a class="toc-link" href="#四浏览器运行机制--网络--性能">四、浏览器运行机制 / 网络 / 性能</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q23. 从输入网址到页面显示，浏览器做了什么？"><a class="toc-link" href="#q23-从输入网址到页面显示浏览器做了什么">Q23. 从输入网址到页面显示，浏览器做了什么？</a></li><li class="toc-q" data-t="Q24. HTTP 和 HTTPS 差在哪？TLS 握手原理"><a class="toc-link" href="#q24-http-和-https-差在哪tls-握手原理">Q24. HTTP 和 HTTPS 差在哪？TLS 握手原理</a></li><li class="toc-q" data-t="Q25. HTTP/1.1、HTTP/2、HTTP/3 的区别"><a class="toc-link" href="#q25-http11http2http3-的区别">Q25. HTTP/1.1、HTTP/2、HTTP/3 的区别</a></li><li class="toc-q" data-t="Q26. 浏览器缓存怎么做的？强缓存和协商缓存"><a class="toc-link" href="#q26-浏览器缓存怎么做的强缓存和协商缓存">Q26. 浏览器缓存怎么做的？强缓存和协商缓存</a></li><li class="toc-q" data-t="Q27. 跨域是什么？CORS 怎么解决？"><a class="toc-link" href="#q27-跨域是什么cors-怎么解决">Q27. 跨域是什么？CORS 怎么解决？</a></li><li class="toc-q" data-t="Q28. 前端性能优化：你的优化思路全景"><a class="toc-link" href="#q28-前端性能优化你的优化思路全景">Q28. 前端性能优化：你的优化思路全景</a></li><li class="toc-q" data-t="Q29. 内存泄漏：JS 里怎么漏的、怎么查？"><a class="toc-link" href="#q29-内存泄漏js-里怎么漏的怎么查">Q29. 内存泄漏：JS 里怎么漏的、怎么查？</a></li></ul></li><li class="toc-chapter" data-t="五、Electron 架构（上）：三进程、IPC、安全"><div class="ch-row"><a class="toc-link" href="#五electron-架构上三进程ipc安全">五、Electron 架构（上）：三进程、IPC、安全</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q30. Electron 的三进程架构：主进程、渲染进程、preload 各是什么？"><a class="toc-link" href="#q30-electron-的三进程架构主进程渲染进程preload-各是什么">Q30. Electron 的三进程架构：主进程、渲染进程、preload 各是什么？</a></li><li class="toc-q" data-t="Q31. 安全三件套：contextIsolation、nodeIntegration、sandbox"><a class="toc-link" href="#q31-安全三件套contextisolationnodeintegrationsandbox">Q31. 安全三件套：contextIsolation、nodeIntegration、sandbox</a></li><li class="toc-q" data-t="Q32. IPC 怎么通信？invoke/handle 和 send/on 怎么选？"><a class="toc-link" href="#q32-ipc-怎么通信invokehandle-和-sendon-怎么选">Q32. IPC 怎么通信？invoke/handle 和 send/on 怎么选？</a></li><li class="toc-q" data-t="Q33. preload 脚本怎么设计才干净？"><a class="toc-link" href="#q33-preload-脚本怎么设计才干净">Q33. preload 脚本怎么设计才干净？</a></li><li class="toc-q" data-t="Q34. 多窗口管理：悬浮窗怎么做的？"><a class="toc-link" href="#q34-多窗口管理悬浮窗怎么做的">Q34. 多窗口管理：悬浮窗怎么做的？</a></li><li class="toc-q" data-t="Q35. 生命周期管理：从启动到退出"><a class="toc-link" href="#q35-生命周期管理从启动到退出">Q35. 生命周期管理：从启动到退出</a></li><li class="toc-q" data-t="Q36. 异常恢复：断线重连和进程崩溃怎么处理？"><a class="toc-link" href="#q36-异常恢复断线重连和进程崩溃怎么处理">Q36. 异常恢复：断线重连和进程崩溃怎么处理？</a></li><li class="toc-q" data-t="Q37. 本地存储怎么做？为什么不用 localStorage？"><a class="toc-link" href="#q37-本地存储怎么做为什么不用-localstorage">Q37. 本地存储怎么做？为什么不用 localStorage？</a></li></ul></li><li class="toc-chapter" data-t="五、Electron 架构（下）：原生模块、打包发布"><div class="ch-row"><a class="toc-link" href="#五electron-架构下原生模块打包发布">五、Electron 架构（下）：原生模块、打包发布</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q38. 原生模块是什么？为什么要编译？"><a class="toc-link" href="#q38-原生模块是什么为什么要编译">Q38. 原生模块是什么？为什么要编译？</a></li><li class="toc-q" data-t="Q39. N-API 和 ThreadSafeFunction：C++ 和 JS 怎么安全协作？"><a class="toc-link" href="#q39-n-api-和-threadsafefunctionc-和-js-怎么安全协作">Q39. N-API 和 ThreadSafeFunction：C++ 和 JS 怎么安全协作？</a></li><li class="toc-q" data-t="Q40. WASAPI 采集链路：怎么抓系统声音？"><a class="toc-link" href="#q40-wasapi-采集链路怎么抓系统声音">Q40. WASAPI 采集链路：怎么抓系统声音？</a></li><li class="toc-q" data-t="Q41. 音频流水线：48kHz 双声道怎么变成 16kHz 单声道？"><a class="toc-link" href="#q41-音频流水线48khz-双声道怎么变成-16khz-单声道">Q41. 音频流水线：48kHz 双声道怎么变成 16kHz 单声道？</a></li><li class="toc-q" data-t="Q42. 打包：electron-builder 怎么把应用变成安装包？"><a class="toc-link" href="#q42-打包electron-builder-怎么把应用变成安装包">Q42. 打包：electron-builder 怎么把应用变成安装包？</a></li><li class="toc-q" data-t="Q43. 自动更新怎么做的？"><a class="toc-link" href="#q43-自动更新怎么做的">Q43. 自动更新怎么做的？</a></li><li class="toc-q" data-t="Q44. 代码签名与公证：为什么要签？"><a class="toc-link" href="#q44-代码签名与公证为什么要签">Q44. 代码签名与公证：为什么要签？</a></li><li class="toc-q" data-t="Q45. Electron vs Tauri：你怎么看？"><a class="toc-link" href="#q45-electron-vs-tauri你怎么看">Q45. Electron vs Tauri：你怎么看？</a></li></ul></li><li class="toc-chapter" data-t="六、性能与问题定位（启动慢 / 内存 / CPU / 卡顿 / 崩溃）"><div class="ch-row"><a class="toc-link" href="#六性能与问题定位启动慢--内存--cpu--卡顿--崩溃">六、性能与问题定位（启动慢 / 内存 / CPU / 卡顿 / 崩溃）</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q46. 启动慢怎么定位和优化？"><a class="toc-link" href="#q46-启动慢怎么定位和优化">Q46. 启动慢怎么定位和优化？</a></li><li class="toc-q" data-t="Q47. 内存泄漏怎么定位？（桌面端版）"><a class="toc-link" href="#q47-内存泄漏怎么定位桌面端版">Q47. 内存泄漏怎么定位？（桌面端版）</a></li><li class="toc-q" data-t="Q48. CPU 占用高怎么定位？"><a class="toc-link" href="#q48-cpu-占用高怎么定位">Q48. CPU 占用高怎么定位？</a></li><li class="toc-q" data-t="Q49. 界面卡顿怎么定位？"><a class="toc-link" href="#q49-界面卡顿怎么定位">Q49. 界面卡顿怎么定位？</a></li><li class="toc-q" data-t="Q50. 崩溃怎么定位？"><a class="toc-link" href="#q50-崩溃怎么定位">Q50. 崩溃怎么定位？</a></li><li class="toc-q" data-t="Q51. 桌面端性能监控怎么做？"><a class="toc-link" href="#q51-桌面端性能监控怎么做">Q51. 桌面端性能监控怎么做？</a></li></ul></li><li class="toc-chapter" data-t="七、AI 工具应用能力"><div class="ch-row"><a class="toc-link" href="#七ai-工具应用能力">七、AI 工具应用能力</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q52. 你用过哪些 AI 工具？分别怎么用？"><a class="toc-link" href="#q52-你用过哪些-ai-工具分别怎么用">Q52. 你用过哪些 AI 工具？分别怎么用？</a></li><li class="toc-q" data-t="Q53. AI 怎么融入你的开发流程？覆盖哪些环节？"><a class="toc-link" href="#q53-ai-怎么融入你的开发流程覆盖哪些环节">Q53. AI 怎么融入你的开发流程？覆盖哪些环节？</a></li><li class="toc-q" data-t="Q54. 上下文组织和任务拆解怎么做？（AI 时代的关键技能）"><a class="toc-link" href="#q54-上下文组织和任务拆解怎么做ai-时代的关键技能">Q54. 上下文组织和任务拆解怎么做？（AI 时代的关键技能）</a></li><li class="toc-q" data-t="Q55. 提示词（prompt）怎么写得有效？"><a class="toc-link" href="#q55-提示词prompt怎么写得有效">Q55. 提示词（prompt）怎么写得有效？</a></li><li class="toc-q" data-t="Q56. 怎么保证 AI 产出质量？你的安全边界在哪？"><a class="toc-link" href="#q56-怎么保证-ai-产出质量你的安全边界在哪">Q56. 怎么保证 AI 产出质量？你的安全边界在哪？</a></li><li class="toc-q" data-t="Q57. 说一个 AI 提效的真实案例"><a class="toc-link" href="#q57-说一个-ai-提效的真实案例">Q57. 说一个 AI 提效的真实案例</a></li><li class="toc-q" data-t="Q58. AI 时代，工程师的核心竞争力是什么？"><a class="toc-link" href="#q58-ai-时代工程师的核心竞争力是什么">Q58. AI 时代，工程师的核心竞争力是什么？</a></li></ul></li><li class="toc-chapter" data-t="八、技术负责人视角"><div class="ch-row"><a class="toc-link" href="#八技术负责人视角">八、技术负责人视角</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"><li class="toc-q" data-t="Q59. 架构决策怎么做？说说你的决策依据"><a class="toc-link" href="#q59-架构决策怎么做说说你的决策依据">Q59. 架构决策怎么做？说说你的决策依据</a></li><li class="toc-q" data-t="Q60. 讲一个你解决的技术难点，难点在哪、怎么解的"><a class="toc-link" href="#q60-讲一个你解决的技术难点难点在哪怎么解的">Q60. 讲一个你解决的技术难点，难点在哪、怎么解的</a></li><li class="toc-q" data-t="Q61. 沟通协作：跨角色、跨端怎么推进事情？"><a class="toc-link" href="#q61-沟通协作跨角色跨端怎么推进事情">Q61. 沟通协作：跨角色、跨端怎么推进事情？</a></li><li class="toc-q" data-t="Q62. 技术判断力：比如&quot;该不该上这个新技术&quot;你怎么判断？"><a class="toc-link" href="#q62-技术判断力比如该不该上这个新技术你怎么判断">Q62. 技术判断力：比如&quot;该不该上这个新技术&quot;你怎么判断？</a></li><li class="toc-q" data-t="Q63. 面试收尾：你怎么反问面试官？"><a class="toc-link" href="#q63-面试收尾你怎么反问面试官">Q63. 面试收尾：你怎么反问面试官？</a></li></ul></li><li class="toc-chapter" data-t="高频一页速记表（考前翻）"><div class="ch-row"><a class="toc-link" href="#高频一页速记表考前翻">高频一页速记表（考前翻）</a><span class="ch-toggle" title="折叠/展开">▾</span></div><ul class="sub"></ul></li></ul></div>
+</nav>
+<main class="content">
+<h1 id="前端--electron--ai-岗位--jd-压题与参考答案小白白话版">前端 + Electron + AI 岗位 · JD 压题与参考答案（小白白话版）</h1>
+<blockquote><p>这份文档是<strong>给没做过 Electron、没啃过底层原理的人准备的</strong>：每个专业名词都用大白话解释一遍，每个原理都配生活化比喻，每道题最后有&quot;一句话总结&quot;——目的是让你<strong>看懂、记住、能用自己的话讲出来</strong>。</p><p>阅读建议：答案不用背。先读懂&quot;为什么&quot;，再用【结合本项目】里的真实经历练口头表达——面试讲自己的事永远最有说服力。这份文档讲通用考点，项目细节深挖看《桌面端面试追问.md》，两份配套用。</p><p>【结合本项目】标注的内容全部来自 audio-capture 仓库真实代码和提交历史；标了&quot;本项目未做&quot;的题（如自动更新），答案讲的是方案设计思路，面试时诚实说&quot;没做但会做&quot;反而是加分。</p></blockquote>
+<h2 id="jd-考点拆解总览">JD 考点拆解总览</h2>
+<p>拿到 JD 先别急着背题，把它拆开看——<strong>面试官问什么，是 JD 一行一行写出来的</strong>：</p>
+<table><thead><tr><th>JD 要求</th><th>翻译成人话</th><th>看本文哪一章</th></tr></thead><tbody><tr><td>掌握 JS/TS/HTML/CSS</td><td>基础题，考底层机制</td><td>一</td></tr><tr><td>掌握 React，懂运行机制</td><td>不止会用，要懂&quot;为什么这么设计&quot;</td><td>二</td></tr><tr><td>熟悉 Vite/Webpack/pnpm/ESLint 等</td><td>工程化：工具原理 + 治理经验</td><td>三</td></tr><tr><td>熟悉浏览器机制、网络协议、性能优化</td><td>浏览器怎么工作、网络怎么传、慢了怎么查</td><td>四</td></tr><tr><td><strong>Electron 架构及优化（硬性）</strong></td><td><strong>重点中的重点：进程模型、安全、通信、更新、性能</strong></td><td>五、六</td></tr><tr><td><strong>AI 工具应用（硬性）</strong></td><td><strong>你真的用过、怎么用、怎么把关</strong></td><td>七</td></tr><tr><td>模块设计、重构、技术负责人</td><td>软实力：拆解、抽象、决策、协作</td><td>八</td></tr></tbody></table>
+<p>章节内题目顺序就是重要度顺序——每章前几题是必问。</p>
+<hr>
+<h2 id="一前端基础">一、前端基础</h2>
+<h3 id="q1-讲讲事件循环宏任务微任务渲染时机">Q1. 讲讲事件循环：宏任务、微任务、渲染时机</h3>
+<p><strong>先打个比方</strong>：浏览器的主线程就像一家<strong>只有一个厨师的餐厅</strong>。客人点单（任务）排成一队，厨师一次只做一单。做完一单，他先看一眼&quot;加急小纸条&quot;（微任务），把纸条全处理完，再决定要不要重新摆盘上菜（渲染页面）。</p>
+<p><strong>用人话拆开讲</strong>：</p>
+<ol><li><strong>宏任务</strong>（一张张点单）：一段 script 代码、setTimeout、setInterval、用户点击事件、网络请求回调。每次从队列里<strong>拿一个</strong>出来执行。</li><li><strong>微任务</strong>（加急小纸条）：Promise.then、queueMicrotask 等。一个宏任务执行完后，事件循环会把微任务队列里的任务<strong>挨个拿出来执行，一直执行到队列变空</strong>（注意：清空 = 执行完，不是丢弃）——执行中产生的新微任务也会在本次<strong>接着被执行掉</strong>，不用等下一轮。</li><li><strong>渲染时机</strong>（摆盘上菜）：微任务清空后，浏览器判断页面要不要更新，要的话执行 requestAnimationFrame → 算样式 → 算布局 → 画出来。</li></ol>
+<p><strong>一轮事件循环的完整顺序（标准背诵骨架）</strong>：① 从宏任务队列取<strong>一个</strong>任务出来执行——注意，一个宏任务就是<strong>一整段一口气跑完的代码</strong>（一个 script、一个 setTimeout 回调、一个点击事件回调），轮到它执行时从头跑到尾、中间不被打断，<strong>不存在&quot;属于它的异步部分&quot;</strong>；写下的 setTimeout / Promise.then 只是把回调<strong>登记到别的队列</strong>，那是独立的新任务。② 当前宏任务跑完 → 微任务队列执行到空（新产生的微任务也在本轮执行掉）。③ 浏览器判断是否渲染（rAF → 样式 → 布局 → 绘制）。④ 回到 ① 取下一个宏任务。</p>
+<p><strong>用厨师视角再走一遍完整循环（最通俗版，四个动作）</strong>：① <strong>拿一张点单</strong>（取一个宏任务）——从头炒到尾，炒的过程中递纸条、来新点单都<strong>不管</strong>，先把手上这盘菜炒完；正在炒的菜谁也不能打断。② <strong>处理全部纸条</strong>（微任务执行到空）——纸条一张一张全干完，处理中又递来的新纸条<strong>接着干</strong>，直到桌上真没有纸条为止（&quot;清空&quot;是把事干完，不是把纸条扔垃圾桶）。③ <strong>看一眼要不要摆盘上菜</strong>（渲染判断）——纸条清完了，浏览器看页面有没有变化要画，要画就画（rAF → 样式 → 布局 → 上色）。④ <strong>回去拿下一张点单</strong>——回到 ①。所以 <code>setTimeout(fn, 0)</code> 那张&quot;0 毫秒&quot;的点单，也得等 ②③ 走完、轮到 ④ 时才会被炒。</p>
+<p><strong>易混点：setTimeout 不是异步的吗，为什么宏任务又是&quot;同步代码&quot;？</strong> 两个词说的是<strong>两个维度</strong>：&quot;异步&quot;决定<strong>什么时候跑</strong>（回调被安排到以后执行）；&quot;同步&quot;决定<strong>怎么跑</strong>（回调真被执行时，从头到尾一口气跑完，中间不被打断）。把 setTimeout 这件事从头到尾拆成三步，每一步对应一个说法：</p>
+<ol><li><strong><code>setTimeout(cb, 1000)</code> 这个调用本身——是同步的</strong>：写下这一行时它<strong>当场执行</strong>——登记&quot;1000ms 后该跑 cb 了&quot;，然后立刻返回，一秒钟都不等。这个登记动作就发生在当前正在跑的那段代码里；</li><li><strong>cb 被安排到&quot;以后&quot;——这是&quot;异步&quot;的意思</strong>：异步说的是<strong>什么时候跑</strong>——不是现在，是 1000ms 后。时间到了，浏览器把 cb 塞进宏任务队列，等事件循环轮到它；</li><li><strong>cb 真被执行的那一刻——它是一口气跑完的，这又是&quot;同步&quot;的意思</strong>：事件循环把 cb 取出来执行时，cb 里的代码从第一行跑到最后一行，中间不被打断——微任务不打断它、别的任务也不打断它，跟一段普通 script 没区别。</li></ol>
+<p>所以&quot;宏任务是一整段一口气跑完的代码&quot;里的&quot;同步&quot;，指的是第 3 步的<strong>执行方式</strong>——<strong>轮到它跑时，它是一口气跑完的</strong>，不是在说 setTimeout 这行代码写得像同步代码。这也正是&quot;微任务不能中断宏任务&quot;成立的原因：<strong>再&quot;异步&quot;的回调，一旦被取出来执行，就是铁板一块</strong>。</p>
+<p><strong>快递比喻</strong>：下单寄快递，是当场完成的一瞬间动作（同步的调用）；快递员两天后才来送货（异步：晚点发生）；但快递员送这一单时，他是一口气送完的，不会送一半去干别的再回来（同步：一口气干完）。</p>
+<p><strong>一句话：异步 = 晚点炒，同步 = 一次炒完。</strong></p>
+<p><strong>追问：为什么都说&quot;微任务比 setTimeout 优先级高&quot;？</strong> 两个队列都是先进先出，<strong>没有任何优先级排序</strong>。&quot;优先级高&quot;只是固定检查顺序的通俗叫法：每跑完一个宏任务，事件循环<strong>必先</strong>清空微任务队列，<strong>才</strong>去取下一个宏任务——而 setTimeout 的回调恰恰是&quot;下一个宏任务&quot;的候选，所以必然排在微任务后面。另外 <code>setTimeout(fn, 0)</code> 的 0 不是&quot;立刻执行&quot;，只是&quot;尽快塞进宏任务队列&quot;，进队列后照样等微任务清空 + 渲染判断。</p>
+<p><strong>宏任务的来源清单</strong>：整段 script 的最初执行、setTimeout / setInterval 回调、用户交互事件（点击/键盘/输入）、网络响应回调（fetch/XHR）、I/O 回调（文件读取）、postMessage / MessageChannel 消息；Node 环境还有 setImmediate。两个易混点：<strong>requestAnimationFrame 既不是宏任务也不是微任务</strong>（它在渲染阶段跑）；<strong>MutationObserver 是微任务</strong>。</p>
+<p><strong>为什么会有微任务这个设计？</strong> 因为 JS 里大量异步操作（比如 await 后面的代码）需要&quot;尽快但不打断当前任务&quot;地执行。如果全排进宏任务队列，就要等前面的宏任务都做完，延迟不可控。</p>
+<p><strong>一个高频追问：微任务会不会&quot;中断&quot;正在执行的宏任务？</strong> 不会。微任务从不打断正在跑的那段代码——<code>Promise.then(...)</code> 被调用的那一刻，回调只是<strong>登记进队列</strong>，不是立刻执行。执行时机只有一个：<strong>当前宏任务的同步代码全部跑完、调用栈完全清空之后</strong>，事件循环才会回头清空微任务队列。它插的是&quot;下一个宏任务&quot;和&quot;渲染&quot;的队，绝不插&quot;正在执行的那段代码&quot;的队。验证代码（输出顺序：A 开始 → A 结束 → B → C → D）：</p>
+<pre><code>console.log('A 宏任务开始');
+setTimeout(() =&gt; console.log('D 下一个宏任务'), 0);   // 登记一个宏任务
+
+Promise.resolve().then(() =&gt; {
+  console.log('B 微任务');
+  Promise.resolve().then(() =&gt; console.log('C 微任务里新产生的微任务'));
+});
+
+console.log('A 宏任务结束');</code></pre>
+<p>0ms 的定时器也要排在 B、C 后面——微任务队列没清空，事件循环不会碰下一个宏任务。另外记住：<strong><code>await</code> 后面的代码就是微任务</strong>（<code>await x</code> 等价于 <code>Promise.resolve(x).then(...)</code>），所以哪怕 <code>await 1</code>，后面的代码也不会同步继续，而是等当前栈清空后以微任务身份跑。</p>
+<p><strong>一个高频追问：为什么微任务可能&quot;饿死&quot;页面渲染？</strong> 如果微任务里不停地再产生新微任务（比如死循环里 Promise.resolve().then(...)），浏览器永远清不完微任务队列，就永远轮不到渲染——页面看起来就卡死了。</p>
+<p><strong>Node 和浏览器的区别</strong>：Node 的事件循环是分阶段的（处理定时器 → 处理 I/O 回调 → 检查 setImmediate 等），process.nextTick 比微任务优先级还高；但 Node 11 以后&quot;每个阶段之间清空微任务&quot;的行为和浏览器基本对齐了。面试说一句&quot;大体一致、细节不同&quot;就够了。</p>
+<p><strong>结合本项目</strong>：你的应用里<strong>有两条独立的事件循环</strong>——渲染进程跑的是浏览器那套，主进程跑的是 Node 那套，它们靠 IPC 通信（后面 Q32 细讲）。这带来一个实际后果：<strong>主进程被一个同步阻塞操作卡住时，所有窗口都会&quot;感觉卡死&quot;</strong>——因为窗口要数据都得等主进程回消息。所以项目里文件转换这类重活用 spawn 开子进程干（Q43 细讲），就是不让主循环被堵住。</p>
+<p><strong>一句话总结</strong>：事件循环 = 单线程厨师：做完一个宏任务 → 清空全部微任务 → 有空就渲染页面。别让任何一环长时间占着，页面就不会卡。</p>
+<hr>
+<h3 id="q2-闭包是什么有什么用有什么坑">Q2. 闭包是什么？有什么用？有什么坑？</h3>
+<p><strong>先打个比方</strong>：闭包就像一个<strong>背着家乡行李箱去外地的人</strong>。函数定义在哪儿（家乡），就永远带着那儿的东西（行李箱）——不管之后被带到哪里调用，都能打开行李箱拿出家乡的变量。</p>
+<p><strong>原理（用人话）</strong>：JS 里内层函数可以看到外层函数的变量（这叫<strong>词法作用域</strong>）。正常情况下外层函数执行完，它的变量就该销毁了。但如果内层函数&quot;逃&quot;了出去（被 return 出去、被存进数组、被当作回调传给别人），引擎一看——&quot;还有人要用这些变量&quot;，就不销毁了。这个&quot;内层函数 + 它记着的那堆变量&quot;打包在一起，就是闭包。</p>
+<p><strong>易混点：闭包里记的是&quot;变量&quot;还是&quot;值&quot;？</strong> 记的是<strong>变量本身</strong>，不是定义那一瞬间的值。行李箱里装的不是&quot;出发时拍的照片&quot;，而是&quot;家乡的家&quot;——<strong>家后来变样了，打开箱子看到的就是变样后的家</strong>。这句话是闭包最容易绕晕的点，下面这段经典代码就是它惹的祸（也是闭包最高频面试题）：</p>
+<pre><code>for (var i = 0; i &lt; 3; i++) {
+  setTimeout(() =&gt; console.log(i), 0);
+}
+// 输出：3 3 3 —— 三个回调记的是【同一个变量 i】
+// 等它们执行时（循环早就结束了），i 已经变成了 3
+
+for (let i = 0; i &lt; 3; i++) {
+  setTimeout(() =&gt; console.log(i), 0);
+}
+// 输出：0 1 2 —— let 每次循环都是【一个全新的变量】
+// 三个回调各记各的 i，互不影响</code></pre>
+<p>为什么 var 会翻车：var 是<strong>函数级作用域</strong>，整个函数里只有一个 i，三个回调记的是同一个箱子；let 是<strong>块级作用域</strong>，每轮循环开一个新箱子，各记各的。</p>
+<p><strong>有什么用</strong>（三个最常用的）：</p>
+<ol><li><strong>数据私有化</strong>：把变量藏进函数里，只通过暴露的方法访问——外面的人改不到，这是最古老的&quot;模块&quot;玩法；</li><li><strong>防抖节流</strong>：debounce 里用闭包记住上一次的定时器，才能实现&quot;最后一次操作后才执行&quot;；</li><li><strong>回调携带上下文</strong>：比如循环里给每个按钮绑点击事件，事件回调要&quot;记住&quot;自己的序号。</li></ol>
+<p><strong>三个经典坑</strong>：</p>
+<ol><li><strong>循环 + var（上面讲过，最高频）</strong>：修法除了换 let，还有老办法 IIFE（立即执行函数，把当前值当参数传进去锁住）；</li><li><strong>内存泄漏</strong>：闭包会<strong>一直占着</strong>它引用的变量。如果你不小心让闭包引用了一个大对象（比如整个页面数据），而且闭包本身又不销毁（挂在全局上、监听器没移除），这个大对象就永远回收不掉（原理见 Q4：从根可达就不算垃圾）。<strong>解法</strong>：不用了就把引用置 null、移除监听器；</li><li><strong>this 的坑</strong>：普通函数的 this 是&quot;调用时&quot;决定的，闭包里直接写 this 经常拿到 window/undefined；箭头函数没有自己的 this，会从定义它的外层继承——所以&quot;闭包 + 箭头函数&quot;通常是你想要的行为。</li></ol>
+<p><strong>一句话总结</strong>：闭包 = 函数 + 它出生时记下的变量包（记的是变量，不是值）。用来藏数据、记状态；坑在&quot;记着的东西一直不释放&quot;和&quot;循环里记错了对象&quot;。</p>
+<hr>
+<h3 id="q3-promise-的原理和-asyncawait-的关系">Q3. Promise 的原理和 async/await 的关系</h3>
+<p><strong>先打个比方</strong>：Promise 就是外卖平台的<strong>订单状态牌</strong>——下单后显示&quot;进行中&quot;，最后必然变成&quot;已送达&quot;或&quot;订单取消&quot;，而且<strong>变一次就定格了</strong>，不会再从&quot;已送达&quot;变回&quot;进行中&quot;。</p>
+<p><strong>原理（用人话）</strong>：</p>
+<ul><li>Promise 本质是一个<strong>状态机</strong>，三个状态：pending（进行中）→ fulfilled（成功）或 rejected（失败）。状态单向变化，不可逆；</li><li>它内部维护一个<strong>回调队列</strong>：状态还没定的时候，.then 注册的回调先排队；状态一定，排队的回调按顺序执行；</li><li><strong>链式调用</strong>：.then 每次都返回一个<strong>新的</strong> Promise，所以能一路 .then 下去。任何一个环节 reject，都会顺着链子冒到最近的一个 .catch——错误不用每层都写 try/catch，这是回调地狱时代做不到的。</li></ul>
+<p><strong>易混点 1：new Promise(executor) 里的 executor 是同步执行的！</strong> 很多人以为&quot;进了 Promise 就异步了&quot;，其实<strong>只有 .then 的回调是异步的</strong>——构造 Promise 时传进去的那个函数是<strong>当场同步执行</strong>的：</p>
+<pre><code>console.log('1 开始');
+new Promise((resolve) =&gt; {
+  console.log('2 executor 同步执行');   // 这一行当场就打印
+  resolve();
+});
+console.log('3 结束');
+// 输出：1 2 3 —— executor 里的代码在当前这段代码里同步跑完</code></pre>
+<p><strong>易混点 2：.then 的回调是微任务</strong>（呼应 Q1）——resolve 之后，then 的回调不是马上执行，而是登记进微任务队列，等当前代码全部跑完才执行：</p>
+<pre><code>Promise.resolve().then(() =&gt; console.log('A 微任务'));
+console.log('B 同步');
+// 输出：B A —— 同步代码全部跑完后，微任务才执行</code></pre>
+<p><strong>async/await 是什么</strong>：语法糖。它底层是 Promise + Generator（生成器）。用人话说：async 函数里遇到 await，就像&quot;把剩下的代码打包成一个回调挂到 Promise 后面，然后先干别的去&quot;。好处是：代码长得像同步、顺序一眼能看懂；错误处理可以用普通的 try/catch 包住。</p>
+<p><strong>易混点 3：async 函数永远返回 Promise</strong>——哪怕你 <code>return 1</code>，调用者拿到手的是 <code>Promise&lt;1&gt;</code>。所以 async 函数的调用者要么 await 要么 .then，不能直接当同步值用；对应地，<code>await 1</code> 也会先把 1 包成 Promise 再&quot;等&quot;它——await 后面的代码按微任务跑（Q1 讲过）。</p>
+<p><strong>高频追问：then 里 return 的 Promise 会被&quot;拆包&quot;</strong>——then 的回调返回一个普通值，下一个 then 拿到的就是这个值；但如果返回的是一个 <strong>Promise</strong>，下一个 then 拿到的<strong>不是这个 Promise 本身，而是它 resolve 出来的值</strong>（链子自动等它完成）。这就是&quot;链式穿值&quot;的规则：返回什么，下一个 then 收到什么；返回 Promise，就等它出结果再传值。</p>
+<p><strong>高频追问：并发四兄弟怎么区分？</strong></p>
+<table><thead><tr><th>方法</th><th>什么时候结束</th><th>拿到什么</th><th>有人失败时</th></tr></thead><tbody><tr><td><code>Promise.all</code></td><td>全部成功</td><td>结果数组（按原顺序）</td><td>整体立刻失败</td></tr><tr><td><code>Promise.allSettled</code></td><td>全部有结果</td><td>每个带状态和值</td><td>不失败，逐个看</td></tr><tr><td><code>Promise.race</code></td><td>第一个出结果</td><td>那一个的结果</td><td>那一个失败就失败</td></tr><tr><td><code>Promise.any</code></td><td>第一个成功</td><td>那一个成功值</td><td>全失败才失败</td></tr></tbody></table>
+<p><strong>一个高频坑</strong>：多个没有依赖关系的 await 要写成 Promise.all 并发执行——如果串行 await，每个都要等上一个完成，纯属浪费时间。比如同时拉&quot;用户信息&quot;和&quot;历史记录&quot;，串行就是 1+1=2 秒，并发只要 1 秒。另外记得：<strong>没接 catch 的 rejected Promise 会触发 unhandledrejection 事件</strong>（Node 里默认打印警告），所以 Promise 链要有兜底 catch。</p>
+<p><strong>一句话总结</strong>：Promise = 只能变一次的状态机 + 回调队列，解决回调地狱；async/await = 让 Promise 长得像同步代码。记住&quot;executor 同步、then 异步（微任务）、没依赖就 Promise.all&quot;。</p>
+<hr>
+<h3 id="q4-v8-的内存结构与垃圾回收">Q4. V8 的内存结构与垃圾回收</h3>
+<p><strong>先打个比方</strong>：垃圾回收（GC）就是<strong>定期检查&quot;这张纸还有没有人拿着&quot;</strong>——没人在用的，扔掉；还有人引用的，留着。判断标准不是&quot;这张纸旧不旧&quot;，而是&quot;还能不能从某些起点找到它&quot;。</p>
+<p><strong>原理展开</strong>：</p>
+<ol><li><strong>判断垃圾的标准：可达性</strong>。从一组&quot;根&quot;（全局对象、正在执行的函数栈、DOM）出发，凡是引用链到不了的对象，就是垃圾。所以<strong>内存泄漏的本质 = 你以为没用了，但它还可达</strong>（还挂在全局变量上、监听器里、定时器里）。</li></ol>
+<ol><li><strong>堆分两代，各用各的回收方式</strong>（为什么分代？因为经验规律：<strong>大部分对象死得很快</strong>，活过一阵的往往活很久，分开处理效率最高）：</li></ol>
+<ul><li><strong>新生代</strong>（年轻对象，小）：用 <strong>Scavenge</strong> 算法——空间换时间。把空间分两半，活着的对象复制到另一半，死的原地不要了。复制很快，但一半空间闲置着，所以只给小区域用；活过约两轮的对象&quot;晋升&quot;（promotion）搬到老生代；</li><li><strong>老生代</strong>（熬过几轮的，大）：用<strong>标记-清除</strong>（Mark-Sweep，找到所有活的打标记，没标记的清掉）+ <strong>标记-整理</strong>（Mark-Compact，把活对象挪到一起，消除内存碎片）。标记过程用<strong>三色标记法</strong>：白=还没看，灰=正在看，黑=确认活着。</li></ul>
+<ol><li><strong>怎么减少&quot;卡一下&quot;（stop-the-world）</strong>：标记阶段耗时长，V8 做了两件事——<strong>增量标记</strong>（标记拆成很多小片，穿插在程序运行间隙做）和<strong>并发标记</strong>（后台线程同时跑）。这样 GC 不再是一次性长暂停。</li></ol>
+<p><strong>易混点 1：循环引用会不会内存泄漏？</strong> 这是老教材传下来的误会，分两个时代看：</p>
+<ul><li><strong>老办法（引用计数）</strong>：数&quot;有多少个引用指向我&quot;，归零就回收。A ↔ B 互相引用 → 计数永远不为零 → 泄漏。老 IE 就是这么翻车的；</li><li><strong>现代引擎（可达性）</strong>：不看计数，看&quot;从根摸不摸得到&quot;。A ↔ B 互相指着，但只要整团对象从根出发都够不着，<strong>整团一起回收</strong>——循环引用本身不泄漏；</li><li><strong>但注意</strong>：如果这个&quot;团&quot;里有任何一员被根引用着（挂在全局变量、事件监听器、定时器上），整团就可达，就泄漏了。所以准确说法：<strong>循环引用不是罪，被根引用才是罪</strong>。</li></ul>
+<p><strong>易混点 2：WeakMap / WeakSet 是什么？</strong>（高频追问）Map 的键是<strong>强引用</strong>——只要 Map 本身活着，它键指向的对象就永远回收不掉（哪怕别处都没人用了）。WeakMap 的键是<strong>弱引用</strong>——键指向的对象一旦没别人用，就正常回收，WeakMap 里这条记录自动消失。用法：给 DOM 节点挂私有数据、做&quot;不阻碍 GC&quot;的缓存。记忆口诀：<strong>Weak = 我不拦着 GC 干活</strong>。</p>
+<p><strong>易混点 3：&quot;内存泄漏&quot;和&quot;内存占用高&quot;是两回事</strong>：泄漏看的是<strong>趋势</strong>——同一操作反复做，内存阶梯式上涨不回落；占用高看的是<strong>基线</strong>——本身就吃得多。排查动作也不同：泄漏用堆快照对比（下面讲），占用高用内存 Profile 找谁占的大头。</p>
+<p><strong>怎么排查内存泄漏</strong>（面试必说操作）：DevTools 的 Memory 面板，在&quot;疑似泄漏的操作&quot;前后各取一次<strong>堆快照</strong>，对比两次快照里<strong>哪些对象变多了没回收</strong>，就是泄漏源。本项目主进程侧还能用 process.memoryUsage() 看 heapUsed 涨不涨。</p>
+<p><strong>一句话总结</strong>：GC = 可达性分析——从根出发找不到的才是垃圾。所以泄漏 = &quot;不该活的还活着&quot;（被根拽着），循环引用不背锅；排查 = 快照对比找&quot;谁一直变多&quot;。</p>
+<hr>
+<h3 id="q5-typescript-的类型系统unknown--any--neverinterface-vs-type">Q5. TypeScript 的类型系统：unknown / any / never，interface vs type</h3>
+<p><strong>先打比方</strong>：</p>
+<ul><li><strong>any</strong> = 蒙着眼睛开车：随便怎么开，编译器不拦你，但出事故（运行时报错）它也不管；</li><li><strong>unknown</strong> = 收到一个没写标签的快递盒：必须拆开检查是什么（类型收窄）之后才能用，安全性拉满；</li><li><strong>never</strong> = &quot;不存在的东西&quot;：永远抛异常的函数没有返回值（返回 never）；穷尽检查的兜底分支——switch 里所有可能都处理完后剩下的那个分支，类型收窄成 never，如果你漏写了 case，编译器会指着这个 never 报错，这就是&quot;穷尽检查&quot;。</li></ul>
+<p><strong>易混点 1：any 和 unknown 到底差在哪？（用代码看最清楚）</strong></p>
+<pre><code>let a: any = 'hello';
+a.toUpperCase();   // 不报错——但 a 要是运行时不是字符串，这里就炸
+
+let u: unknown = 'hello';
+u.toUpperCase();   // 编译报错！unknown 上不能直接用任何方法
+if (typeof u === 'string') {
+  u.toUpperCase(); // 必须先&quot;收窄&quot;（检查类型），编译器才放行
+}</code></pre>
+<p>区别一句话：<strong>any 是&quot;关掉检查&quot;，unknown 是&quot;强制先检查&quot;</strong>。any 会让类型错误顺着它传染（any 参与运算，结果也是 any），unknown 不会——所以拿不准类型时用 unknown 而不是 any，是&quot;安全兜底&quot;和&quot;埋雷&quot;的区别。</p>
+<p><strong>易混点 2：类型断言（as）不是类型转换</strong>——<code>value as string</code> 只是<strong>编译期骗编译器</strong>&quot;你就当它是 string&quot;，运行时<strong>什么都不会发生</strong>：数字 123 不会真的变成字符串&quot;123&quot;。如果断言错了，运行时报错照样报。所以用 as 等于你对编译器说&quot;我负责&quot;，滥用 as 和滥用 any 一样是埋雷。顺带：<code>as unknown as X</code> 是&quot;双重断言&quot;绕过检查的老套路，代码审查里看到要警惕。</p>
+<p><strong>易混点 3：never 的穷尽检查（配代码）</strong>——给联合类型加新成员后，编译器能帮你在所有没处理完的 switch 处报错：</p>
+<pre><code>type Shape = 'circle' | 'square';
+function area(s: Shape) {
+  switch (s) {
+    case 'circle': return 1;
+    case 'square': return 2;
+    default: {
+      const _exhaustive: never = s; // 以后给 Shape 加了 'triangle'
+      return _exhaustive;           // 没写它的 case，这行立刻编译报错
+    }
+  }
+}</code></pre>
+<p><strong>interface vs type</strong>：</p>
+<ul><li>interface 只能描述<strong>对象形状</strong>，特点是<strong>同名自动合并</strong>（两次声明同一个名字会合在一起）——给第三方库补类型时好用；</li><li>type 是&quot;给类型起别名&quot;，能表达<strong>联合类型</strong>（<code>type ID = string | number</code>）、交叉、条件类型等组合运算，表达力强；</li><li>实践惯例：描述对象用 interface，需要类型运算用 type。面试时说&quot;各有所长，按场景选&quot;比背&quot;必须用哪个&quot;高明。</li></ul>
+<p><strong>一个容易被忽略但很加分的点</strong>：TS 是<strong>编译期擦除</strong>——类型信息不进运行产物，运行时完全不存在。所以类型系统是&quot;编译期的契约&quot;，跨进程、跨端共享类型 = 共享契约。<strong>结合本项目</strong>：preload 暴露的 window.electronAPI 用一份类型声明文件（electron.d.ts）定义，渲染进程全靠它写代码——<strong>改一个 API，类型报错会一路红到所有调用点</strong>，契约变更零遗漏。类型声明就是&quot;接口文档&quot;，而且这份文档编译器会帮你检查，不会过期。</p>
+<p><strong>一句话总结</strong>：any 放弃检查、unknown 强制检查、never 表示不存在；as 是编译期欺骗不是运行时转换；类型 = 编译期契约，TS 的价值就是把接口约定变成编译器帮你盯的红线。</p>
+<hr>
+<h3 id="q6-浏览器渲染管线从-html-到像素回流与重绘">Q6. 浏览器渲染管线：从 HTML 到像素，回流与重绘</h3>
+<p><strong>先打个比方</strong>：渲染网页像装修：先画图纸（DOM/CSSOM）→ 确认哪些家具摆哪儿（渲染树）→ 量尺寸定位（布局）→ 刷漆（绘制）→ 拍照合成上墙（合成）。</p>
+<p><strong>流程一步步走</strong>：</p>
+<ol><li>解析 HTML 出 <strong>DOM 树</strong>（页面结构），解析 CSS 出 <strong>CSSOM 树</strong>（样式规则）——两棵&quot;图纸&quot;；</li><li>合并成<strong>渲染树</strong>：只包含真正要显示的东西（display:none 的元素不进树）；</li><li><strong>布局（Layout）</strong>：计算每个元素的位置和大小——这一步最贵；</li><li><strong>绘制（Paint）</strong>：把文字、颜色、边框画成像素；</li><li><strong>合成（Composite）</strong>：把各图层拼成最终画面交给屏幕。</li></ol>
+<p><strong>三个关键词（面试必考）</strong>：</p>
+<ul><li><strong>回流（reflow）</strong>：改了几何属性（宽高、位置、内容量、字号），要重新布局——最贵。比如 JS 里改一次宽读一次高，来回折腾，每次读都强制同步重新布局，这叫&quot;强制同步布局&quot;，性能杀手；</li><li><strong>重绘（repaint）</strong>：只改颜色、阴影这类&quot;长相&quot;，不用重新量尺寸——中等贵；</li><li><strong>合成（composite）</strong>：transform、opacity 这类属性<strong>既不用重新布局也不用重新绘制</strong>，只动合成层——最便宜。所以动画要用 transform，而不是改 left/top。</li></ul>
+<p><strong>易混点 1：display:none、visibility:hidden、opacity:0 三个&quot;看不见&quot;有什么不同？</strong>（高频追问，一个表记住）</p>
+<table><thead><tr><th></th><th>占不占位置</th><th>触发什么</th><th>能点吗</th></tr></thead><tbody><tr><td><code>display:none</code></td><td>不占，彻底从渲染树移除</td><td>回流 + 重绘（最贵）</td><td>不能</td></tr><tr><td><code>visibility:hidden</code></td><td><strong>占位</strong>，位置留着只是看不见</td><td>只重绘</td><td>不能</td></tr><tr><td><code>opacity:0</code></td><td>占位</td><td>只合成（最便宜）</td><td><strong>能</strong>（元素还在，能响应点击）</td></tr></tbody></table>
+<p>所以&quot;藏起来但别影响布局&quot;用 visibility，&quot;藏起来还要能点&quot;用 opacity，&quot;彻底不要&quot;用 display:none。按需选择，乱用 display:none 做动画是最贵的隐藏方式。</p>
+<p><strong>易混点 2：强制同步布局长什么样（配代码）</strong>——JS 里&quot;写&quot;（改样式）和&quot;读&quot;（取尺寸）交错进行时，每次读都会<strong>强制浏览器立刻做一次布局</strong>，打断批处理：</p>
+<pre><code>// 反例：读写交错，两次读取各强制一次布局
+el.style.width = '100px';
+const h1 = el.offsetHeight;   // 读 → 浏览器被迫立刻重新布局
+el.style.width = '200px';
+const h2 = el.offsetHeight;   // 再读 → 又被追一次布局
+
+// 正确姿势：先读完，再批量写
+const h1 = el.offsetHeight;
+el.style.width = '100px';
+el.style.height = h1 + 'px';  // 写全放后面，浏览器攒一起算</code></pre>
+<p><strong>易混点 3：合成层不是免费的</strong>——transform/opacity 便宜，是因为浏览器把它们提到了<strong>独立的合成层</strong>（GPU 加速），但每提一个层都要额外内存（图层是有开销的）。<code>will-change</code> 手动提层能救急，<strong>乱提层会占内存、越提越卡</strong>——所以&quot;动画全加 will-change&quot;是反模式。</p>
+<p><strong>结合本项目</strong>：浮窗是透明窗口，渲染成本天生比普通窗口高（Windows 上依赖桌面合成器），再加流式翻译文本高频更新，所以浮窗的设计是&quot;内容克制 + 动画只用 transform/opacity&quot;——这就是把渲染原理用在了产品上。另外注意：渲染五步发生的位置在事件循环里是&quot;微任务清空之后&quot;（Q1 的渲染时机），所以<strong>微任务卡死会连带页面不更新</strong>。</p>
+<p><strong>一句话总结</strong>：渲染五步走，改几何会回流（最贵）、改长相会重绘、只动 transform/opacity 最便宜；三个&quot;看不见&quot;要按占位/可点性选；读写分离避免强制布局；合成层别乱提。</p>
+<hr>
+<h3 id="q7-事件冒泡捕获与事件委托">Q7. 事件冒泡/捕获与事件委托</h3>
+<p><strong>先打个比方</strong>：点击一个按钮，事件像<strong>快递员跑两趟</strong>——先从上往下送通知（捕获阶段，从根节点到按钮），再原路返回（冒泡阶段，从按钮回到根）。默认情况下，你在哪个阶段挂监听器，就在哪个阶段收到通知。</p>
+<p><strong>用人话讲</strong>：</p>
+<ul><li>三个阶段：<strong>捕获</strong>（根 → 目标）→ <strong>目标</strong> → <strong>冒泡</strong>（目标 → 根）；</li><li>addEventListener 默认在<strong>冒泡阶段</strong>触发，第三个参数传 true 改到捕获阶段；</li><li><code>stopPropagation</code> 阻止继续传播（快递员不往下/上跑了），<code>preventDefault</code> 阻止浏览器默认行为（比如 a 标签跳转）——这俩名字像但干的完全不是一件事，面试常考混淆点。</li></ul>
+<p><strong>易混点 1：e.target 和 e.currentTarget 不是一回事！</strong>（委托场景里最重要的坑，配代码）</p>
+<pre><code>&lt;ul id=&quot;list&quot;&gt;&lt;li&gt;1&lt;/li&gt;&lt;li&gt;2&lt;/li&gt;&lt;/ul&gt;
+&lt;script&gt;
+document.getElementById('list').addEventListener('click', (e) =&gt; {
+  console.log(e.target);        // 实际被点的那个 &lt;li&gt;（事件发源地）
+  console.log(e.currentTarget); // 监听器挂着的 &lt;ul&gt;（此刻处理事件的元素）
+});
+&lt;/script&gt;</code></pre>
+<p>一句话：<strong>target = 谁被点的，currentTarget = 谁在代收</strong>。事件委托判断&quot;点的是哪个子元素&quot;必须用 target；用错了 currentTarget 永远拿到父元素，委托就废了。顺带：currentTarget 就是回调里 this 指向的东西（普通函数）。</p>
+<p><strong>易混点 2：哪些事件不冒泡？（委托失灵清单）</strong>——委托全靠冒泡，这些事件冒不了，委托前先查：</p>
+<ul><li><strong>focus / blur</strong>：不冒泡。想委托怎么办？用它们的冒泡版：<strong>focusin / focusout</strong>；</li><li><strong>mouseenter / mouseleave</strong>：不冒泡。冒泡版是 <strong>mouseover / mouseout</strong>；</li><li>scroll、resize、load 等：不冒泡（scroll 能捕获，捕获阶段仍可用委托思维）。</li></ul>
+<p><strong>易混点 3：阻止传播的三个 API 各自管到哪？</strong></p>
+<ul><li><code>stopPropagation</code>：阻止<strong>继续</strong>传播（别的元素上的监听器收不到）——注意：<strong>当前元素上注册的其他监听器仍然会执行</strong>；</li><li><code>stopImmediatePropagation</code>：连<strong>当前元素上排在后面的监听器也一起阻止</strong>——&quot;全都给我停下&quot;；</li><li><code>preventDefault</code>：不拦传播，只拦<strong>浏览器默认行为</strong>（a 跳转、表单提交、右键菜单）。用 stopPropagation 不能阻止 a 跳转，用 preventDefault 不能阻止冒泡——两者互不越权。</li></ul>
+<p><strong>事件委托是什么</strong>：把子元素各自的监听器，统一挂到父元素上，靠 <code>e.target</code> 判断&quot;实际点的是谁&quot;。<strong>原理就是冒泡</strong>——不管点的是哪个子元素，事件都会经过父元素。</p>
+<p><strong>为什么好</strong>：① 动态增删子元素不用反复绑定/解绑（列表无限加载场景尤其明显）；② 一千个按钮从一千个监听器变成一个。</p>
+<p><strong>一句话总结</strong>：事件默认从目标冒泡回根，委托就是&quot;让父元素统一代收，用 e.target（不是 currentTarget）分辨来源&quot;；focus/mouseenter 不冒泡要换冒泡版；记不住就记住&quot;快递员两趟、默认第二趟收&quot;。</p>
+<hr>
+<h2 id="二react-技术栈">二、React 技术栈</h2>
+<h3 id="q8-组件化设计的原则">Q8. 组件化设计的原则</h3>
+<p><strong>先打个比方</strong>：组件化就是<strong>拼乐高</strong>——每块积木只干一件事、接口（拼接口）清晰，搭大东西才有底气；要是每块积木都自带一堆机关还互相缠绕，就没人敢拼第二次。</p>
+<p><strong>三条核心原则（用人话）</strong>：</p>
+<ol><li><strong>单一职责</strong>：一个组件只做一件事，拆分的依据是&quot;<strong>它可能因为什么原因而变化</strong>&quot;——数据获取和界面展示分两个组件（容器/展示分离）、几处都要用的逻辑抽成 Hook、纯展示的小块抽成无状态组件。这样改需求时只动一小块；</li><li><strong>受控/非受控想清楚</strong>：组件的数据<strong>要么全部来自 props（受控，父组件说了算），要么全部内部自管（非受控）</strong>——最忌讳&quot;半受控&quot;：一边内部存状态，一边又看 props，两套逻辑打架，没人说得清当前值从哪来；</li><li><strong>组合优于继承</strong>：React 生态里没有&quot;子组件继承父组件&quot;这套玩法——复用靠 children 插槽、render props、HOC、自定义 Hook。<strong>继承是&quot;是什么&quot;的关系，组合是&quot;有什么&quot;的关系</strong>，UI 复用天然适合组合。</li></ol>
+<p><strong>易混点：受控组件到底长什么样？（配代码）</strong> 以 input 为例：</p>
+<pre><code>// 受控：值永远来自 state，改值必须走 setState
+const [name, setName] = useState('');
+&lt;input value={name} onChange={(e) =&gt; setName(e.target.value)} /&gt;
+// React 说了算：你输入一个字 → onChange → setState → 重新渲染 → value 更新
+
+// 非受控：值由 DOM 自己管，React 只在&quot;要拿结果&quot;时读一次
+&lt;input defaultValue=&quot;初始值&quot; ref={ref} /&gt;   // 拿值：ref.current.value</code></pre>
+<p>判断口诀：<strong>&quot;单一数据源&quot;在谁手里</strong>——受控的单一数据源是 React state（表单校验、实时联动必须用这个），非受控的单一数据源是 DOM 本身（简单的&quot;填完提交&quot;场景，代码更少）。混着用的&quot;半受控&quot;（value 有时传有时不传）是 bug 制造机，React 会直接警告。</p>
+<p><strong>易混点：什么时候抽组件、什么时候抽 Hook？</strong> 一条规则：<strong>&quot;要复用 UI（长相）&quot;抽组件，&quot;要复用逻辑（行为）&quot;抽 Hook</strong>。比如&quot;录音按钮的启动/停止/错误处理&quot;哪都要用 → 抽 useAudioCapture Hook（没有长相）；&quot;带图标的设置项&quot;哪都要显示 → 抽 SettingItem 组件（只有长相）。逻辑混在组件里，就永远没法单独复用。</p>
+<p><strong>易混点：拆得越细越好吗？</strong> 不是。拆得太碎会出现&quot;抽屉型组件&quot;——为了用一个小功能要打开五层文件夹，每次跨层传 props 传一路（prop drilling）。<strong>拆分是手段，解耦才是目的</strong>；拆完发现 props 层层下传，说明拆的边界不对（这时该用 Context 或组合调整）。合理的组件数 = 每个组件能一句话说清它干什么。</p>
+<p><strong>结合本项目</strong>：目录结构就是组件化思维的落地——screens（页面）/ components（通用 UI 件）/ hooks（useAudioCapture、useKeyboardShortcuts）/ store（纯状态机）/ stream（通信层）/ utils。每层单向依赖，谁都不越层。最有说服力的成果是：把面试会话的状态机抽成<strong>纯函数</strong>（interview-reducer.ts，不依赖任何 UI/平台）后，从 React Native 到 Electron <strong>零改动迁移</strong>——拆对了，跨端复用是白送的。</p>
+<p><strong>一句话总结</strong>：单一职责定边界、受控非受控定归属、组合代替继承做复用、逻辑抽 Hook 长相抽组件；拆得好的标志是&quot;换平台不用改&quot;。</p>
+<hr>
+<h3 id="q9-hooks-的原理为什么不能写在条件语句里">Q9. Hooks 的原理：为什么不能写在条件语句里？</h3>
+<p><strong>先打个比方</strong>：React 记组件的状态靠的是<strong>点名册</strong>——每次渲染，按<strong>顺序</strong>挨个点名（调用 Hook），把每个 Hook 的状态存在对应的座位号上。它不看名字、不看长相，只看&quot;这次是第几个被点到的&quot;。一旦有一次你跳过了 3 号直接点 4 号，从 3 号开始所有人的状态就全对不上了。</p>
+<p><strong>原理展开</strong>：</p>
+<ul><li>每个组件在 React 内部有一张<strong>链表</strong>（fiber 上的 memoizedState），useState/useEffect 等每被调用一次，就对应链上的一个节点；</li><li>每次渲染，React 重新按顺序执行一遍 Hook，<strong>&quot;第 N 次调用的 Hook&quot; 就取 &quot;链表第 N 个节点&quot; 的状态</strong>——所以 Hook 调用必须次数、顺序永远一致；</li><li>写在 if 里 = 这次渲染调了 3 个 Hook、下次调了 4 个 → 链表错位 → useState 拿到别人的值，useEffect 清理函数对不上号，全乱。这就是 rules-of-hooks 这条 ESLint 规则存在的原因——它不是风格偏好，是防错位。</li></ul>
+<p><strong>易混点 1：setState 是&quot;异步&quot;的吗？</strong>（最高频追问之一）不是真正的异步（没有 setTimeout 那一套），而是<strong>批处理 + 时机延后</strong>：React 为了少渲染几次，把同一个事件里（React 18 起任何地方）的多个 setState <strong>攒到一起、一次渲染</strong>。所以&quot;调完 setState 立刻读 state&quot;读到的还是<strong>旧值</strong>——新值要等这次渲染发生后才看得到：</p>
+<pre><code>const [count, setCount] = useState(0);
+const onClick = () =&gt; {
+  setCount(count + 1);      // 排队
+  setCount(count + 1);      // 又排队——但两个都是 count+1（旧值 0），结果还是 1
+  console.log(count);       // 0 —— 当前这轮里 count 还是旧值
+};
+// 想要&quot;连着加两次&quot;：用函数式更新
+const onClick2 = () =&gt; {
+  setCount(c =&gt; c + 1);     // 排队：&quot;在最新值上加 1&quot;
+  setCount(c =&gt; c + 1);     // 排队：&quot;再在最新值上加 1&quot; → 结果 2
+};</code></pre>
+<p>口诀：<strong>要看新值，去渲染后看；要连续改，用函数式更新 <code>setCount(c =&gt; ...)</code></strong>。</p>
+<p><strong>易混点 2：过期闭包（stale closure）到底怎么发生的？</strong> 配代码：</p>
+<pre><code>const [count, setCount] = useState(0);
+useEffect(() =&gt; {
+  const timer = setInterval(() =&gt; {
+    console.log(count);          // 永远打印 0！
+    setCount(count + 1);         // 永远设置成 1！
+  }, 1000);
+  return () =&gt; clearInterval(timer);
+}, []);                          // 依赖为空 = 这个 effect 只在挂载时执行一次
+// 这个回调是&quot;第一次渲染时&quot;的闭包，记着当时的 count = 0（呼应 Q2：记的是变量）
+// 之后 count 变了，但闭包里的 count 还是那个 0</code></pre>
+<p>解法二选一：把 count 写进依赖数组（每次重建定时器），或者用函数式更新 <code>setCount(c =&gt; c + 1)</code> 摆脱对旧值的依赖。<strong>凡是&quot;回调里读到了旧值&quot;，第一反应就是&quot;这是个记着旧变量的闭包&quot;</strong>。</p>
+<p><strong>易混点 3：useEffect 和 useLayoutEffect 差在哪？</strong> useEffect 在<strong>渲染提交到屏幕之后</strong>异步执行（先让用户看到画面）；useLayoutEffect 在<strong>提交后、浏览器绘制之前</strong>同步执行（会挡住绘制）。所以：改 DOM 导致闪烁的、要量元素尺寸的，用 useLayoutEffect；发请求、订阅事件这类不着急的，一律 useEffect。默认 useEffect，遇到闪烁再换。</p>
+<p><strong>useEffect 的依赖数组同理</strong>：渲染提交后，React 对依赖做<strong>浅比较</strong>（逐个 === 比引用），变了才执行副作用（先跑上次的清理函数，再跑新的）。两个坑：</p>
+<ul><li>依赖漏写 → 回调里的值还是<strong>上次渲染的旧快照</strong>（就是上面的易混点 2）；</li><li>依赖写成对象/数组字面量 → 每次渲染都是新引用 → 浅比较永远&quot;变了&quot; → 无限执行，甚至死循环。</li></ul>
+<p><strong>一句话总结</strong>：Hooks 靠&quot;调用顺序&quot;对号入座存状态，所以顺序不能变、不能进条件；setState 是批处理的（要连续改用函数式）；回调里读到旧值 = 过期闭包；依赖数组是浅比较，漏了就拿到旧值，写对象就无限跑。</p>
+<hr>
+<h3 id="q10-状态管理怎么选型为什么你项目用-usereducer">Q10. 状态管理怎么选型？为什么你项目用 useReducer？</h3>
+<p><strong>先讲背景</strong>：状态管理没有银弹，选型是<strong>判断题</strong>而不是&quot;背 Redux 全家桶&quot;。判断顺序：<strong>先看状态的形状，再看共享范围，最后看团队成本</strong>。</p>
+<ul><li><strong>短命、组件内自用</strong> → useState，够了；</li><li><strong>多个状态互相联动、切换规则明确（状态机）</strong> → useReducer。它把&quot;什么动作导致什么变化&quot;写进一个纯函数：dispatch(动作) → 纯函数(旧状态, 动作) → 新状态。好处：所有状态转移在一处，<strong>可预测、可单测、可回放</strong>；</li><li><strong>跨组件共享</strong> → Context（轻量）或外部 store（Zustand/Redux Toolkit）。关键判断是<strong>更新频率</strong>：Context 的 value 一变，所有消费者都会重渲染——高频更新的状态不适合放 Context；</li><li><strong>服务端数据</strong>（请求缓存、重试、失效）→ React Query 这类库，别自己再造轮子。</li></ul>
+<p><strong>先打个比方</strong>：useReducer 就像<strong>红绿灯</strong>——状态只有几种（红/黄/绿），怎么切换有死规矩（红→绿必须经过黄），所有规则写在一张表里。面试会话就是这样：采集态/推流态/转写态/回答态，切换规则明确且互斥。</p>
+<p><strong>易混点：useState 和 useReducer 的边界到底在哪？</strong> 判据不是&quot;状态数量&quot;，是<strong>&quot;下一个状态和上一个状态有没有逻辑关系&quot;</strong>：</p>
+<ul><li>每个状态<strong>各自独立</strong>（名字、年龄、是否展开……互不牵连）→ useState，一个状态一个 setter 最简单；</li><li>状态们<strong>互相联动、要一起变</strong>（比如&quot;开始录音&quot;同时要把状态改成采集中 + 计时归零 + 清空上次转写）→ useReducer，一次 dispatch 一个动作，reducer 里保证这组变化<strong>一起发生、永远一致</strong>——用 useState 分开改，改漏一个就是 bug，而且&quot;谁能改成什么状态&quot;散落各处，毫无规矩可言。</li></ul>
+<p><strong>高频追问：为什么不用 Redux？</strong> 标准答法：<strong>Redux 解决的是&quot;全局共享 + 中间件生态&quot;问题，我们解决的是&quot;状态机规则收敛&quot;问题</strong>——问题不同，工具不同。本项目会话状态只在一个功能域里流转（不需要全局），用 useReducer + 纯函数就够；如果哪天要跨页面共享、要 devtools 时间旅行、要 saga 式副作用编排，Redux Toolkit 是合理下一步。<strong>选型是对着问题选，不是对着名气选。</strong></p>
+<p><strong>结合本项目</strong>：面试会话用 useReducer 收敛全部转移规则，而且抽成<strong>纯函数</strong>后与 UI 完全解耦——<strong>同一份 reducer 在 RN 和 Electron 两端零改动复用</strong>（Q8 也提到）。这就是&quot;状态管理选对了 + 抽纯了&quot;的实际收益：逻辑一处维护，两端共享，单测直接覆盖状态机而不是 UI。</p>
+<p><strong>一句话总结</strong>：useState 管&quot;各自独立&quot;的小状态，useReducer 管&quot;互相联动有规则&quot;的状态机，Context 管低频共享，服务端数据交给 React Query——按状态形状和更新频率选，不按名气选。</p>
+<hr>
+<h3 id="q11-虚拟-dom-是什么diff-为什么不是-on³">Q11. 虚拟 DOM 是什么？diff 为什么不是 O(n³)？</h3>
+<p><strong>先打个比方</strong>：虚拟 DOM 就是<strong>先在草稿纸上改作业，改完再一次性誊到作业本上</strong>。作业本（真实 DOM）很贵——每写一个字都要动纸笔工具（浏览器重排重绘）；草稿纸（JS 对象）随便涂改不要钱。React 的做法：每次更新先在草稿纸（JS 对象树）上算出&quot;最终长什么样&quot;，和上一版草稿对比出<strong>最小的改动清单</strong>，再照着清单批量改作业本。</p>
+<p><strong>为什么对比不慢？</strong> 严格算两棵树的&quot;最小编辑距离&quot;是 O(n³)——一对比一对地试，组合爆炸。React 做了<strong>三个假设</strong>把复杂度降到 O(n)：</p>
+<ol><li><strong>只比同层</strong>：不跨层比较（跨层移动会被当成&quot;删掉重建&quot;）；</li><li><strong>类型不同直接换</strong>：div 变 span，整棵子树直接替换，不进去比细节；</li><li><strong>key 标注身份</strong>：同层列表里的元素靠 key 认人——key 稳定（业务 id）就能复用/移动，key 用数组下标 index 会在排序/插入时全错乱（状态串位）。</li></ol>
+<p><strong>易混点：key 用 index 到底怎么翻车？（配代码）</strong> 列表项里有内部状态时最明显：</p>
+<pre><code>const [list, setList] = useState([
+  { id: 'a', name: '苹果' },
+  { id: 'b', name: '香蕉' },
+]);
+// 渲染：list.map((item, index) =&gt; &lt;input key={index} value={item.name} /&gt;)
+
+// 用户在第一个输入框里手打了一段字（DOM 自己记住的&quot;未提交状态&quot;），
+// 然后在列表头部插入一项：
+// 用 key={index}：React 看&quot;第 0 项还是第 0 项&quot;（index 没变）→ 复用同一个 input
+//   → 用户打的那段字&quot;跑&quot;到了新插入的项上！状态串位。
+// 用 key={item.id}：React 认出&quot;苹果&quot;这个身份挪到了第 1 位 → 带着它的 DOM 和状态搬家。</code></pre>
+<p>口诀：<strong>key 是&quot;身份证号&quot;，不是&quot;座位号&quot;</strong>——座位号（index）会随队伍变化，身份证号（id）永远跟着本人。列表有排序/插入/删除时，index 必翻车；静态列表用 index 才勉强没事。</p>
+<p><strong>易混点：useState 的 setState 是&quot;替换&quot;不是&quot;合并&quot;</strong>——class 组件的 this.setState 会把新对象<strong>浅合并</strong>进旧状态（只写 name，age 还在）；函数组件的 setState 是<strong>整个替换</strong>（只写 name，age 就没了）。所以对象状态要自己手动合并：<code>setUser(u =&gt; ({ ...u, name: '新名字' }))</code>——这也是&quot;函数式更新&quot;的另一个常用场景（在旧值基础上改）。</p>
+<p><strong>一个认知升级（面试很加分）</strong>：虚拟 DOM 的核心价值<strong>不是&quot;比直接操作 DOM 快&quot;</strong>（精心手写的原生 DOM 操作往往更快），而是：① 开发者不用管&quot;什么时候该改 DOM&quot;（声明式）；② 更新天然<strong>批处理</strong>（一次计算、一次提交）；③ 同一棵树可以渲染到不同终端（DOM / React Native 原生控件 / Canvas）——<strong>跨端能力是虚拟 DOM 送的</strong>。</p>
+<p><strong>一句话总结</strong>：虚拟 DOM = JS 里的草稿纸，diff 靠&quot;同层比较 + 类型不同就换 + key 认人&quot;三个假设降到 O(n)；key 是身份证号不是座位号；它的价值是声明式 + 批量 + 跨端，不是字面上的&quot;快&quot;。</p>
+<hr>
+<h3 id="q12-fiber-架构解决什么问题">Q12. Fiber 架构解决什么问题？</h3>
+<p><strong>先打个比方</strong>：React 15 以前的更新像<strong>一口气爬 30 层楼</strong>——半路不让停，用户按电梯（输入）、别人叫开门（动画）都得干等爬完。Fiber 改成<strong>每爬一层都能歇脚</strong>——让位置、存进度，有事（高优先级更新）先去办，回来接着爬。</p>
+<p><strong>为什么原来停不下来</strong>：老版本把组件树<strong>递归地</strong>一遍 diff 完——递归是靠调用栈的，栈不清空就出不来。组件树一大，一次 diff 占着主线程几百毫秒，期间的点击、滚动、动画全部冻结——用户感知就是卡顿掉帧。</p>
+<p><strong>Fiber 干了什么（原理级）</strong>：</p>
+<ol><li><strong>把递归改成链表遍历</strong>：每个组件实例变成一个 Fiber 节点，用指针（child/sibling/return）连起来。链表遍历<strong>随时可以暂停、记住位置、稍后继续</strong>——不需要调用栈了；</li><li><strong>双缓冲</strong>：屏幕上正在显示的是 current 树，后台偷偷构建一棵新的 workInProgress 树，建完一次性切换——用户永远看到完整画面，不会看到&quot;改了一半&quot;的树；</li><li><strong>优先级调度</strong>：更新按优先级（lane）排队，高优先级的（用户输入）可以<strong>打断</strong>低优先级的（离屏内容）。React 18 的 startTransition / useDeferredValue 就是&quot;主动声明这是低优先级更新&quot;的入口。</li></ol>
+<p><strong>易混点 1：并发（Concurrent）不是多线程</strong>——React 的并发是<strong>单线程上的时间切片</strong>：不是同时干两件事，而是&quot;这件事干 5ms → 让开，有更急的先去 → 回来接着干&quot;。让开的时机正好呼应 Q1 的事件循环——<strong>让出主线程，浏览器才有空处理点击、画帧</strong>。为什么约 5ms？60fps 意味着一帧只有约 16ms，React 只占用其中一小段，剩下的留给浏览器干别的，动画和交互才不掉帧。</p>
+<p><strong>易混点 2：打断会不会让页面显示&quot;半成品&quot;？</strong> 不会。Fiber 把更新拆成两个阶段：<strong>render 阶段</strong>（算 diff，纯计算，可暂停可打断可丢弃）和 <strong>commit 阶段</strong>（把结果写进真实 DOM，快且不可中断）。打断只发生在 render 阶段——&quot;算到一半&quot;不算数，重算即可；<strong>commit 一旦开始必须一口气完成</strong>，所以用户永远只会看到&quot;完整的上一版&quot;或&quot;完整的新版&quot;，绝不会看到改了一半的树。这就是双缓冲的意义：新树没建完之前，屏上的旧树纹丝不动。</p>
+<p><strong>易混点 3：优先级从哪来？</strong> React 内部按更新来源排 lane（优先级）：用户输入/点击最高，普通 setState 次之，startTransition 包住的（还有 useDeferredValue）最低。低优先级更新可以被高优先级插队；插队后，被丢弃的那版低优先级更新会被<strong>基于最新状态重算</strong>——不会丢数据。</p>
+<p><strong>结合本项目</strong>：流式翻译场景里 llm_chunk 逐字高频到达，如果被问&quot;怎么保证不卡&quot;可以答：把流式文本更新包进 transition / useDeferredValue，标记成低优先级——React 把它拆片执行，用户点击、切页永远即时响应，字晚渲染几十毫秒毫无感知。</p>
+<p><strong>一句话总结</strong>：Fiber = 把&quot;一口气必须做完的递归 diff&quot;改成&quot;可暂停、可打断、带优先级的链表遍历&quot;；并发 = 单线程时间切片（约 5ms 让路）；render 可打断、commit 不可打断——长任务不再冻结页面。</p>
+<hr>
+<h3 id="q13-路由原理与-react-router-7">Q13. 路由原理与 React Router 7</h3>
+<p><strong>先讲原理</strong>：SPA（单页应用）只有一份 HTML，所谓&quot;换页面&quot;其实是 JS 在<strong>本地切换组件</strong>——但 URL 要跟着变，这样刷新、分享、前进后退才不会丢位置。两种玩法：</p>
+<ul><li><strong>history 模式</strong>：用浏览器 History API（pushState/replaceState）改 URL——<strong>只改地址栏，不发起网络请求</strong>；监听 popstate 响应&quot;前进/后退&quot;。URL 干净（没有 #），需要服务器配合（刷新时任何路径都返回 index.html，否则 404）；</li><li><strong>hash 模式</strong>：只改 URL 的 <code>#</code> 后面那截（# 后面的变化本来就不发请求），监听 hashchange。好处是零服务器配置，坏处是 URL 丑、对 SEO 不友好。</li></ul>
+<p><strong>易混点 1：pushState 改了 URL，popstate 会触发吗？</strong> 不会——popstate <strong>只在用户按前进/后退按钮（或脚本调用 go/back）时触发</strong>；你自己 pushState/replaceState 改地址栏，是不发任何事件的（React Router 会在 pushState 之后自己通知内部状态机去渲染对应页面，走的是&quot;代码直连&quot;而不是&quot;监听事件&quot;）。面试说清这条，说明你真懂实现而不只是会用。</p>
+<p><strong>易混点 2：为什么 Electron 里用 hash 模式？</strong>（结合本项目的真实选择）Electron 的页面用 <code>loadFile</code> 加载——URL 形如 <code>file:///C:/.../index.html</code>。<strong>history 模式在这种环境下有两个雷</strong>：刷新后地址对不上文件路径直接白屏；本地文件也没有&quot;服务器把所有路径重写到 index.html&quot;这回事。hash 模式<strong>只动 # 后面那截、不碰路径、不依赖任何服务器配置</strong>——文件协议下天然稳。<strong>本项目 App.tsx 里用的就是 HashRouter</strong>。记住这个推理链：<strong>加载方式（file://）决定了路由模式（hash）</strong>，而不是&quot;hash 丑不丑&quot;。</p>
+<p><strong>易混点 3：服务端路由和客户端路由怎么区分？</strong> 服务端路由 = 每个 URL 真的向服务器要一份新 HTML（传统多页应用）；客户端路由 = 一份 HTML 打天下，URL 变化是 JS 在本地演戏。SPA 本质是后者。追问&quot;刷新为什么能回到当前页&quot;——history 模式靠服务器 rewrite，hash 模式靠 # 后的内容本来就不参与请求。</p>
+<p><strong>React Router 7</strong>（和 Remix 合并后的版本）在基础路由上加了三样：<strong>数据路由</strong>（loader 在进页面<strong>之前</strong>拉数据、action 处理表单提交——页面到的时候数据已经就位，没有&quot;先白屏再加载&quot;的闪烁）、<strong>嵌套路由</strong>（子页面天然嵌在父布局里）、<strong>类型安全</strong>（路由参数有类型）。</p>
+<p><strong>结合本项目</strong>：桌面端多个页面（面试页/历史页/工具页/订阅页）用 react-router-dom 7 组织；快捷键 Ctrl+1/2/3 切页面本质上就是 useNavigate 编程式跳转——快捷键和路由是同一套机制，不是两套并行逻辑。</p>
+<p><strong>一句话总结</strong>：路由 = 不刷新页面但换 URL（history 或 hash）；pushState 不触发 popstate；file:// 场景选 hash 模式；React Router 7 把&quot;进页面前拉数据&quot;也管了；快捷键切页就是程序里调用 navigate。</p>
+<hr>
+<h3 id="q14-memo--usememo--usecallback-的原理和滥用问题">Q14. memo / useMemo / useCallback 的原理和滥用问题</h3>
+<p><strong>先讲原理（一句话）</strong>：三兄弟的共同机制是<strong>引用相等性</strong>——JS 里比较两个对象（函数也是对象）用的是&quot;是不是同一张纸&quot;，而不是&quot;两张纸写的是不是一样&quot;。</p>
+<ul><li><strong>useMemo / useCallback</strong>：把计算结果/函数<strong>缓存下来</strong>，依赖没变就直接返回<strong>上次那个引用</strong>（同一张纸）；</li><li><strong>memo</strong>：包裹组件，props 做<strong>浅比较</strong>——每个 prop 都和上次的引用比一遍，全相等就跳过这次渲染。</li></ul>
+<p><strong>易混点 1：引用相等和值相等到底差在哪？（配代码）</strong></p>
+<pre><code>const a = { x: 1 };
+const b = { x: 1 };
+console.log(a === b);        // false —— 两张纸，内容一样也不算&quot;同一张&quot;
+console.log(a.x === b.x);    // true —— 但比到&quot;值&quot;这一层，1 就是 1
+
+const arr = [1, 2, 3];
+arr.push(4);
+// 数组还是&quot;同一个&quot; arr —— 但浅比较不往下看内容，所以 React 察觉不到内容变了
+// → 这也是&quot;直接 push 再 setState 同一个引用&quot;不触发重渲染的原因
+// → 必须换新引用：setList([...list, 4])</code></pre>
+<p>一句话：<strong>JS 的 === 比&quot;身份&quot;，不比&quot;内容&quot;</strong>（基本类型除外）；React 全家桶的优化全靠这个身份判断。所以&quot;改了内容但没换引用&quot;在 React 眼里等于&quot;没改&quot;——这是无数&quot;页面不更新&quot;bug 的根因。</p>
+<p><strong>易混点 2：useMemo 和 useCallback 是同一件事</strong>——useCallback 就是&quot;专门缓存函数的 useMemo&quot;（<code>useCallback(fn, deps)</code> 等价于 <code>useMemo(() =&gt; fn, deps)</code>）。所以不用纠结背俩概念：<strong>一个缓存值，一个缓存函数，机制相同</strong>。</p>
+<p><strong>为什么经常&quot;没用&quot;</strong>：memo 要生效，前提是<strong>每个 prop 的引用都要稳定</strong>。但父组件每次渲染都会<strong>新建</strong>对象字面量、箭头函数（新纸，即使内容一样）——props 引用全变，浅比较全失败，memo 白包了，还白付一次比较的成本。必须配合 useMemo/useCallback 把引用&quot;钉住&quot;，这套组合拳才打得出来。</p>
+<p><strong>为什么还&quot;有害&quot;</strong>：缓存不是免费的——useMemo 存结果要内存、每次渲染要比较依赖；对便宜的计算/轻量组件做缓存，是<strong>负优化</strong>。React 官方自己的态度都是：<strong>先出现性能问题，测量确认瓶颈，再动手优化</strong>——凭感觉全项目包 memo 是过度设计。</p>
+<p><strong>易混点 3（新动向，加分项）：React Compiler 正在让这件事过时</strong>——React 19 时代官方编译器（React Compiler）能<strong>自动</strong>给代码加上 memo 级别的优化，方向是&quot;人别管缓存，编译器管&quot;。了解这个动向，回答&quot;怎么防滥用&quot;时可以说：短期靠纪律（只在测出瓶颈处用），长期靠编译器自动化——<strong>展现你知道生态演进方向</strong>。</p>
+<p><strong>结合本项目</strong>：状态机用 useReducer 后有一个天然红利——<strong>dispatch 函数的引用永远稳定</strong>（React 保证），传给 memo 包裹的子组件时浅比较能过，不需要 useCallback 再包一层。这个&quot;组合拳&quot;可以主动讲：选对状态管理，性能优化是送的。</p>
+<p><strong>一句话总结</strong>：三件套的本质是&quot;引用不变就不重算/不重渲&quot;；=== 比身份不比内容；memo 想生效必须配合稳定的引用，且只对&quot;测出来的瓶颈&quot;用——无脑包 memo 是负优化，未来交给 React Compiler。</p>
+<hr>
+<h2 id="三工程化">三、工程化</h2>
+<h3 id="q15-vite-为什么快原理是什么">Q15. Vite 为什么快？原理是什么？</h3>
+<p><strong>先打个比方</strong>：Webpack 开发模式像<strong>团餐</strong>——客人没来先把所有菜全做好摆上（把整个项目打成一个 bundle）；Vite 像<strong>自助餐</strong>——客人走到哪道菜（哪个模块），厨房才现做哪道（按需编译单个文件）。人少的时候，自助餐上菜速度快得多。</p>
+<p><strong>原理拆成三层</strong>：</p>
+<ol><li><strong>开发期不打包，靠浏览器原生 ESM</strong>：现代浏览器支持 <code>import</code> 直接按 URL 加载模块。Vite 的开发服务器<strong>不把所有代码打包成一个文件</strong>，而是&quot;页面请求哪个模块，就现场把那个文件编译好返回&quot;。项目再大，启动时也只处理正在用的文件——Webpack 冷启动要先把整个依赖图打一遍；</li><li><strong>依赖预构建</strong>：第三方库（node_modules 里几百个包）用 <strong>esbuild</strong> 预先转译并缓存（在 node_modules/.vite 下）。esbuild 为什么快？它是 <strong>Go 语言</strong>写的（编译成机器码跑，不像 JS 要经过 JS 引擎），而且<strong>极度并行</strong>、中间不生成 AST 到 JS 的来回转换。几百个依赖一次搞定，之后全是缓存命中；</li><li><strong>HMR（热更新）边界精确</strong>：Vite 清楚每个文件的依赖关系，你改了哪个文件，它只让<strong>依赖这个文件的最小模块链</strong>失效重载——状态能保留。Webpack 的 HMR 也快，但依赖图在内存里大而全，链路长了失效范围就大。</li></ol>
+<p><strong>易混点 1：&quot;开发不打包&quot;在浏览器里长什么样？</strong> 打开 DevTools 的 Network 面板会看到<strong>几百个小请求</strong>——每个模块一个请求（<code>/src/App.tsx</code>、<code>/src/hooks/useAudio.ts</code>……）。这恰恰是&quot;按需&quot;的证据：浏览器 import 谁就请求谁。代价是请求多，所以依赖（node_modules 里几百个文件）不能一个个发请求——<strong>预构建就是把几百个小文件拼成少量大文件</strong>，一举两得：少发请求 + 把 CommonJS 格式转成浏览器认识的 ESM 格式（CJS 的 require 浏览器原生不认，必须转）。</p>
+<p><strong>易混点 2：HMR 为什么改个组件&quot;状态不丢&quot;？</strong> HMR 的机制是&quot;<strong>只重新执行改动的那个模块</strong>&quot;：文件变了 → Vite 通过 WebSocket 通知浏览器 → 浏览器重新 import 这个模块，<strong>顺藤摸瓜</strong>让依赖它的模块链也失效重执行。React 组件的状态能保留，靠的是 vite-plugin-react 的配合（组件本身重执行，但 Hooks 状态在 React 侧通过模块热替换机制保住）。<strong>理解边界：状态不丢不是免费的，是靠&quot;模块级替换 + 框架配合&quot;实现的</strong>。</p>
+<p><strong>易混点 3（新动向，加分项）：Vite 的构建层正在换血</strong>——生产构建从 Rollup 换成 <strong>Rolldown</strong>（Rust 写的&quot;Rollup 兼容版&quot;，Vite 6 已作为实验选项、后续版本默认）。趋势一句话：<strong>esbuild 证明了&quot;Go/Rust 写的编译器快一个数量级&quot;，现在整个链路都在往原生语言迁移</strong>。答出这条说明你跟踪生态。</p>
+<p><strong>生产环境为什么不用 esbuild 打包</strong>：esbuild 转译单文件极快，但<strong>产物优化能力弱</strong>（拆包、摇树细节）。所以 Vite 生产构建底层用的是 <strong>Rollup</strong>——成熟稳重。记住这句：<strong>开发快靠 ESM 按需 + esbuild，生产稳靠 Rollup</strong>。</p>
+<p><strong>结合本项目</strong>：渲染层用 Vite（React 应用，开发体验好）；Electron 主进程用 tsc 直接编译（主进程是纯 Node 环境，不需要 bundle 那一套运行时处理，编译成 CJS 产物直接跑，简单可靠）。<strong>两个运行环境，两种构建策略</strong>——这也是工程判断。</p>
+<p><strong>一句话总结</strong>：Vite 快 = 开发期不打包（浏览器原生 ESM 按需）+ esbuild 预构建依赖（Go 写的、并行快）+ HMR 只失效最小链路；生产用 Rollup（未来 Rolldown）兜底。</p>
+<hr>
+<h3 id="q16-webpack-的原理loader-和-plugin-的区别">Q16. Webpack 的原理：loader 和 plugin 的区别</h3>
+<p><strong>先打个比方</strong>：Webpack 是个<strong>流水线工厂</strong>——从入口文件开始，把每个文件当成零件，顺着 import 关系画出&quot;哪些零件之间有依赖&quot;（模块依赖图），加工（转译）后打包出货。</p>
+<ul><li><strong>loader = 翻译官</strong>：管&quot;<strong>单个文件怎么变成可执行模块</strong>&quot;。一个文件进来，交给一串 loader 从右往左依次处理——.ts 交给 ts-loader 翻成 JS、.css 交给 css-loader 处理、图片交给 file-loader。loader 的职责是<strong>翻译</strong>；</li><li><strong>plugin = 车间主任</strong>：管&quot;<strong>整个构建流程上还能插什么手脚</strong>&quot;。Webpack 的构建过程（开始编译 → 产出 chunk → 优化 → 写盘）暴露了大量钩子（基于 Tapable 这个发布订阅库），plugin 挂在任意钩子上，干什么都行——HtmlWebpackPlugin 自动生成 HTML 文件、DefinePlugin 注入环境变量、压缩插件做代码压缩。plugin 的职责是<strong>干预流程</strong>。</li></ul>
+<p><strong>易混点 1：loader 的&quot;从右往左&quot;执行到底怎么理解？（配代码）</strong></p>
+<pre><code>// 配置里写的是从左到右，执行是倒过来的
+use: ['style-loader', 'css-loader', 'sass-loader']
+// 执行顺序：sass-loader 先把 scss 翻成 css
+//   → css-loader 再处理 css 里的 import/url
+//   → style-loader 最后把 css 塞进 &lt;style&gt; 标签</code></pre>
+<p>为什么倒着来？可以理解成<strong>洋葱模型</strong>：右边的 loader 先碰原始文件，处理完递给左边，左边的最后收口——<strong>&quot;翻译链条&quot;：原料从右进，成品从左出</strong>。口诀：<strong>配置正着写，执行倒着跑</strong>。</p>
+<p><strong>易混点 2：为什么浏览器需要&quot;打包&quot;这一步？</strong> 三个原因：① 历史上浏览器不认识 <code>import</code>（老浏览器没有 ESM，所有模块要拼进一个文件）；② 项目几百个模块，一个个发请求 = 几百次网络往返，拼成一个（或拆成几个）请求少得多；③ <strong>tree shaking（摇树优化）</strong>——打包时只保留&quot;真正 import 到的代码&quot;，没用的函数整段剪掉，产物体积大降。注意：<strong>tree shaking 依赖 ESM 的静态 import</strong>（import 语法是写死的，编译器能静态分析；CommonJS 的 require 可以写在任何地方、参数还能是变量，分析不了——这也是 ESM 成为标准的重要原因）。</p>
+<p><strong>易混点 3：bundler 时代的产物 splitChunks 是什么？</strong> 打包不是只出一个大文件——把&quot;公共的、体积大的、很少变的&quot;（比如 React 本身）拆成独立的 vendor chunk，利用浏览器缓存（改业务代码不影响 vendor 的缓存命中）；业务代码再按路由拆包，首屏只加载首屏。<strong>&quot;打包&quot;不是目的，&quot;拆得有策略&quot;才是</strong>——这句话面试很加分。</p>
+<p><strong>一句话区分</strong>：loader 管&quot;文件怎么翻译&quot;（右进左出），plugin 管&quot;流程上还能发生什么&quot;（挂钩子干预）。</p>
+<p><strong>结合本项目</strong>：渲染层选 Vite（开发体验优先），主进程选 tsc 直编（Node 环境不需要 bundle），前端工程化工具是<strong>按场景选</strong>，不是&quot;只会 Webpack 全家桶&quot;。这个&quot;为什么不用 Webpack&quot;的答案，比背 loader/plugin 定义更有价值。</p>
+<p><strong>一句话总结</strong>：loader 翻译单文件（倒着执行），plugin 干预全流程；打包为的是兼容、少请求、摇树；选型按场景——浏览器端 bundle 有需求就上，纯 Node 环境 tsc 直编更简单。</p>
+<hr>
+<h3 id="q17-pnpm-的原理为什么快为什么严格">Q17. pnpm 的原理：为什么快、为什么严格？</h3>
+<p><strong>先打个比方</strong>：npm/yarn 像<strong>每家店自己囤货</strong>——每个项目的 node_modules 里都有一份完整的包拷贝，同一个包在 10 个项目里就存了 10 份。pnpm 像<strong>一个中央大仓库 + 各家贴标签</strong>——包在全局只存一份，项目里放的是指向仓库的&quot;硬链接&quot;（同一磁盘上同一份文件，多了个名字而已）。</p>
+<p><strong>两个核心机制</strong>：</p>
+<ol><li><strong>内容寻址存储 + 硬链接</strong>：所有包按内容哈希存在全局 store 里；项目 node_modules 里的文件是<strong>硬链接</strong>——不占额外磁盘、安装 = 建链接，秒级完成。同一版本同一包全机器只存一份；</li><li><strong>非扁平 node_modules</strong>：npm 会把依赖&quot;拍平&quot;到顶层（node_modules 根目录），带来的副作用是<strong>幽灵依赖</strong>——你 import 了一个<strong>根本没在 package.json 里声明</strong>的包，它恰好被某个依赖带到了顶层，代码能跑！等到哪天依赖升级把它挪走，线上突然崩了。pnpm 严格按声明结构放包，<strong>没声明的包 import 直接报错</strong>——不是 pnpm 找茬，是它在帮你把&quot;依赖没写全&quot;这颗雷提前引爆。</li></ol>
+<p><strong>易混点 1：硬链接和软链接/复制到底差在哪？</strong> 硬链接 = 同一个文件<strong>多个名字</strong>，磁盘上只有一份数据（改任何一个名字下的内容，别的名字看到的也变）；软链接 = 一个&quot;路标&quot;指向另一个路径（跨文件系统也行，但路标断了就没了）；复制 = 磁盘上真有两份。pnpm 在 store 和项目之间用<strong>硬链接</strong>（省磁盘、秒级安装），在项目内部 <code>.pnpm</code> 结构里用符号链接把依赖<strong>摆成声明的样子</strong>。一句话：<strong>硬链接省空间，符号链接摆结构</strong>。</p>
+<p><strong>易混点 2：幽灵依赖长什么样？（配代码）</strong></p>
+<pre><code>// 你的 package.json 里只声明了 axios
+import axios from 'axios';
+import dayjs from 'dayjs';   // 没声明！但 npm 下能跑——因为 axios 恰好依赖 dayjs，
+                             // npm 把它&quot;拍平&quot;到了顶层，你的代码顺手就 import 到了
+// 哪天 axios 升级不再依赖 dayjs → 你的 import 突然找不到模块 → 线上炸
+// pnpm 下这行 import 当场报错：&quot;你没声明这个包&quot;——把雷提前引爆在本地</code></pre>
+<p><strong>易混点 3：pnpm 为什么&quot;跑脚本&quot;这么谨慎？</strong> pnpm 出于安全默认<strong>不执行依赖包的 install 脚本</strong>（依赖包想跑 postinstall 得显式批准），而 npm 默认会跑——这就是&quot;pnpm 装完 native 模块没编译&quot;类问题的根源。理解了这条，就理解了我们踩的那个坑的完整链条（见下）——不是 pnpm 的 bug，是&quot;安全默认&quot;和&quot;隐式编译&quot;两个设计撞在一起的结果。</p>
+<p><strong>结合本项目</strong>：pnpm workspace 管理 fe/be/shared 多包（Q18 细讲）；还踩过一个 pnpm 特有的坑——原生模块目录（electron/audio/native）的 install 脚本曾经会被 pnpm 在安装时隐式触发 node-gyp 编译，而<strong>针对系统 Node 编出来的插件在 Electron 里是坏的</strong>（ABI 不匹配，Q39 细讲）。解法：把 native 目录的 install 脚本改成 no-op（什么都不做），编译统一走 ensure-native 自动化脚本。<strong>对包管理器的行为理解到这个深度，工程能力就体现出来了</strong>。</p>
+<p><strong>一句话总结</strong>：pnpm = 全局仓库 + 硬链接（快、省磁盘）+ 严格依赖树（幽灵依赖直接报错）+ 谨慎执行脚本（安全默认）；它报的&quot;错&quot;往往是你的依赖声明真的有错。</p>
+<hr>
+<h3 id="q18-monorepo-怎么治理你项目怎么做的">Q18. monorepo 怎么治理？你项目怎么做的？</h3>
+<p><strong>先解释名词</strong>：monorepo = 一个仓库装多个包（项目）。好处是跨包改代码、共享逻辑、统一版本都方便；坏处是不治理就乱——<strong>治理的核心是&quot;边界&quot;两个字</strong>。</p>
+<p><strong>四条治理要点（用人话）</strong>：</p>
+<ol><li><strong>目录边界 = 依赖方向</strong>：谁可以 import 谁，必须定死——共享层不能反向依赖业务层（shared 里绝不能 import fe 的东西）。依赖方向混乱是 monorepo 腐化的第一步；</li><li><strong>统一脚本入口</strong>：根目录统一 pnpm 命令进各包，别让每个包各玩各的启动方式；</li><li><strong>锁文件唯一</strong>：全仓库一个 pnpm-lock.yaml，依赖版本全局一致——一个包升版本另一个包没升，是跨端 bug 的最大来源；</li><li><strong>CI 精准触发</strong>：哪个包的目录变了，只跑哪个包的检查——仓库大了全量跑不起。</li></ol>
+<p><strong>易混点 1：包和包之间怎么互相引用？<code>workspace:*</code> 协议是什么？</strong> fe 要用 shared，就在 fe 的 package.json 里写 <code>&quot;shared&quot;: &quot;workspace:*&quot;</code>——意思是&quot;用仓库里那个 shared 包，版本号无所谓&quot;。pnpm 把它<strong>链接</strong>（符号链接）到 node_modules 里：<strong>改 shared 的代码，fe 里立刻生效，不用发布、不用安装</strong>——这是 monorepo 最大的甜头：跨包改动可以一个提交里完成（改 shared + 改 fe + 跑测试），而不是&quot;改 shared → 发布 → 升级依赖&quot;的慢循环。</p>
+<p><strong>易混点 2：monorepo 一定比多仓库好吗？</strong> 不是。monorepo 的好处是<strong>改得快、对齐便宜</strong>；代价是<strong>工具链复杂</strong>（构建、CI、权限都要按包拆）、<strong>历史膨胀</strong>（仓库越拉越大）、<strong>权限难精细</strong>（所有人看得到所有包）。判断标准就一条：<strong>这些包是不是&quot;经常一起改&quot;</strong>——fe/be/shared 每次协议变更都牵三端，放一个仓库是对的；两个完全不相关的独立产品，硬塞一个仓库就是折磨。<strong>选型讲&quot;为什么适合我&quot;，不讲&quot;哪个时髦&quot;</strong>。</p>
+<p><strong>易混点 3：shared 包为什么会&quot;腐化&quot;？</strong> shared 是全家最容易被当垃圾场的地方——谁都往里塞东西，塞完没人维护，最后没人敢动。防法还是<strong>边界</strong>：shared 里只放&quot;真正跨端共享且有测试&quot;的东西（协议编解码、算法、类型），放进去就要有测试守门。<strong>&quot;塞进 shared 就能共享&quot;是错觉，&quot;塞进 shared 就要维护&quot;才是真相</strong>。</p>
+<p><strong>结合本项目</strong>：workspace 分三块——fe（前端/桌面）、be（后端）、shared（跨端共享逻辑）。最妙的是 shared 的用法：<strong>三端协议（wire protocol 编解码、PCM 归一化算法）的规格和测试用例放 shared</strong>——任何一端改协议，三端跑同一套字节级测试。协作成本从&quot;三端口头对齐、各写各的测试&quot;变成&quot;<strong>测试说了算</strong>&quot;，误会和漂移在提交时就暴露。</p>
+<p><strong>一句话总结</strong>：monorepo 治理 = 管依赖方向和边界；包间用 workspace:* 链接（改完即生效）；&quot;经常一起改&quot;才适合单仓；把跨端共享的东西放进 shared 包 + 一套共用的测试，是 monorepo 最大价值的用法。</p>
+<hr>
+<h3 id="q19-eslint-9-和-typescript-eslint-的工程实践">Q19. ESLint 9 和 typescript-eslint 的工程实践</h3>
+<p><strong>先讲背景</strong>：ESLint 9 最大的变化是 <strong>flat config</strong>——以前配置散在 .eslintrc 一堆文件里、还按目录层层覆盖（继承规则复杂到没人看得懂），现在统一一个 eslint.config.js，<strong>配置合并规则直白</strong>（就是数组拼接），TS/JS 混用项目一条配置搞定。</p>
+<p><strong>易混点 1：flat config&quot;直白&quot;在哪？（配代码）</strong> 老式 .eslintrc 是&quot;继承链&quot;——extends 套 extends，规则从哪来、谁覆盖谁，要画图才理得清；flat config 是<strong>一个大数组</strong>，后面的覆盖前面的，自上而下读一遍就明白：</p>
+<pre><code>// eslint.config.js —— 就是几段配置排成数组，谁在后面谁生效
+export default [
+  js.configs.recommended,                      // 基础 JS 规则
+  ...tseslint.configs.recommended,             // TS 规则（语法级）
+  {
+    files: ['**/*.ts'],
+    rules: { 'no-console': 'error' },          // 只对 ts 文件收紧
+  },
+];</code></pre>
+<p><strong>易混点 2：类型感知规则为什么&quot;贵&quot;？</strong> 语法级规则只看代码文本，一条条跑，快；类型感知规则要先<strong>建整个项目的类型图</strong>（读 tsconfig、解析所有文件的类型关系），然后才能查&quot;这个变量到底是什么类型、这个 await 有没有用错&quot;。代价是<strong>首次要几秒到几十秒</strong>，文件越多越慢。所以工程上<strong>分层</strong>：日常开发跑轻量集（秒回，不打断思路），CI 跑全量（类型感知 + 全部规则，慢点没关系）。</p>
+<p><strong>易混点 3：ESLint 和 Prettier 到底怎么分工？</strong> 都是&quot;改代码风格&quot;的，但管的是两类事：ESLint 管<strong>正确性</strong>（<code>await</code> 用错、变量没用到、Hooks 规则违反——这些错了是 bug），Prettier 管<strong>格式</strong>（缩进、换行、引号——只是好看）。两者会冲突（比如引号风格两边都管），解法是 eslint-config-prettier 把 ESLint 里的格式类规则全关掉。口诀：<strong>ESLint 管对错，Prettier 管美丑，各管一摊</strong>。</p>
+<p><strong>工程做法</strong>：日常开发跑轻量集（快，不打断思路），CI 跑全量（类型感知 + 所有规则）——<strong>分层执行，体验和严格两不误</strong>。团队底线：<strong>CI 不过不能合入</strong>。</p>
+<p><strong>结合本项目</strong>：ESLint 9 + typescript-eslint 8，同时 lint src/（渲染层）和 electron/（主进程）；配合 typecheck 脚本（两个 tsconfig 各跑一次）和 vitest 单测，构成提交前&quot;三道闸&quot;：lint → 类型 → 测试。<strong>质量不是靠自觉，是靠闸门</strong>——这句话可以原样说给面试官。</p>
+<p><strong>一句话总结</strong>：ESLint 9 flat config = 数组拼接直白可读；类型感知规则贵但有用，开发跑轻量、CI 跑全量；ESLint 管对错、Prettier 管美丑；lint/typecheck/test 三道闸卡提交。</p>
+<hr>
+<h3 id="q20-typescript-工程治理你项目的类型边界怎么设计">Q20. TypeScript 工程治理：你项目的类型边界怎么设计？</h3>
+<p><strong>先讲理念</strong>：TS 工程治理的关键不是&quot;全项目禁 any&quot;（那是口号），而是<strong>在边界处定义契约</strong>。哪里是边界？模块与模块之间、进程与进程之间、端与端之间——边界处的类型，就是接口文档。</p>
+<p><strong>易混点 1：.d.ts 到底是什么文件？</strong> 它的学名叫<strong>类型声明文件</strong>——里面只有类型，没有实现，编译后不产生任何 JS（所以叫&quot;声明&quot;）。它干两件事：① 给没有类型的 JS 库&quot;补户口&quot;（告诉 TS 这个库有什么函数、什么参数）；② <strong>给跨模块/跨进程的 API 立契约</strong>（告诉调用方&quot;你能调用什么、传什么、拿到什么&quot;）。一句话：<strong>实现活在 .ts 里，契约写在 .d.ts 里</strong>。</p>
+<p><strong>易混点 2：同一门 TypeScript，为什么要两份 tsconfig？</strong> 因为&quot;编译目标&quot;和&quot;运行环境&quot;必须匹配：渲染层跑在 Chromium 里（目标是浏览器，走 Vite 处理）；主进程跑在 Node 里（目标 CommonJS 模块，tsc 直编）。如果拿一份配置硬套两边，就会在&quot;环境全局变量、模块格式、ES 版本&quot;上互相污染（比如主进程代码里用 window、渲染层代码里用 process）。<strong>两份 tsconfig = 两个环境各说各的话，语言统一但环境分明</strong>。</p>
+<p><strong>结合本项目，三层做法</strong>：</p>
+<ol><li><strong>严格模式全开</strong>（strict），新代码禁用 any——必须用 any 的地方写注释说明理由；拿不准类型的用 unknown + 收窄（Q5 讲的方法）；</li><li><strong>多 tsconfig 分层</strong>：同一门 TypeScript，两个运行环境两种编译目标——渲染层走 Vite（浏览器目标），主进程单独一份 electron/tsconfig.json 编译成 CJS 产物（package.json 的 main 指向 dist-electron/main.js）。<strong>语言统一，编译目标分开</strong>，互不干扰；</li><li><strong>跨进程契约 = 类型声明文件</strong>（最有含金量的一条）：preload 暴露给页面的 window.electronAPI 用一份 electron.d.ts 声明（四个分类、每个方法的入参出参）。渲染进程写代码全靠这份类型——<strong>preload 的 API 就是渲染进程的 SDK</strong>。改一个 API，类型报错一路红到所有调用点，契约变更零遗漏。这比&quot;写一份接口文档 Word&quot;强在哪儿？<strong>编译器帮你盯，文档永远不会过期</strong>。</li></ol>
+<p><strong>一句话总结</strong>：类型治理 = 边界处立契约：strict 是底线，多 tsconfig 按环境分层，跨进程用 .d.ts 类型声明当 SDK——接口抽象最务实的形式，编译器帮你盯文档不过期。</p>
+<hr>
+<h3 id="q21-环境与构建链治理讲一个你踩过的坑和固化方案">Q21. 环境与构建链治理：讲一个你踩过的坑和固化方案</h3>
+<p><strong>这道题是展示工程能力的最好机会</strong>——面试官要听的不是&quot;我配了个环境变量&quot;，而是&quot;坑 → 排查 → 根因 → 固化成流程&quot;的完整闭环。结合本项目三个真实案例（讲一个就够，三个都讲是碾压）：</p>
+<p><strong>案例一：Electron 43 安装卡死的坑</strong></p>
+<ul><li><strong>现象</strong>：pnpm install 在国内环境直接卡死，装不上依赖；</li><li><strong>排查</strong>：看下载日志 → 发现卡在下载 Electron 二进制 → 查证发现 <strong>Electron 43 起二进制改成安装期懒下载</strong>，而且它用的 Node fetch <strong>不读系统代理</strong>——公司内网/国内网络直接走不通；</li><li><strong>根因</strong>：版本升级引入了&quot;懒下载 + 不吃代理&quot;两个行为叠加；</li><li><strong>固化</strong>：配置 ELECTRON_MIRROR（npmmirror 国内镜像）或 NODE_USE_ENV_PROXY，写进环境文档和 CI 配置——新同事、新机器、CI 都不会再踩。</li></ul>
+<p><strong>易混点：为什么 Node 的 fetch 不读系统代理？</strong> Node 内置 fetch 的底层是 undici 这个 HTTP 客户端——它<strong>默认不读取 HTTP_PROXY/HTTPS_PROXY 环境变量</strong>，而传统的 curl、git、npm 默认都读。这就是&quot;同样的网络环境，别的工具能下、它下不动&quot;的原因。两个解法：① 配 NODE_USE_ENV_PROXY=1 让 Node 自己去读代理环境变量；② 直接换源——ELECTRON_MIRROR 把下载地址指向 npmmirror 镜像（镜像的原理：国内服务器上存一份完整副本，下载走国内网络）。<strong>排查这类问题的通用思路：先确认&quot;是网络不通还是不走代理&quot;，再对症下药</strong>。</p>
+<p><strong>案例二：dev 首次启动竞态</strong></p>
+<ul><li><strong>现象</strong>：开发模式偶尔启动失败——electron 的入口要等 tsc 编译出 main.js，而 vite 和 tsc 是并行启动的，electron 可能&quot;抢跑&quot;在产物就绪之前；</li><li><strong>固化</strong>：launch-electron 脚本<strong>显式等待 tsc 产物出现再拉起 electron</strong>——竞态窗口被脚本消灭。</li></ul>
+<p><strong>易混点：&quot;竞态&quot;（race condition）到底是什么意思？</strong> 两个（或多个）事情<strong>同时开始、但完成顺序不定</strong>，而结果依赖于&quot;谁先完成&quot;——就会时好时坏。竞态的两个特征：<strong>偶发</strong>（顺序对了没事，错了才炸）和<strong>难复现</strong>（跟机器快慢、负载都有关）。修法通常不是&quot;调快谁&quot;，而是<strong>把依赖关系写死</strong>：&quot;必须等 A 完成，B 才启动&quot;——等待变成显式条件，竞态就没有发生的空间了。这个思维在 Q36 的 WS 重连竞态、Q39 的 TSFN 退出竞态里还会反复出现。</p>
+<p><strong>案例三：原生插件编译自动化</strong></p>
+<ul><li><strong>问题</strong>：C++ 插件必须按 Electron 的 ABI 编译（Q39 细讲），手工编译容易忘、容易编错；</li><li><strong>固化</strong>：ensure-native 脚本在 dev 启动前和打包前<strong>自动检查/编译插件</strong>，并把 native 目录的 install 钩子改成 no-op 防止包管理器隐式编译。</li></ul>
+<p><strong>三个案例讲完，收一句金句</strong>：<strong>工程化的价值，就是把踩过的坑固化进脚本，让新机器、新同事零成本继承。</strong>——面试官要的就是这句话背后的思维方式。</p>
+<p><strong>一句话总结</strong>：环境坑三件套（镜像固化、启动竞态、编译自动化）的共同套路：定位根因 → 写脚本消灭人工步骤 → 沉淀文档让后来人不踩；竞态的特征是偶发难复现，修法是把依赖关系写死。</p>
+<hr>
+<h3 id="q22-git-协作流程与-commit-规范">Q22. Git 协作流程与 commit 规范</h3>
+<p><strong>要点（每条用人话解释为什么）</strong>：</p>
+<ol><li><strong>分支模型</strong>：主干开发或 feature 分支 + PR 合入。核心诉求是&quot;<strong>主干的代码永远是能跑的</strong>&quot;——任何合入都经过检查，别人拉下来不会崩；</li><li><strong>commit 语义化</strong>：type（feat/fix/refactor/docs 等）+ scope（改了哪个模块）+ 一句说清<strong>问题或动机</strong>。为什么重要？<strong>半年后排查线上问题，靠的是 git log 而不是记忆</strong>；</li><li><strong>PR 描述写&quot;为什么&quot;</strong>：diff 本身已经展示了&quot;改了什么&quot;，描述要写&quot;为什么这么改、有哪些取舍、怎么验证的&quot;——reviewer 才能判断对错；</li><li><strong>review 关注点</strong>：接口契约变更、错误路径处理、性能敏感点、测试覆盖——不是挑格式（格式交给工具）。</li></ol>
+<p><strong>易混点 1：merge 和 rebase 到底怎么选？</strong>（高频追问）两者都是&quot;把分支的改动并进来&quot;，区别在<strong>历史长什么样</strong>：</p>
+<ul><li><strong>merge</strong>：保留两条线的真实历史，产生一个&quot;合并提交&quot;——历史像岔路又合流，<strong>真实但分叉多</strong>；</li><li><strong>rebase</strong>：把你的提交&quot;搬家&quot;到目标分支最新提交之上，历史成一条直线——<strong>干净但改写历史</strong>（提交哈希会变）。</li></ul>
+<p>经验法则：<strong>分支之间合并用 merge（或 PR 的 squash），自己本地整理提交用 rebase</strong>。铁律：<strong>已经推到远程、别人可能拉过的分支，不要 rebase</strong>——改写公共历史等于篡改别人脚下的地基（别人拉下来会冲突到怀疑人生）。一句话：<strong>rebase 只动自己的，merge 尊重大家的</strong>。</p>
+<p><strong>易混点 2：冲突了怎么办？（流程比技巧重要）</strong> 冲突不是事故，是常态——同一处代码两个人都在改。流程：① 拉最新代码；② 解决冲突时<strong>看清楚两边各写了什么、为什么写</strong>，别机械选一边；③ 解决完<strong>跑一遍相关测试</strong>（解冲突很容易把两边的逻辑&quot;各留一半&quot;，合成一个没人想过的状态）；④ 提交。口诀：<strong>解冲突先理解再动手，动手后必跑测试</strong>。</p>
+<p><strong>易混点 3：commit message 的语义化格式长什么样？</strong>（配例子）</p>
+<pre><code>fix(electron): dev 首次启动竞态——launch-electron 同时等 tsc 产出 main.js
+^类型^ ^范围^   ^一句话说清问题或动机^</code></pre>
+<p>类型常用：feat（新功能）、fix（修 bug）、refactor（重构，行为不变）、docs（文档）、perf（性能）、chore（杂务）。<strong>为什么这么写</strong>：① git log 一眼扫出&quot;这段时间干了什么类型的事&quot;；② 排查线上问题能按 fix 快速定位；③ 生成发布说明（changelog）可以自动化。</p>
+<p><strong>结合本项目</strong>：提交历史就是规范示例——<code>fix(electron): dev 首次启动竞态——launch-electron 同时等 tsc 产出 main.js</code>、<code>feat(electron): addon 编译全自动化（ensure-native）+ TSFN 退出竞态修复 + 下载镜像固化</code>。<strong>每个 commit 一句话说清一个完整变化，可独立回溯</strong>。面试时可以说：commit message 就是我的变更日志，这也是和 AI 协作时代的习惯——AI 干活，人把关，把关的结果留在提交记录里。</p>
+<p><strong>一句话总结</strong>：分支保主干可跑，commit 写清&quot;为什么&quot;，PR 讲取舍，review 盯契约；rebase 只动自己的、merge 尊重大家的；解冲突先理解再动手、动手后跑测试——git log 是你的第二份简历。</p>
+<hr>
+<h2 id="四浏览器运行机制--网络--性能">四、浏览器运行机制 / 网络 / 性能</h2>
+<h3 id="q23-从输入网址到页面显示浏览器做了什么">Q23. 从输入网址到页面显示，浏览器做了什么？</h3>
+<p><strong>这道题是&quot;浏览器运行机制&quot;的招牌题，考察你脑子里有没有一张完整的流水线图。用寄快递的流程来类比整个链路，分五站：</strong></p>
+<ol><li><strong>问路（DNS 解析）</strong>：你输的是域名（google.com），网络只认 IP。浏览器先查&quot;地址本&quot;——浏览器缓存 → 系统 hosts 文件 → DNS 服务器，逐级把域名翻成 IP。查不到就问上级，像问路问到最后找到门牌号；</li><li><strong>敲门（建立 TCP 连接）</strong>：找到 IP 后握手三次（发送方：在吗？→ 接收方：在，你确定？→ 发送方：确定，开始说话），建立起一条可靠的传输通道；HTTPS 还要在这之上再做 TLS 握手（Q24 细讲），加一层加密身份验证；</li><li><strong>寄信（发请求收响应）</strong>：浏览器发出 HTTP 请求（要哪个页面、我是什么浏览器、带不带缓存），服务器返回 HTML；</li><li><strong>拆箱（渲染流水线）</strong>：拿到 HTML 后逐行解析——遇到 <code>&lt;link&gt;</code> 去拿 CSS、遇到 <code>&lt;script&gt;</code> 去拿 JS、遇到 <code>&lt;img&gt;</code> 去拿图片。<strong>CSS 会阻塞页面显示</strong>（样式不定型，画出来也白画）、<strong>JS 会阻塞 HTML 解析</strong>（JS 可能改 DOM，得停下来等它跑完，所以有了 async/defer）。等都齐了：DOM 树（页面结构）+ CSSOM 树（样式）合成渲染树 → 计算布局 → 上色 → 合成显示——这就是 Q6 讲的装修流水线；</li><li><strong>拆箱后的零工（JS 执行）</strong>：JS 跑起来，注册事件、发起异步请求、更新页面——进入 Q1 讲的事件循环的世界。</li></ol>
+<p><strong>三个高频追问</strong>：</p>
+<ul><li><strong>为什么 JS 要放 body 底部或用 defer？</strong> 因为 JS 阻塞 HTML 解析，放头部会把&quot;拆箱&quot;环节卡住，用户干等白屏；</li><li><strong>CSS 放头部为什么？</strong> 放尾部会出现&quot;先素颜后上妆&quot;的闪屏（无样式内容闪现，业内叫 FOUC）；</li><li><strong>关键渲染路径</strong>：这几个环节里哪几个串起来决定了&quot;首屏快不快&quot;——DNS + 建连 + 首字节 + 关键资源加载。面试官问优化，就是在问这链条上的每一环。</li></ul>
+<p><strong>易混点 1：async 和 defer 到底怎么区分？</strong>（高频追问，一个表记住）都是&quot;让 script 不阻塞 HTML 解析&quot;，但执行时机不同：</p>
+<table><thead><tr><th></th><th>下载时阻塞解析吗</th><th>执行时机</th><th>执行顺序</th></tr></thead><tbody><tr><td>普通 script</td><td>阻塞（下载+执行都堵）</td><td>当场</td><td>按出现顺序</td></tr><tr><td><code>defer</code></td><td>不阻塞</td><td><strong>HTML 解析完</strong>、DOMContentLoaded 之前</td><td><strong>保证按出现顺序</strong></td></tr><tr><td><code>async</code></td><td>不阻塞</td><td><strong>谁先下载完谁先执行</strong></td><td>乱序</td></tr></tbody></table>
+<p>口诀：<strong>defer 是&quot;排队等最后按顺序跑&quot;，async 是&quot;谁先到谁先跑&quot;</strong>。脚本之间互相依赖（比如工具库要先于业务代码）→ 必须 defer 或普通 script；独立脚本（统计、广告）→ async。</p>
+<p><strong>易混点 2：TCP 三次握手、四次挥手是什么？</strong> 握手是&quot;<strong>建立连接</strong>&quot;的礼节（三步：在吗？→ 在，你确定？→ 确定，开聊），挥手是&quot;<strong>断开连接</strong>&quot;的礼节（四步，因为断开是双向的：我说完了 → 好，收到 → 我也说完了 → 好，拜拜）。为什么握手三次挥手四次？<strong>握手时&quot;确认&quot;可以捎带在第二步里；挥手时双方各说各的&quot;我说完了&quot;，确认只能分开发</strong>。面试点到&quot;三次握手 + 四次挥手&quot;的名字和用途就够，不用背报文细节。</p>
+<p><strong>易混点 3：DNS 解析慢怎么办？</strong> 两个常用手段：<strong>DNS 预解析</strong>（<code>&lt;link rel=&quot;dns-prefetch&quot;&gt;</code> 提前把要用的域名翻成 IP，点击跳转时省掉&quot;问路&quot;时间）和 <strong>CDN/多级缓存</strong>（问路的&quot;地址本&quot;越近越好）。这是&quot;关键渲染路径&quot;上第一环的优化。</p>
+<p><strong>结合本项目</strong>：Electron 的渲染进程加载本地文件（loadFile 直接读磁盘 HTML），<strong>没有 DNS 和网络建连这两站</strong>——应用秒开的结构性优势；但 JS 加载、执行、渲染这一站一模一样，所以渲染层优化手段通用。另外我们的语音流数据走 WebSocket 通道，<strong>绕开 HTTP 请求响应模型</strong>——HTTP 是&quot;一问一答&quot;，流式场景要靠长连接（Q25 会呼应）。</p>
+<p><strong>一句话总结</strong>：URL → DNS 翻 IP → TCP/TLS 建连 → 发请求收 HTML → 解析成 DOM/CSSOM → 布局绘制合成；优化就是在这条链上逐环提速。</p>
+<hr>
+<h3 id="q24-http-和-https-差在哪tls-握手原理">Q24. HTTP 和 HTTPS 差在哪？TLS 握手原理</h3>
+<p><strong>先打个比方</strong>：HTTP 是<strong>明信片</strong>——内容写正面，任何一个经手的邮差（中间人）都能看、能改；HTTPS 是<strong>带锁保险箱</strong>——中间人看得见箱子、看不见内容、改不了（改了锁就对不上）。</p>
+<p><strong>HTTPS = HTTP + TLS 这一层&quot;锁&quot;</strong>，锁干三件事：</p>
+<ol><li><strong>加密</strong>：内容用对称加密（同一把钥匙加解密，快）——但钥匙怎么安全送到对方手里？<strong>先用非对称加密（一对钥匙：公钥加密、私钥解密）交换对称钥匙</strong>，之后全程对称加密。面试说这句就够专业：<strong>非对称协商、对称传输</strong>；</li><li><strong>身份验证</strong>：服务器出示<strong>证书</strong>（由 CA 机构签发的&quot;身份证&quot;），证明&quot;我真是 google.com 而不是骗子&quot;；</li><li><strong>防篡改</strong>：每段数据带校验码，被改过立刻发现。</li></ol>
+<p><strong>TLS 握手（简化版，四步记住）</strong>：</p>
+<ul><li>客户端：你好，我支持这些加密方案（ClientHello）；</li><li>服务器：这是我的证书 + 我选的方案（ServerHello）；</li><li>双方用证书里的公钥协商出会话密钥；</li><li>互相确认&quot;我用这把钥匙了&quot;，之后全部加密通信。</li></ul>
+<p><strong>易混点 1：对称加密和非对称加密到底差在哪？</strong> 打个比方：对称加密是<strong>同一把钥匙开和锁</strong>（快，但钥匙得先安全送到对方手里——怎么送？）；非对称加密是<strong>一对钥匙：公钥锁、私钥开</strong>（谁都能锁，只有私钥主人能开——安全，但算得慢）。所以 TLS 的组合拳：<strong>用非对称（慢而安全）只干一件事——安全地交换对称钥匙；之后的数据全走对称（快）</strong>。面试说&quot;非对称协商、对称传输&quot;就这意思。RSA/ECDHE 是非对称算法，AES 是对称算法——知道这两个名字对得上号即可。</p>
+<p><strong>易混点 2：中间人攻击为什么被证书防住？</strong> 中间人（骗子邮差）能截住明信片，能不能截住保险箱？流程：骗子冒充银行出示<strong>假证书</strong>——浏览器拿着证书去找<strong>发证书的 CA（证书机构）</strong>核对：&quot;这个证书是你签发的吗？&quot;对不上就弹警告。所以安全的根基是<strong>信任链</strong>：浏览器出厂内置信任几家根 CA，CA 只给&quot;能证明域名属于自己&quot;的人签证书。中间人没有银行域名的真证书，装不了银行。<strong>一句话：防的不是&quot;看&quot;，是&quot;冒充&quot;</strong>。</p>
+<p><strong>易混点 3（加分项）：TLS 1.3 比 1.2 快在哪？</strong> TLS 1.3 把握手从<strong>两个往返（2-RTT）压到尽量一个往返（1-RTT）</strong>，且只留安全的加密算法（砍掉了 1.2 里那些被攻破的老算法）。&quot;为什么现在 HTTPS 没那么慢了&quot;——TLS 1.3 是答案之一。</p>
+<p><strong>结合本项目</strong>：后端语音/LLM 通道走 wss://（TLS 加密的 WebSocket），录音转写属于敏感数据，走明文 http:// 属于红线错误。<strong>面试万能句：任何含用户数据的通道，默认走 TLS。</strong></p>
+<p><strong>一句话总结</strong>：HTTPS = 加密（非对称协商 + 对称传输）+ 证书验身份 + 防篡改；敏感数据一律 wss/https。</p>
+<hr>
+<h3 id="q25-http11http2http3-的区别">Q25. HTTP/1.1、HTTP/2、HTTP/3 的区别</h3>
+<p><strong>先讲清每代解决什么问题</strong>（面试按&quot;痛点 → 改进&quot;讲，清晰有逻辑）：</p>
+<ul><li><strong>HTTP/1.1 的痛点</strong>：一个 TCP 连接上，请求是<strong>串行</strong>的（发了 A 等 A 回，才能发 B）。浏览器顶多开 6 条连接并行，域名分片、雪碧图、合并文件这些&quot;古董优化&quot;全是这个痛点的止痛药。且响应<strong>队头阻塞</strong>：A 慢，后面全排队；</li><li><strong>HTTP/2 的解法</strong>：<strong>一个 TCP 连接上多路复用</strong>——把数据切碎成带编号的帧，A、B、C 的帧混着发，接收方按编号重新拼。加上<strong>头部压缩</strong>（HPACK，请求头里重复的字段用索引表代替）、<strong>服务端推送</strong>（服务器猜你要啥提前给）。队头阻塞缓解在应用层，<strong>但 TCP 层还在</strong>——丢一个包，TCP 要求重传，后面所有流的帧都得等（这叫 TCP 层队头阻塞，HTTP/2 治标不治本）；</li><li><strong>HTTP/3 的解法</strong>：换地基——不用 TCP，改用 <strong>QUIC（基于 UDP）</strong>。UDP 本身不可靠，QUIC 在用户态自己实现了可靠传输：<strong>每条流独立重传</strong>，A 流丢包只堵 A 流，B 流照走——队头阻塞根治。加上 0-RTT 握手（连接过的服务器直接带数据开场）。<strong>一句话：HTTP/2 换汤（应用层多路复用），HTTP/3 换药（传输层从 TCP 换 QUIC）</strong>。</li></ul>
+<p><strong>WebSocket 和这仨什么关系</strong>（结合本项目必答）：WebSocket 是<strong>另一个协议</strong>——先走一个 HTTP 请求&quot;请求升级连接&quot;，握手成功后这条 TCP 连接<strong>脱离 HTTP 模型，变成双向自由收发</strong>。我们的语音流/转写结果走 ws 通道（客户端发 hello 握手消息、服务器回 ready，才算正式就绪），因为音频帧是<strong>高频、双向、持续</strong>的——HTTP 一问一答模型不适合。</p>
+<p><strong>易混点 1：队头阻塞这个词有两层，别答混了</strong>——① <strong>HTTP 层队头阻塞</strong>：1.1 里&quot;一条连接上 A 的响应没回完，B 的请求发不出去&quot;，HTTP/2 用多路复用解决了这一层；② <strong>TCP 层队头阻塞</strong>：HTTP/2 之后，数据都混在一条 TCP 流里，<strong>丢一个包，TCP 必须重传，重传期间所有流的帧全堵住</strong>——这层是 HTTP/2 的残余问题，HTTP/3 换 QUIC（按流独立重传）才根治。面试时把两层分开说，立即和&quot;只会背版本号&quot;的候选人拉开差距。</p>
+<p><strong>易混点 2：HTTP/2 只能在 HTTPS 上用吗？</strong> 标准上允许明文，但<strong>所有主流浏览器只支持带 TLS 的 HTTP/2</strong>（h2 实现都要求加密）。所以现实里&quot;上了 HTTP/2 = 上了 HTTPS&quot;。HTTP/3 同理，QUIC 本身就内建 TLS 1.3 加密。<strong>新协议默认加密，是行业的大趋势</strong>。</p>
+<p><strong>易混点 3：头部压缩为什么能省流量？</strong> 每个请求头都带着几十个重复字段（User-Agent、Cookie、Accept……几百字节起步），HTTP/2 的 <strong>HPACK</strong> 用一张动态表存&quot;之前发过的头&quot;——第二次发只发&quot;变化的部分 + 表索引&quot;。想象快递单：第一单写全地址，之后同一收件人只写&quot;同上，编号 3&quot;。HTTP/3 换成了 QPACK（原理同，适配 QUIC 不重排的特性）——知道&quot;压缩原理 = 去重索引&quot;即可，不必记算法名。</p>
+<p><strong>一句话总结</strong>：1.1 串行排队 → 2 多路复用（TCP 队头阻塞残留，两层队头阻塞分开说）→ 3 换 QUIC 根治；新协议默认加密；流式数据走 WebSocket，不走 HTTP。</p>
+<hr>
+<h3 id="q26-浏览器缓存怎么做的强缓存和协商缓存">Q26. 浏览器缓存怎么做的？强缓存和协商缓存</h3>
+<p><strong>先打个比方</strong>：强缓存像<strong>&quot;保质期内不联系&quot;</strong>——你（浏览器）有张便签写着&quot;这文件保质期到明天&quot;，明天之前直接吃自己存的，<strong>根本不问服务器</strong>；协商缓存像<strong>&quot;每次打电话确认&quot;</strong>——手里有文件但不知坏没坏，打个电话报上版本号，服务器说&quot;没变，继续用你的&quot;（304）或&quot;换新的&quot;（200 带上新文件）。</p>
+<p><strong>强缓存的钥匙</strong>：响应头 <code>Cache-Control</code>——<code>max-age=3600</code> 表示 1 小时内不问服务器；<code>no-cache</code> 不是说&quot;不缓存&quot;，而是&quot;存下来但每次都要确认&quot;（别背反了，这是高频坑）；<code>no-store</code> 才是真不存。HTTP/1.0 时代用 Expires（绝对时间，客户端时钟不准会翻车），Cache-Control 优先。</p>
+<p><strong>协商缓存的钥匙</strong>：<code>ETag</code>（内容的指纹哈希）优先于 <code>Last-Modified</code>（最后修改时间）。为什么？文件在 1 秒内改两次，修改时间分辨不出来（秒级精度），哈希不会。命中协商缓存，服务器回 304（没带文件体），省的是传输，不是请求。</p>
+<p><strong>工程上的标准玩法</strong>：<strong>内容哈希命名 + 强缓存</strong>——文件名带哈希（app.a1b2c3.js），内容变了名字就变，新页面引用新文件名自然拿到新文件，所以带哈希的资源敢放心设一年强缓存；而 index.html 本身<strong>不缓存</strong>（或协商缓存）——它是&quot;进货单&quot;，改了它才能指向新文件。</p>
+<p><strong>易混点 1：304 到底是什么意思？</strong> 304 Not Modified = &quot;<strong>没改，用你存的</strong>&quot;。它不是缓存的一种，而是<strong>协商缓存命中的信号</strong>：服务器不返回文件体（省传输），只回一个 304 状态码 + 少量头。注意：<strong>请求发出去了、往返发生了</strong>——协商缓存省的是&quot;传文件&quot;，省不了&quot;打电话&quot;。所以页面刷新快，多半是强缓存 + 协商缓存共同作用，而&quot;从缓存直接拿&quot;（连请求都没有）只可能是强缓存命中。</p>
+<p><strong>易混点 2：memory cache 和 disk cache 是什么？</strong> DevTools 的 Network 面板里能看到这两类来源——<strong>memory cache（内存缓存）</strong>：存在内存里，同一标签页会话内快（关浏览器就没了）；<strong>disk cache（磁盘缓存）</strong>：存在硬盘上，重启浏览器还在，但读得慢一点。浏览器的策略是&quot;先查内存，再查磁盘&quot;。面试被问&quot;缓存存在哪&quot;答这两层，再补一句&quot;<strong>内存快但短命，磁盘慢但持久，浏览器自动调度</strong>&quot;。</p>
+<p><strong>易混点 3：Cache-Control 还有哪些常用指令？</strong>（问到就赚到）</p>
+<ul><li><code>private</code>：只能浏览器自己存（不能进 CDN/代理的公共缓存——适合用户隐私数据）；</li><li><code>public</code>：代理/CDN 也可以存；</li><li><code>immutable</code>：内容绝不变，连协商确认都省了（配合哈希文件名用）；</li><li><code>s-maxage</code>：只对 CDN/代理生效的过期时间（浏览器不认）。</li></ul>
+<p><strong>记忆主线</strong>：强缓存看 Cache-Control 的 max-age，协商缓存看 ETag；no-cache ≠ 不缓存（= 每次确认），no-store 才是真不存。</p>
+<p><strong>结合本项目</strong>：Electron 应用更新整个包走 electron-updater（全量替换，缓存问题天然简单）；开发期 Vite 对 node_modules 预构建产物做文件级缓存（esbuild 扫依赖，没变化就复用），首次 dev 启动快很多——<strong>缓存思想处处通</strong>。</p>
+<p><strong>一句话总结</strong>：强缓存不问服务器（Cache-Control），协商缓存要确认（ETag 指纹）；内容哈希文件名 + 长强缓存 + 入口文件不缓存是标准组合。</p>
+<hr>
+<h3 id="q27-跨域是什么cors-怎么解决">Q27. 跨域是什么？CORS 怎么解决？</h3>
+<p><strong>先搞懂为什么有跨域</strong>：浏览器的<strong>同源策略</strong>——协议、域名、端口三者完全一致才叫&quot;同源&quot;，不同源之间脚本读不到对方数据。注意是<strong>浏览器</strong>这个&quot;守门员&quot;在拦截：请求其实发出去了，服务器也回了，是<strong>浏览器把响应扣下不给你的 JS</strong>。为什么这么设计？防钓鱼——你登录着银行 A，打开个坏网站 B，B 的脚本若无同源策略，可以直接以你的身份调银行接口把钱转走（CSRF 的原理就在这，后面追问里讲）。</p>
+<p><strong>CORS（跨域资源共享）是服务器主动开门的标准做法</strong>：服务器响应里加 <code>Access-Control-Allow-Origin</code>（允许哪些域名来读我），浏览器检查响应头，放行。<strong>核心认知：跨域是&quot;服务器允许&quot;的事，不是前端代码能绕过的</strong>——前端绕（比如 JSONP、代理）都是把请求换个形态，最终还是要服务器配合或同源中转。</p>
+<p><strong>两类请求要分清（高频考点）</strong>：</p>
+<ul><li><strong>简单请求</strong>：GET/POST + 普通头，浏览器直接发；</li><li><strong>预检请求（preflight）</strong>：PUT、DELETE 或自定义头（如 Authorization），浏览器<strong>先发一个 OPTIONS 问&quot;允不允许这种请求&quot;</strong>，服务器答允许，才发真请求。一次跨域请求变成两次——这就是为什么后端接口多了 OPTIONS 请求，前端别慌。</li></ul>
+<p><strong>三个常用解法</strong>：开发期用 Vite 代理（dev 服务器把请求转给后端，浏览器眼里是同源的）；服务器配 CORS 头；生产同域部署用反向代理。<strong>WebSocket 不受同源策略限制</strong>（但服务器应该校验 Origin 头防串线——这正是我们后端 WS 服务做的安全检查）。</p>
+<p><strong>高频追问：CSRF 是什么？</strong> 跨站请求伪造——坏网站诱导你（已登录状态下）悄悄向银行发&quot;转账&quot;请求，浏览器会<strong>自动带上银行的 cookie</strong>，银行以为是你在操作。同源策略拦不住这个（请求是&quot;发出去&quot;的，只是&quot;读不回来&quot;），所以业界用 <strong>CSRF Token</strong>（页面上随表单发的随机令牌，坏网站猜不到）和 <strong>SameSite Cookie</strong>（标记 cookie 只跟同站请求走）来防。</p>
+<p><strong>易混点 1：什么是&quot;简单请求&quot;？判定标准记三条</strong>：方法只限 GET/HEAD/POST；请求头只限几种安全头（Content-Type 只限 form 三种值）；不带自定义头（如 Authorization）。<strong>超出任一条 = 非简单请求 = 先发 OPTIONS 预检</strong>。所以&quot;为什么接口有两次请求&quot;的标准答案：<strong>第一次 OPTIONS 是浏览器在问&quot;服务器允不允许这种跨域请求&quot;，答允许才发真的</strong>。预检可以被缓存（Access-Control-Max-Age 头），不是每次都问。</p>
+<p><strong>易混点 2：JSONP 是什么原理？现在还用吗？</strong> 上古方案：<code>&lt;script src&gt;</code> 标签<strong>加载跨域脚本不受同源策略限制</strong>（同源策略管的是&quot;读响应&quot;，script 加载是&quot;执行&quot;）——所以跨域请求伪装成一个 script 加载，服务器回一段&quot;函数调用&quot;（<code>callback({数据})</code>）来传数据。<strong>两大缺陷：只能 GET、等于执行对方任意代码（安全裸奔）</strong>。现在基本淘汰，答出来是加分的&quot;历史脉络&quot;。</p>
+<p><strong>易混点 3：为什么 WebSocket 不受同源策略限制？</strong> 同源策略出生时只管&quot;读 HTTP 响应&quot;，没覆盖 WebSocket 这种后起之秀——所以 WS 连接本身不拦跨域。<strong>但这不代表安全</strong>：服务器必须校验 Origin 头，拒绝陌生域名连进来（防&quot;钓鱼网站借你的 WS 通道白嫖服务/伪装身份&quot;）。这正是本项目后端 WS 服务做的安全检查——<strong>&quot;没限制&quot;的地方，要靠自己补防线</strong>。</p>
+<p><strong>一句话总结</strong>：跨域 = 浏览器同源策略扣响应；CORS = 服务器响应头开门；预检 = 复杂请求先问再发；CSRF = 带 cookie 的&quot;代打请求&quot;，靠 Token 和 SameSite 防。</p>
+<hr>
+<h3 id="q28-前端性能优化你的优化思路全景">Q28. 前端性能优化：你的优化思路全景</h3>
+<p><strong>面试官要的不是背清单，是&quot;分析框架&quot;——从哪几个维度拆问题。给一套三层框架（背下来就赢了）：</strong></p>
+<p><strong>第一层：加载阶段（页面出现的速度）</strong></p>
+<ul><li><strong>资源层面</strong>：静态资源走内容哈希 + 长强缓存（Q26）；图片按需压缩/懒加载；路由级代码分割（首屏只下首屏的 JS）；HTTP/2 多路复用；</li><li><strong>渲染层面</strong>：SSR/预渲染把首屏 HTML 直接送到（省掉&quot;下 JS → 跑 JS → 拼页面&quot;）；关键 CSS 内联；非关键脚本 defer/async；</li><li><strong>骨架屏 / 首屏占位</strong>：用户感知快 = 真快。白屏 500ms 配骨架屏，比硬等 1 秒强。</li></ul>
+<p><strong>第二层：运行阶段（交互跟手的程度）</strong></p>
+<ul><li><strong>JS 侧</strong>：长任务拆碎（Q1 的厨师原则，别让事件循环卡死）；计算密集任务丢 Web Worker；防抖节流控制高频回调；虚拟列表（一万行只渲染看得见的几十行）；避免频繁触发布局（读写分离，批处理 DOM 变更——Q6 装修队的坑）；</li><li><strong>内存侧</strong>：定时器/监听器/闭包三大泄漏源（Q29 细讲）；</li><li><strong>框架侧</strong>：React 的 memo 三件套按需用（Q14）、列表 key 稳定、状态尽量下沉。</li></ul>
+<p><strong>第三层：工程侧（度量与防线）</strong></p>
+<ul><li><strong>先测量再优化</strong>：Lighthouse / Performance 面板 / web-vitals（LCP 首屏速度、INP 交互跟手度、CLS 布局稳定性三大指标）；<strong>无测量不优化</strong>——凭感觉优化多半是负优化；</li><li><strong>性能回归防线</strong>：CI 里跑 Lighthouse 预算，指标超线合入失败——性能靠闸门守住，不靠自觉。</li></ul>
+<p><strong>易混点 1：防抖和节流差在哪？（高频追问，配代码）</strong> 都是控高频，但语义相反：</p>
+<pre><code>// 防抖（debounce）：等&quot;停手&quot;再执行——搜索框输入，停止打字 300ms 才发请求
+// 节流（throttle）：固定节奏执行——滚动监听，最多每 200ms 触发一次</code></pre>
+<p>打比方：<strong>防抖是电梯</strong>——有人进来就重置关门倒计时，最后一个人进来后再等一会才走；<strong>节流是地铁闸机</strong>——不管来多少人，固定节奏一个一个过。口诀：<strong>防抖&quot;最后一次生效&quot;（搜索、窗口 resize），节流&quot;有节奏地生效&quot;（滚动、拖拽）</strong>。</p>
+<p><strong>易混点 2：Web Worker 能干什么、不能干什么？</strong> Worker = 另开一个<strong>线程</strong>跑 JS（真并行，不像主线程的异步是&quot;排队&quot;）——计算密集任务（大 JSON 解析、图像处理、加密）丢过去，主线程不卡。<strong>但它不能碰 DOM、不能碰 window</strong>（它没有界面），和主线程通信靠 postMessage 传数据（结构化克隆，Q32 同款机制）。口诀：<strong>Worker 是&quot;没眼睛的计算工&quot;，算完把结果寄回来</strong>。</p>
+<p><strong>易混点 3：LCP / INP / CLS 三个指标各看什么？</strong>（web-vitals 核心指标，背名字和含义）</p>
+<ul><li><strong>LCP（Largest Contentful Paint）</strong>：最大那块内容出现的时间——<strong>首屏快不快</strong>（目标 &lt; 2.5s）；</li><li><strong>INP（Interaction to Next Paint）</strong>：用户交互到画面响应的时间——<strong>跟不跟手</strong>（替代了老的 FID，目标 &lt; 200ms）；</li><li><strong>CLS（Cumulative Layout Shift）</strong>：布局偏移累计——<strong>页面会不会&quot;跳&quot;</strong>（图片没留位、广告晚插入都会造成跳动，目标 &lt; 0.1）。</li></ul>
+<p>一句话：<strong>LCP 管&quot;出得快&quot;，INP 管&quot;跟得紧&quot;，CLS 管&quot;站得稳&quot;</strong>。</p>
+<p><strong>结合本项目</strong>：桌面端比 Web 端多三张牌——本地加载（无网络延迟）、主进程分担计算（音频采集、WS 推流、文件转换全在主进程，渲染进程只做界面）、原生模块（C++ 处理音频，比 JS 快一个数量级）。以及两个真实优化：<strong>背景节流陷阱</strong>（窗口失焦时 backgroundThrottling 会冻结渲染进程定时器，显式关掉后转写响应从 4.2s 回到 1.1s——这是社区真实案例的复刻）；<strong>静音帧跳过</strong>（WASAPI 抓到的静音缓冲区直接丢弃不上报，高峰期省掉一半上行流量）。</p>
+<p><strong>一句话总结</strong>：优化分三层——加载（缓存/分割/预渲染）、运行（不卡事件循环、不泄漏、按需渲染）、工程（先测量、CI 设性能预算）；桌面端的牌：本地加载 + 主进程分担 + 原生模块。</p>
+<hr>
+<h3 id="q29-内存泄漏js-里怎么漏的怎么查">Q29. 内存泄漏：JS 里怎么漏的、怎么查？</h3>
+<p><strong>先补 GC 背景</strong>（呼应 Q4）：JS 内存靠垃圾回收自动管理，回收依据是<strong>&quot;还有没有人用&quot;</strong>（可达性）——从全局对象、调用栈出发能摸到的对象，就是活的。所以<strong>内存泄漏的定义</strong>：你以为不用的东西，因为还有条引用链连着，GC 摸得到、不敢收，于是越积越多。</p>
+<p><strong>四大经典泄漏源（每个都要会讲机制）</strong>：</p>
+<ol><li><strong>定时器没清</strong>：setInterval 的回调闭包持有外层变量；即使页面逻辑上&quot;不再需要&quot;，计时器活着，闭包里的引用就活着。记得 clearInterval——<strong>启动计时器的地方必须能找到它的句柄</strong>（高频坑：写在组件里忘了在卸载时清）；</li><li><strong>事件监听器没摘</strong>：DOM 节点被删了，但监听器还挂在全局事件源上（window、document、WebSocket、IPC）。事件源活得久（全局的），它持有的回调链（带着 DOM 和数据）全活着；</li><li><strong>闭包大网</strong>：闭包引用的是<strong>整个外层函数作用域</strong>，不是单个变量——闭包只要用到作用域里一个变量，整个作用域的变量都收不走（引擎够聪明时会做逃逸分析优化掉一部分，但不能依赖它）。面试点睛句：<strong>闭包是保留引用，不是拷贝值</strong>；</li><li><strong>游离的 DOM 引用</strong>：JS 变量里存着已从文档移除的节点，这节点连同它的子树全部活着。</li></ol>
+<p><strong>怎么查（讲定位方法比背概念加分）</strong>：</p>
+<ul><li><strong>Chrome Memory 面板</strong>：拍两次 Heap Snapshot，对比两次之间&quot;新存活的对象&quot;（切换视图），涨的都是泄漏嫌疑；</li><li><strong>看趋势</strong>：做同一操作反复 N 次（进页面→出页面），内存阶梯式上涨不回落 = 泄漏的指纹；</li><li><strong>Performance 面板</strong>看内存曲线 + 手动 GC 探针；</li><li><strong>桌面端特有</strong>（结合本项目）：<code>app.getAppMetrics()</code> 拿每个进程的实时内存；<code>v8.writeHeapSnapshot()</code> 主动抓主进程堆快照——主进程是 Node 环境，DevTools 连上去同样能抓。</li></ul>
+<p><strong>易混点 1：快照对比的完整操作链（面试手把手描述）</strong>：① 打开页面，做一次&quot;进页面 → 出页面&quot;（或创建组件 → 卸载组件）作为热身；② 拍<strong>快照 A</strong>；③ 把同样操作重复 5 次；④ 手动触发一次 GC（回收掉&quot;该回收的&quot;）；⑤ 拍<strong>快照 B</strong>；⑥ 用 Comparison 视图对比 A 和 B——<strong>B 里多出来的对象就是&quot;操作 5 次后还活着的&quot;</strong>，就是泄漏嫌疑。为什么先手动 GC？不 GC 的话快照里全是&quot;还没来得及收的垃圾&quot;，把真正的泄漏淹没了。</p>
+<p><strong>易混点 2：WeakMap 防泄漏怎么用？（呼应 Q4 的易混点 2）</strong> 场景：要给 DOM 节点挂&quot;私有数据&quot;，用普通 Map 存 <code>map.set(node, data)</code>——<strong>Map 是强引用，节点从页面删了 Map 还拽着它，节点连同数据永远收不掉</strong>。换 WeakMap：<code>weakMap.set(node, data)</code>——节点没了，WeakMap 里的记录自动消失。<strong>凡是以&quot;对象&quot;为键的缓存/附属数据，默认优先 WeakMap</strong>——这是把&quot;防泄漏&quot;做在数据结构选择里的思维。</p>
+<p><strong>易混点 3：泄漏和&quot;内存涨了&quot;怎么区分？</strong>（呼应 Q4 的易混点 3）看<strong>重复操作后的回落</strong>：做 5 次涨 50MB，GC 后掉回只涨 2MB → 那不是泄漏，是正常峰值（缓存、临时对象，能回收）；GC 后 50MB 原封不动 → 泄漏。<strong>判据是&quot;GC 之后还剩多少&quot;，不是&quot;最高涨到多少&quot;</strong>——所以排查一定要配合手动 GC 探针，不然会把正常缓存误判成泄漏。</p>
+<p><strong>结合本项目</strong>：preload 里<strong>每个 onXxx 都返回 cleanup 函数</strong>（订阅者自行摘除），订阅型 API 从设计上把&quot;泄漏的出口&quot;堵住；IPC handler 里<strong>注册前先检查窗口 isDestroyed</strong>，回调触发时也检查——窗口销毁后的回调触发是桌面端 IPC 泄漏的经典场景（监听器挂在销毁的 webContents 上）。<strong>设计 API 时就把清理路径想好，比事后排查强百倍。</strong></p>
+<p><strong>一句话总结</strong>：泄漏 = 引用链断不掉，四大源（计时器/监听器/闭包/游离 DOM）；查法 = 堆快照对比 + 阶梯式内存曲线；桌面端加 getAppMetrics 和 IPC isDestroyed 检查。</p>
+<hr>
+<h2 id="五electron-架构上三进程ipc安全">五、Electron 架构（上）：三进程、IPC、安全</h2>
+<h3 id="q30-electron-的三进程架构主进程渲染进程preload-各是什么">Q30. Electron 的三进程架构：主进程、渲染进程、preload 各是什么？</h3>
+<p><strong>先打个比方</strong>：Electron 应用像一栋大厦——</p>
+<ul><li><strong>主进程 = 大厦物业总部</strong>：管整栋楼的水电（文件系统、网络、原生能力）、决定哪个房间开不开（创建/销毁窗口）、掌握全楼钥匙。<strong>整个应用只有一个主进程</strong>，它是 Node.js 环境（fs、net 等 Node API 随便用）；</li><li><strong>渲染进程 = 每个房间的住户</strong>：每开一个窗口就诞生一个渲染进程（一个住户），住户在房间里过自己的日子——跑 HTML/CSS/JS 画界面。它本质上是 <strong>Chromium 浏览器内核</strong>。住户之间互相隔离：<strong>一个窗口崩了，不影响别的窗口，更不影响物业</strong>；</li><li><strong>preload = 房间门上的服务窗口</strong>：住户不能随便出房门（渲染进程被刻意剥夺了直接碰 Node 的权限），需要什么服务（存文件、录音、开新窗）就走到服务窗口递条子，物业代办。preload 脚本<strong>一半站在住户这边（能访问页面 window），一半站在物业那边（能访问 Node API）</strong>，是两边唯一合法的交接点。</li></ul>
+<p><strong>为什么要这么设计？</strong>（这是整个架构的灵魂，必答）</p>
+<ol><li><strong>安全</strong>：渲染进程跑的是&quot;网页&quot;，网页内容可能被注入恶意脚本（XSS）。如果渲染进程能直接摸文件系统，<strong>页面被攻破 = 整台电脑被攻破</strong>。所以渲染进程默认没有 Node 权限，只能通过 preload 白名单接口请求服务；</li><li><strong>稳定</strong>：界面崩了（渲染进程崩溃）不影响核心逻辑——物业还在，房间重开一个就行；而主进程崩了整个应用就没了。所以<strong>核心逻辑、长生命周期服务（音频采集、WS 连接、文件转换）全部放主进程</strong>；</li><li><strong>性能</strong>：重活（C++ 音频处理、大文件下载）在主进程和原生模块里跑，不跟画界面抢 CPU。</li></ol>
+<p><strong>易混点 1：渲染进程崩溃 ≠ 应用崩了（隔离到底隔离了什么）</strong>。三个进程各管各的，崩溃互不传染，但对应用的影响天差地别：</p>
+<table><thead><tr><th>谁崩了</th><th>会发生什么</th><th>怎么恢复</th></tr></thead><tbody><tr><td>渲染进程</td><td>只有这一个窗口白屏，主进程和其他窗口照常</td><td>监听 render-process-gone，自动 reload 重开房间（Q36）</td></tr><tr><td>preload 抛错</td><td>页面的 JS 世界崩，窗口本体还在</td><td>reload 即可</td></tr><tr><td>主进程</td><td>整个应用没了，所有窗口一起消失</td><td>只能记日志退出，下次启动自愈（Q35/Q36）</td></tr></tbody></table>
+<p>可以自己验证：在主进程写 <code>setTimeout(() =&gt; process.crash(), 5000)</code>，5 秒后主进程崩、全应用消失；换成在渲染进程里写 <code>process.crash()</code>，则<strong>只有那个窗口白屏，主进程日志照打</strong>——崩的是房间，不是物业。</p>
+<p><strong>易混点 2：渲染进程不是&quot;能力弱&quot;，只是&quot;没有 Node 能力&quot;</strong>。它本质是 Chromium——fetch、WebSocket、Canvas、DOM 这些<strong>浏览器能力全都有</strong>，缺的只有 <code>require('fs')</code> 这类 Node 能力（被刻意拔了插头）。面试别说&quot;渲染进程能力弱&quot;，准确说法是：<strong>页面能干的事它都能干，系统级的活（文件、进程、原生 API）才必须找主进程代办</strong>。</p>
+<p><strong>易混点 3：多窗口之间不是&quot;共享数据&quot;，是&quot;各自为政&quot;</strong>。每个渲染进程有自己的内存，窗口 A 里存的变量窗口 B 看不见——想让两个窗口看到同一份数据，只能<strong>由主进程中转</strong>（数据放主进程内存或文件，各窗口各自来取）。这也是本项目 storage 走主进程文件的原因（Q37）。</p>
+<p><strong>高频追问：为什么要 preload，直接让主进程开个 HTTP 接口给页面调用不行吗？</strong> 不是不行，是更糟。HTTP 接口是&quot;默认放行&quot;——任何网页脚本（包括被注入的恶意脚本）都能朝它发请求，你只能靠接口内部做鉴权防；IPC + preload 是&quot;<strong>默认拒绝</strong>&quot;——页面能调用的方法只有白名单上那几个，多一个都没有。安全设计里，&quot;默认拒绝&quot;永远比&quot;默认放行再加门卫&quot;可靠。</p>
+<p><strong>结合本项目</strong>：本项目是标准的&quot;重主进程&quot;架构——音频采集、WS 推流、LLM 事件转发、LibreOffice 转换、下载器全在主进程；渲染进程（React 应用）只做界面 + 状态管理（纯 reducer）。<strong>判断 Electron 架构是否合理的口诀：界面脆、服务重——重活放主进程，界面层保持薄。</strong></p>
+<p><strong>一句话总结</strong>：主进程 = 物业（Node 环境、管系统、全局唯一）；渲染进程 = 住户（Chromium 画界面、按窗口隔离、无 Node 权限）；preload = 服务窗口（唯一合法交接点）。重活归主进程。</p>
+<hr>
+<h3 id="q31-安全三件套contextisolationnodeintegrationsandbox">Q31. 安全三件套：contextIsolation、nodeIntegration、sandbox</h3>
+<p><strong>先逐个用人话解释</strong>（这仨是 Electron 面试的&quot;三件套&quot;，默认值时间线要背）：</p>
+<ol><li><strong>nodeIntegration（默认关，Electron 5 起）</strong>：渲染进程的页面里能不能直接写 <code>require('fs')</code> 用 Node API。开着 = 页面一旦被 XSS 注入，恶意脚本直接用 Node 权限读文件、执行命令。<strong>关了 = 页面里的 JS 是纯网页环境，摸不到 Node</strong>；</li><li><strong>contextIsolation（默认开，Electron 12 起）</strong>：preload 的 JS 世界和页面的 JS 世界<strong>隔不隔开</strong>。开着时两者各有各的全局变量互不相通（preload 只能通过 contextBridge 把指定的东西递过去）；关掉时 preload 的变量会<strong>掉进页面的全局作用域</strong>，页面脚本能直接改写它——等于把服务窗口的柜台搬进房间任人摆弄；</li><li><strong>sandbox（默认开，Electron 20 起）</strong>：渲染进程跑在操作系统级沙箱里（跟 Chromium 同款机制）。<strong>即使页面内核被攻破，也拿不到系统权限</strong>——这是最后一道防线。开了 sandbox 后 preload 只能用&quot;阉割版&quot; API（不能随便 require Node 模块，只能用 electron 提供的有限子集），代价是 preload 里写不了复杂逻辑——所以<strong>正确姿势是 preload 只做薄薄的转发</strong>。</li></ol>
+<p><strong>补一个历史考点：remote 模块在 Electron 12 弃用、14 移除</strong>。它历史上让渲染进程&quot;远程遥控&quot;主进程（直接调用主进程对象），看起来方便，实则给渲染进程开了个<strong>后门</strong>（安全上等价于 nodeIntegration 全开），而且每个远程调用都是跨进程代理、<strong>慢得离谱</strong>。面试官问 remote，你就答：<strong>它的功能用 IPC + contextBridge 正规实现，remote 的移除正是安全默认值收紧的里程碑</strong>。</p>
+<p><strong>易混点 1：三个开关各防一种&quot;坏人&quot;（对应关系要背）</strong>：</p>
+<table><thead><tr><th>开关</th><th>防的是谁</th><th>不防的后果</th></tr></thead><tbody><tr><td>nodeIntegration（关）</td><td>页面里的恶意脚本直接调 Node</td><td>开了 = XSS 注入后随便读文件、执行命令</td></tr><tr><td>contextIsolation（开）</td><td>页面脚本改写、偷听 preload 的变量</td><td>关了 = preload 暴露的东西掉进页面全局作用域，任人摆弄</td></tr><tr><td>sandbox（开）</td><td>Chromium 内核本身被攻破后逃逸</td><td>关了 = 内核漏洞直接等于系统权限</td></tr></tbody></table>
+<p>口诀：<strong>关大门（nodeIntegration）、修柜台（contextIsolation）、加金库（sandbox）</strong>——三道防线各管一段，都开才是纵深防御。</p>
+<p><strong>易混点 2：sandbox 开后 preload 到底还能用什么</strong>。能：<code>require('electron')</code>（ipcRenderer、contextBridge 等有限子集）+ 少量 Node polyfill；<strong>不能：require 任意 npm 包，fs、path 等 Node 模块也用不了</strong>。所以 sandbox 下 preload 想 import axios 是不行的——正确姿势是<strong>网络请求放主进程</strong>（主进程是完整 Node 环境随便用），preload 只做转发。这就是&quot;preload 越薄越好&quot;的技术原因，不是代码洁癖。</p>
+<p><strong>易混点 3：安全默认值时间线，口诀 &quot;5-12-14-20&quot;</strong>。nodeIntegration 默认关（Electron 5）、contextIsolation 默认开（12）、remote 移除（14）、sandbox 默认开（20）。面试官最爱考&quot;哪个默认值是哪个版本变的&quot;，<strong>顺着版本号背：5 关大门、12 修柜台、14 拆后门、20 加金库</strong>。</p>
+<p><strong>高频追问：三件套全开就绝对安全了吗？</strong> 不是。安全是&quot;木桶&quot;——剩下的风险全在<strong>你自己设计的 IPC 白名单</strong>上：如果你在 preload 里暴露了 <code>openShell(command)</code> 这种&quot;执行任意命令&quot;的宽接口，三件套形同虚设。所以本项目 preload 只暴露四个分类下的<strong>具体业务方法</strong>（startCapture、convert、toggleContentProtection……），不存在任何&quot;传什么执行什么&quot;的宽接口。<strong>开关只是底盘，白名单设计才是上限。</strong></p>
+<p><strong>结合本项目</strong>：preload 用 <code>contextBridge.exposeInMainWorld('electronAPI', {...})</code> 暴露四个分类（audio / fileConvert / window / storage），页面只能摸到这四个白名单 API，多一个都不行；渲染进程没有 nodeIntegration，一切 Node 能力走 IPC。<strong>白名单思维</strong>——不是&quot;信任页面&quot;，而是&quot;只给页面它需要的&quot;。</p>
+<p><strong>一句话总结</strong>：nodeIntegration 关（页面无 Node）、contextIsolation 开（preload 与页面隔离）、sandbox 开（系统级兜底）；remote 已死（12 弃用 14 移除），安全默认值只会越来越严。</p>
+<hr>
+<h3 id="q32-ipc-怎么通信invokehandle-和-sendon-怎么选">Q32. IPC 怎么通信？invoke/handle 和 send/on 怎么选？</h3>
+<p><strong>先解释 IPC</strong>：Inter-Process Communication，进程间通信。进程之间内存不共享（各是各的），消息必须通过通道传递——主进程和渲染进程之间靠 Electron 内置的 IPC 通道。</p>
+<p><strong>打比方</strong>：<code>invoke/handle</code> 是<strong>挂号信</strong>——发出必回执，<code>await ipcRenderer.invoke('xxx')</code> 就是寄出挂号信等回信（Promise）；<code>send/on</code> 是<strong>大喇叭广播</strong>——喊出去不等人回，谁在听谁收到。</p>
+<p><strong>选择口诀</strong>：</p>
+<ul><li><strong>&quot;我要个结果&quot; → invoke/handle</strong>：渲染进程请求（invoke），主进程处理（ipcMain.handle），结果通过 Promise 返回。读存储、打开文件对话框、开始录音——都是问答型；</li><li><strong>&quot;我推个状态&quot; → send/on</strong>：主进程主动推送（webContents.send），渲染进程监听（ipcRenderer.on）。转写结果到了、下载进度变了、状态变了——都是推送型；</li><li><strong>高频单向数据 → send（不等回执）</strong>：麦克风音频帧每秒几十次发往主进程，如果用 invoke 每次都要等一个&quot;收到&quot;的确认，性能浪费一半。send 发出去就走，最快。</li></ul>
+<p><strong>两个必懂的底层细节</strong>：</p>
+<ol><li><strong>结构化克隆</strong>：跨进程传数据不是传引用，而是<strong>克隆一份</strong>（和 postMessage 同理）。所以只能传可序列化数据（对象、数组、TypedArray 都行），<strong>不能传函数、类实例</strong>。这也是为什么音频帧用 Uint8Array 传——可克隆且高效；</li><li><strong>老的 send 双向问答要用 reply channel</strong>（收的时候带个&quot;回信地址&quot;参数），繁琐易错——现代 Electron 直接用 invoke/handle 干问答，send/on 只干单向推送。<strong>别背老教材写一堆 event.sender.send</strong>。</li></ol>
+<p><strong>易混点 1：结构化克隆的&quot;能传/不能传&quot;（验证代码）</strong>。Electron IPC 和 postMessage 用的是同一套结构化克隆算法，在浏览器控制台试一下就知道边界：</p>
+<pre><code>// 能传：对象、数组、TypedArray、Date、Map、Set
+ipcRenderer.send('ok', { a: 1 }, new Uint8Array(8), new Date());
+
+// 不能传：函数、类实例、DOM 节点 —— 直接抛 DataCloneError
+window.postMessage(() =&gt; {}, '*'); // Uncaught DOMException: could not be cloned</code></pre>
+<p>还有一个隐蔽坑：<strong>类实例传过去原型就丢了</strong>——<code>new MyClass()</code> 到了对面变成普通对象，方法全没了。跨进程传的是&quot;数据快照&quot;，不是&quot;对象本体&quot;，记住这条就不会踩坑。</p>
+<p><strong>易混点 2：老的 send 双向问答到底有多繁琐（新旧写法对比）</strong>：</p>
+<pre><code>// 老写法：send + reply channel，两端都要写样板代码
+ipcRenderer.send('ask-question', 'answer-channel', payload);
+ipcRenderer.on('answer-channel', (e, reply) =&gt; { /* 收到回信 */ });
+ipcMain.on('ask-question', (e, payload) =&gt; {
+  e.reply('answer-channel', compute(payload)); // 还容易忘带回信地址
+});
+
+// 新写法：invoke/handle，一个 await 搞定
+const reply = await ipcRenderer.invoke('ask-question', payload); // 返回值就是答案</code></pre>
+<p>面试遇到&quot;老教材式&quot;的 event.sender.send 写法，直接指出：<strong>那是 invoke/handle 出现之前的时代产物，现在只有单向推送还用 send</strong>。</p>
+<p><strong>易混点 3：高频数据为什么打死不用 invoke</strong>。invoke 每次调用都要完整走一遍：序列化 → 跨进程 → 主进程处理 → 序列化回执 → 渲染进程 resolve。音频帧每秒几十帧，用 invoke 等于<strong>每一帧都付一次挂号信的钱</strong>。send 是单向的，发出去就完事，没有回执往返。<strong>口诀：问答用 invoke，推送用 on，洪流用 send。</strong></p>
+<p><strong>高频追问：主进程 handler 里抛异常会怎样？</strong> await invoke 的那头会 <strong>reject</strong>，渲染进程用 try/catch 就能接住——invoke 的错误传播是完整的，不像老式 send 出了错没人知道。所以问答型 API 统一走 invoke，错误处理不用另造轮子。<strong>追问&quot;怎么给渲染进程群发消息&quot;</strong>：主进程侧用 <code>webContents.send</code>（或遍历 BrowserWindow.getAllWindows() 逐个发），渲染进程侧统一用 <code>ipcRenderer.on</code> 收——方向不同、方法不同，别背混。</p>
+<p><strong>结合本项目</strong>：startCapture / stopCapture / getSnapshot 是 invoke（问答）；onTranscription / onLLMChunk / onLevels 是 on（推送）；sendMicFrame / sendSystemFrame 是 send（高频单向帧）。<strong>三种模式在同一个 preload 里各司其职</strong>——面试官问 IPC，你就拿这三个分类当例子讲，比背概念有说服力得多。</p>
+<p><strong>一句话总结</strong>：invoke/handle 管问答（有回执的挂号信），send/on 管推送（广播喇叭）；高频数据用 send 省回执；跨进程传的是克隆，传不了函数。</p>
+<hr>
+<h3 id="q33-preload-脚本怎么设计才干净">Q33. preload 脚本怎么设计才干净？</h3>
+<p><strong>先明确一个认知</strong>：preload 的定位是<strong>门房服务窗口</strong>——只负责&quot;接收条子、转交物业、递回结果&quot;，<strong>不做业务逻辑</strong>。业务逻辑放主进程，preload 越薄越好（sandbox 开启时本来也写不了重逻辑）。</p>
+<p><strong>四条设计准则（结合本项目逐条对号入座）</strong>：</p>
+<ol><li><strong>白名单 + 分类命名</strong>：exposeInMainWorld 暴露一个 electronAPI 对象，内部按业务域分四个命名空间——audio（音频控制）、fileConvert（文件转换）、window（窗口管理）、storage（存储）。页面代码写 <code>window.electronAPI.audio.startCapture()</code>，<strong>语义清晰、无全局污染、新 API 往对应分类里加</strong>；</li><li><strong>订阅型方法返回清理函数</strong>：<code>onTranscription(cb)</code> 内部注册监听、<strong>返回 <code>() =&gt; removeListener(...)</code> 供调用方摘除</strong>。API 设计上就把&quot;泄漏的出口&quot;堵住（呼应 Q29）——<strong>好的 API 让人没机会犯错</strong>；</li><li><strong>类型契约</strong>：preload 暴露什么，就写一份 electron.d.ts 声明给渲染进程（Q20 的&quot;跨进程契约 = 类型声明&quot;）——preload 就是渲染进程的 SDK，改 API 时编译器一路红到底；</li><li><strong>参数只透传、不加工</strong>：preload 里收到参数直接 invoke 出去，<strong>校验和业务处理在主进程的 handler 里做</strong>——因为 preload 是离页面最近的一环，页面被攻破时 preload 也不该藏有意义的逻辑。</li></ol>
+<p><strong>易混点 1：订阅方法返回清理函数的完整用法（配合 React 一路通到底）</strong>。preload 里返回了清理函数，渲染进程要接得住：</p>
+<pre><code>useEffect(() =&gt; {
+  const off = window.electronAPI.audio.onTranscription((data) =&gt; {
+    setItems((prev) =&gt; [...prev, data]);
+  });
+  return off; // 组件卸载时调用 off()，监听被摘除
+}, []);</code></pre>
+<p>useEffect 的 cleanup 就是为&quot;订阅-退订&quot;成对出现而设计的——<strong>如果 preload 不返回清理函数，调用方就得自己再造一个 removeListener 的 IPC，麻烦且容易漏</strong>。清理函数是 API 自带的&quot;退订按钮&quot;，没它订阅一定泄漏（呼应 Q29 的&quot;设计上堵住泄漏出口&quot;）。</p>
+<p><strong>易混点 2：contextBridge 传的是&quot;函数代理&quot;，不是&quot;函数克隆&quot;</strong>。exposeInMainWorld 暴露的每个方法，页面侧拿到的是一个<strong>包装后的代理函数</strong>（真正的逻辑仍留在 preload 的世界里执行）——这正是 contextIsolation 的意义：页面只能&quot;叫号&quot;，不能&quot;进柜台&quot;。两个推论要记住：① 参数和返回值同样走结构化克隆（Map/类实例传不过去，Q32）；② 页面侧<strong>改不了</strong>代理函数的内部实现，它是只读的。</p>
+<p><strong>易混点 3：preload 里为什么不能 import 业务模块</strong>。两层原因：技术层面，sandbox 下 preload 没有任意 require 权限（Q31）；安全层面，preload 是半边身子在页面侧的代码——<strong>业务逻辑放这里，等于把逻辑放进攻击面</strong>。校验、转换、容错全在主进程 handler 里做，preload 只当传声筒。</p>
+<p><strong>高频追问：为什么不直接在 window 上挂一堆全局函数，偏要用一个 electronAPI 对象？</strong> 全局函数互相踩名、没法分类、类型契约难写；一个命名空间对象 = 白名单清单 + 分类收纳 + 一份 electron.d.ts 全部搞定（Q20 的类型契约）。页面代码写 <code>window.electronAPI.audio.startCapture()</code>，一看就知道是哪个业务域的能力。</p>
+<p><strong>一句话总结</strong>：preload = 薄转发层：分类白名单、订阅返回清理函数、类型契约、不写业务——页面能碰到的能力越少越安全。</p>
+<hr>
+<h3 id="q34-多窗口管理悬浮窗怎么做的">Q34. 多窗口管理：悬浮窗怎么做的？</h3>
+<p><strong>先讲多窗口的通用坑</strong>：窗口一多，状态就散——谁在控制窗口开关？窗口销毁后谁还握着它的引用？窗口之间的消息怎么路由？<strong>治理原则一条：窗口的生命周期决策集中在主进程，渲染进程只发&quot;请求&quot;，不直接操作窗口对象。</strong></p>
+<p><strong>结合本项目</strong>：两个窗口——<strong>主窗口</strong>（正常应用界面）+ <strong>悬浮窗</strong>（overlay，转写内容置顶显示）。悬浮窗是本项目多窗口能力的招牌案例，参数全是硬核配置：</p>
+<ul><li><code>transparent: true</code> + <code>frame: false</code>：透明背景、无系统边框（自绘界面）；</li><li><code>alwaysOnTop: true</code>：置顶——配合 <code>setVisibleOnAllWorkspaces</code> 跨虚拟桌面可见；</li><li><code>skipTaskbar: true</code>：不出现在任务栏（它是个&quot;跟随型&quot;工具窗）；</li><li><code>setIgnoreMouseEvents(true, { forward: true })</code>：<strong>鼠标穿透</strong>——点击悬浮窗时点的是它下面的应用，悬浮窗只显示不挡操作；</li><li>开关走 window 分类的 IPC（openOverlay / toggleOverlay），<strong>渲染进程只能&quot;申请&quot;，主进程决定</strong>；快捷键（keydown + ctrl/meta）同样发请求给主进程。</li></ul>
+<p><strong>多窗口的死亡陷阱：窗口销毁后的引用</strong>。主进程遍历窗口做批量操作（比如本项目开/关内容保护 <code>BrowserWindow.getAllWindows().forEach</code>），<strong>操作前必须检查 <code>win.isDestroyed()</code></strong>——窗口销毁是异步的，引用可能还挂在数组/闭包里，不检查就是空指针崩溃。IPC handler 里同样：回调触发时先查窗口还活着没有。</p>
+<p><strong>易混点 1：isDestroyed 检查不是洁癖，是保命（对比代码）</strong>：</p>
+<pre><code>// 错误写法：异步回调触发时，窗口可能已经关了
+ipcMain.on('window:toggle-content-protection', () =&gt; {
+  BrowserWindow.getAllWindows().forEach((win) =&gt; {
+    win.setContentProtection(true); // win 已销毁 → 崩溃
+  });
+});
+
+// 正确写法：凡是异步时刻碰窗口引用，先问一句&quot;还活着吗&quot;
+BrowserWindow.getAllWindows().forEach((win) =&gt; {
+  if (!win.isDestroyed()) win.setContentProtection(true);
+});</code></pre>
+<p><strong>易混点 2：鼠标穿透的 forward 参数到底是什么意思</strong>。<code>setIgnoreMouseEvents(true, { forward: true })</code> 拆开看：第一个参数 <code>true</code> = 点击事件穿透给下面的窗口；<code>forward: true</code> = <strong>鼠标移动事件仍然发给悬浮窗自己</strong>（页面还能做 hover 效果）。如果 forward 不传（默认 false），穿透后悬浮窗连鼠标移动都收不到，页面完全&quot;瞎&quot;了。本项目要的是&quot;只显示、可 hover、不挡点击&quot;，所以两个参数缺一不可。</p>
+<p><strong>易混点 3：close 和 closed 是两码事</strong>。<code>close</code> 是可以被拦截的&quot;请求关窗&quot;——页面正在编辑时弹&quot;确定退出吗&quot;就是在 close 事件里 preventDefault；<code>closed</code> 是窗口<strong>已经销毁之后</strong>的通知——在 closed 里把引用置空，是防止悬挂引用的标准姿势。<strong>口诀：close 可拦，closed 收尸。</strong></p>
+<p><strong>高频追问：两个窗口之间怎么直接通信？</strong> 答案是<strong>不能</strong>——渲染进程之间没有直接 IPC 通道，一切都要主进程中转（A → 主进程 → B）。所以&quot;多窗口同步状态&quot;的正确姿势永远是：<strong>状态放主进程，主进程负责把更新推给所有关心的窗口</strong>。</p>
+<p><strong>一句话总结</strong>：多窗口 = 状态集中主进程 + 渲染进程只发请求；悬浮窗靠 transparent/frame/alwaysOnTop/skipTaskbar/鼠标穿透组合；凡是碰窗口引用，先 isDestroyed。</p>
+<hr>
+<h3 id="q35-生命周期管理从启动到退出">Q35. 生命周期管理：从启动到退出</h3>
+<p><strong>Electron 应用的一生，按时间轴记</strong>（面试按时间轴讲，逻辑天然顺）：</p>
+<ol><li><strong>启动</strong>：主进程跑起来 → <code>app.whenReady()</code> 后创建主窗口（窗口必须在 ready 之后创建，早了会崩）→ 加载本地 HTML（loadFile）→ 渲染进程开始跑；</li><li><strong>单实例锁</strong>：<code>app.requestSingleInstanceLock()</code>——<strong>拿不到锁说明已有实例在跑，直接退出</strong>；已有实例收到 second-instance 事件，把主窗口<strong>聚焦并恢复</strong>（本项目做这个是因为麦克风采集是独占型资源，两个实例抢设备会乱套）。<strong>桌面对单实例的需求比 Web 严格得多</strong>；</li><li><strong>运行期</strong>：监听各窗口状态、处理 IPC、跑后台服务（采集/推流/下载）；</li><li><strong>退出前清理</strong>：<code>before-quit</code> 里做<strong>有序关停</strong>——停掉音频采集（WASAPI 线程 Stop → join → 再释放，Q39 讲 TSFN 退出竞态）、断开 WS（发关闭帧、清重连定时器）、杀干净子进程（LibreOffice 用 taskkill /F /T 连同进程树一起带走）。<strong>退出清理的顺序和资源释放的顺序一样，倒着来</strong>；</li><li><strong>退出</strong>：window-all-closed 事件——Windows/Linux 惯例直接 quit；macOS 惯例<strong>不退出</strong>（关窗后应用驻留 Dock，点击 Dock 图标重新建窗），<strong>跨平台差异是高频考点，答出来说明你真上过线</strong>。</li></ol>
+<p><strong>易混点 1：退出事件的真顺序（背这个表，面试按表答）</strong>：</p>
+<table><thead><tr><th>顺序</th><th>事件</th><th>发生了什么</th><th>还能不能拦</th></tr></thead><tbody><tr><td>1</td><td>before-quit</td><td>准备退出，窗口还没关</td><td>preventDefault() 可以拦下</td></tr><tr><td>2</td><td>（各窗口依次关闭）</td><td>每个窗口走 close → closed</td><td>close 阶段可拦（&quot;确定退出吗&quot;弹窗）</td></tr><tr><td>3</td><td>window-all-closed</td><td>所有窗口都关了</td><td>在这里决定要不要 quit</td></tr><tr><td>4</td><td>will-quit</td><td>窗口全关，退出已成定局</td><td>拦不住了</td></tr><tr><td>5</td><td>quit</td><td>进程真正结束</td><td>—</td></tr></tbody></table>
+<p><strong>易混点 2：before-quit 里想写异步清理，直接 await 是坑</strong>。事件回调里 await 不会让 Electron 等你——回调一返回，退出流程就继续走，清理没跑完进程就没了：</p>
+<pre><code>app.on('before-quit', async () =&gt; {
+  await stopCapture(); // 危险！没人等这个 Promise，进程可能已经退出
+});
+
+// 正确姿势：先拦下，清理完再自己放行
+let cleaning = false;
+app.on('before-quit', (e) =&gt; {
+  if (cleaning) return; // 第二次进来（清理完后的 app.quit）直接放行
+  e.preventDefault(); // 先别退出
+  cleaning = true;
+  stopCapture()
+    .catch(() =&gt; {})
+    .finally(() =&gt; app.quit()); // 清理完再走一次完整退出流程
+});</code></pre>
+<p><strong>易混点 3：app.quit() 和 app.exit() 的区别</strong>。quit 走完整流程（触发 before-quit / will-quit，像&quot;体面辞职，交接完再走&quot;）；exit 立即终止（什么都不触发，像被保安架出去）。正常退出用 quit；<strong>exit 只用于清理逻辑的兜底</strong>——比如&quot;quit 发出 3 秒后进程还没退掉，强制 exit 防卡死&quot;。</p>
+<p><strong>高频追问：用户强杀进程怎么办？</strong>（比如任务管理器结束）before-quit 根本不会跑——所以<strong>任何&quot;清理&quot;都不能只依赖退出钩子</strong>：音频设备句柄、临时文件、WS 连接都要设计成&quot;下次启动能自愈&quot;（启动时清扫孤儿临时文件、设备打开失败自动重试）。本项目下载器支持断点续传（Range 请求 + 部分文件检查），就是&quot;不靠完美退出也能恢复&quot;的设计。</p>
+<p><strong>高频追问：macOS 上关了窗，点 Dock 图标为什么窗口又回来了？</strong> 因为 window-all-closed 里 mac 不 quit，应用驻留 Dock；再次点击图标触发 <code>activate</code> 事件，惯例代码在 activate 里判断&quot;没有窗口就重建一个&quot;。<strong>这段平台差异代码每个 Electron 项目都会写，能背出来就是&quot;真上过线&quot;的证据。</strong></p>
+<p><strong>一句话总结</strong>：whenReady 建窗 → 单实例锁防重 → 运行期服务 → before-quit 倒序关停 → 跨平台退出惯例不同；强杀不可防，所以一切资源要能自愈。</p>
+<hr>
+<h3 id="q36-异常恢复断线重连和进程崩溃怎么处理">Q36. 异常恢复：断线重连和进程崩溃怎么处理？</h3>
+<p><strong>先给框架：异常分三层，每层的对策不同</strong>：</p>
+<ol><li><strong>网络层（WS 断连）——指数退避重连</strong>。打比方：打电话没人接，第一次隔 0.5 秒重拨，再没人接隔 1 秒、2 秒、4 秒……<strong>间隔每次翻倍、封顶 30 秒</strong>，避免服务器刚重启时几百个客户端同时重连的&quot;惊群&quot;踩踏；重试次数设上限（10 次），真连不上就进入&quot;错误状态&quot;让 UI 提示，而不是默默死循环；</li><li><strong>渲染进程层（窗口崩溃）——重新加载</strong>。监听 render-process-gone 事件（崩溃原因、退出码都带在事件里），策略通常是<strong>自动 reload 恢复界面</strong>——渲染进程是&quot;房间&quot;，房间塌了重开一个，物业不受影响，这正是三进程架构的结构性优势（Q30）；</li><li><strong>主进程层（最严重）——崩溃即退出，但要留遗言</strong>。主进程挂了应用就没了，所以策略是<strong>兜底记录</strong>：process.on('uncaughtException') 记日志；但注意——<strong>主进程状态可能已不一致，记录完应主动退出</strong>，带病硬跑比干脆退出更危险（半死的状态会写出损坏的数据）。业界共识：主进程异常 = 尽快落盘日志 + 退出 + 下次启动自检。</li></ol>
+<p><strong>结合本项目的重连实现（招牌案例，讲细节有分量）</strong>：WS 客户端带 <strong>generation 计数器</strong>——每次发起连接 generation+1，<strong>收到的每一条消息都校验&quot;是不是当前这代连接的消息&quot;</strong>，旧连接的迟到消息一律丢弃。为什么？重连是异步的：老连接可能还没断干净，新连接已经建立，<strong>如果不做代际校验，旧消息会串进新会话，把转写结果和用户当前说的话混在一起</strong>。这个&quot;代际计数器防竞态&quot;的思维，在所有&quot;重连/重试&quot;场景都适用——记住它，回答任何&quot;异步竞态怎么防&quot;的问题都用得上。</p>
+<p><strong>易混点 1：generation 计数器怎么防串话（代码骨架）</strong>：</p>
+<pre><code>let generation = 0; // 连接代际
+
+function connect() {
+  const myGen = ++generation; // 我是第几代连接
+  const ws = new WebSocket(url);
+  ws.onmessage = (e) =&gt; {
+    if (myGen !== generation) return; // 我已是&quot;老连接&quot;，迟到消息丢弃
+    handle(e.data);
+  };
+  ws.onclose = () =&gt; {
+    if (myGen === generation) reconnect(); // 只有&quot;现任&quot;断了才触发重连
+  };
+}</code></pre>
+<p>老连接断得慢、新连接已建立，<strong>老连接最后漂来的几条消息如果照单全收，就会和当前会话的内容混在一起</strong>——用&quot;我是第几代&quot;一票否决。推广到所有&quot;重试/重连&quot;场景：<strong>每一次重新开始，都给自己发一个新编号，过期编号的结果一律丢弃</strong>（这个模式同样能回答 Q9 里 setState 的竞态问题）。</p>
+<p><strong>易混点 2：指数退避的具体参数（面试要会报数字）</strong>。首延迟 0.5s~1s，每次翻倍，<strong>封顶 30s</strong>，重试上限 10 次左右；进阶版再加<strong>随机抖动</strong>（jitter，最终延迟 = 计算值 × 0.5~1.5 的随机系数）——因为服务器宕机恢复的瞬间，所有客户端如果同一时刻重连，会像开闸放水一样把服务器打垮（惊群效应），抖动让它们错开。<strong>背口诀：翻倍、封顶、加抖动、设上限。</strong></p>
+<p><strong>易混点 3：uncaughtException 之后为什么&quot;记录完就退出&quot;</strong>。异常发生点之后的代码状态没人保证——可能文件写了一半、句柄没关、内存里的数据已经损坏。<strong>继续硬跑 = 用半死的状态去处理接下来的所有请求</strong>，最坏情况是把损坏的数据落盘、把错误的结果发给用户。所以业界共识：主进程兜底 catch → 写日志 → 主动退出 → 靠&quot;下次启动自愈&quot;（Q35）恢复。<strong>异常恢复的最高原则：宁可干净地死，不可带病地活。</strong></p>
+<p><strong>高频追问：渲染进程反复崩溃怎么办？</strong> 自动 reload 必须带<strong>熔断</strong>——连续崩溃 N 次（比如 3 次）就不再自动重载，弹提示让用户手动重启。没有熔断的&quot;崩溃 → reload → 再崩溃&quot;会变成无限循环，CPU 被反复拉起的窗口烧掉。<strong>重试类策略都逃不过这句：没有上限的重试，本身就是新的故障。</strong></p>
+<p><strong>一句话总结</strong>：断线用指数退避 + 次数上限重连；渲染进程崩溃自动 reload；主进程异常记日志后主动退出；重连竞态用 generation 计数器，迟到消息一律丢弃。</p>
+<hr>
+<h3 id="q37-本地存储怎么做为什么不用-localstorage">Q37. 本地存储怎么做？为什么不用 localStorage？</h3>
+<p><strong>先摆方案对比</strong>（面试问&quot;你项目怎么存&quot;，先讲清选择理由）：</p>
+<ul><li><strong>localStorage</strong>：渲染进程里的 Web 标准存储。问题在于：<strong>它绑定的是渲染进程的浏览器 profile</strong>，清了缓存就没了；多窗口数据不一致；<strong>主进程读不到它</strong>（主进程是 Node 环境，没有 localStorage 这东西）；</li><li><strong>electron-store 等库</strong>：在主进程封装 JSON 文件读写。本质和第三种一样，只是封装好的第三方方案；</li><li><strong>主进程文件系统（本项目方案）</strong>：storage IPC（<code>storage:get/set/remove</code>）→ 主进程写 JSON 文件，放 <strong>userData 目录</strong>（<code>app.getPath('userData')</code>，Windows 上是 AppData 下的应用专属目录，跨平台自动适配）。</li></ul>
+<p><strong>为什么选它</strong>：</p>
+<ol><li><strong>主进程自己也要用这份数据</strong>——设置项（如内容保护开关）由主进程在窗口创建时读取应用，存 localStorage 主进程根本摸不到；</li><li><strong>应用级而非页面级</strong>：userData 是&quot;应用的专属抽屉&quot;，卸载重装行为可控、升级不丢（electron-builder 升级保留 userData）；localStorage 是&quot;页面抽屉&quot;，清缓存就空；</li><li><strong>一处存储、多窗口一致</strong>：所有窗口通过同一份主进程文件读同一份数据，没有多窗口各自为政的同步问题。</li></ol>
+<p><strong>注意一个坑</strong>：高频写 JSON 文件有性能损耗——所以本项目 storage 只存低频的配置类数据（设置项、窗口状态），<strong>高频数据（音频帧、转写结果）走内存和事件通道，根本不落盘</strong>。<strong>存储方案跟着数据的&quot;温度&quot;选：冷数据落盘、热数据留内存</strong>。</p>
+<p><strong>易混点 1：localStorage 不是&quot;不能用&quot;，是&quot;主进程用不了&quot;</strong>。渲染进程里 localStorage 一直可以用，问题有三个：① <strong>主进程是 Node 环境，根本没有 window/localStorage</strong>——设置项主进程也要读（窗口创建时就要用），存 localStorage 主进程摸不到；② 每个渲染进程的 localStorage 是<strong>各自一份</strong>，多窗口不同步；③ 清缓存就丢。所以选型逻辑不是&quot;localStorage 不好&quot;，而是&quot;<strong>存的地方必须主进程也够得着</strong>&quot;。</p>
+<p><strong>易混点 2：直接写 JSON 文件有个隐藏坑——写一半崩溃，文件就坏了</strong>。writeFile 是&quot;逐步覆盖&quot;，中途断电/崩溃会留下半截 JSON，下次启动 parse 直接崩：</p>
+<pre><code>// 危险：写一半进程没了，文件是半个 JSON
+fs.writeFileSync(file, JSON.stringify(settings));
+
+// 安全：写临时文件 → 原子重命名（rename 在文件系统上是原子操作）
+fs.writeFileSync(tmpFile, JSON.stringify(settings));
+fs.renameSync(tmpFile, file); // 结果要么是旧文件、要么是新文件，不存在&quot;半个&quot;</code></pre>
+<p><strong>易混点 3：userData 目录到底在哪（跨平台路径表）</strong>：</p>
+<table><thead><tr><th>平台</th><th>路径</th></tr></thead><tbody><tr><td>Windows</td><td><code>%APPDATA%\应用名</code>（即 <code>C:\Users\你\AppData\Roaming\应用名</code>）</td></tr><tr><td>macOS</td><td><code>~/Library/Application Support/应用名</code></td></tr><tr><td>Linux</td><td><code>~/.config/应用名</code></td></tr></tbody></table>
+<p>统一用 <code>app.getPath('userData')</code> 拿，<strong>别手拼路径</strong>——路径随平台和系统设置变，手拼必出错。</p>
+<p><strong>高频追问：为什么不直接上 electron-store？</strong> 它的本质就是&quot;主进程 JSON 文件读写 + 订阅通知&quot;的封装，和本项目方案<strong>同一种原理</strong>——自己写十几行是因为只需要 get/set/remove 三个接口，不想为一个文件读写引一个依赖（依赖多了要审计、要升级）。答题口径：<strong>原理一样，选型看体量</strong>。<strong>追问&quot;敏感数据（如密钥）也存这吗？&quot;</strong>——不，Electron 有 <code>safeStorage</code> API（系统级加密：Windows 走 DPAPI、macOS 走 Keychain），敏感数据用 safeStorage 加密后再落盘。<strong>普通配置走 JSON 文件，敏感数据走 safeStorage，热数据走内存——三层分工。</strong></p>
+<p><strong>一句话总结</strong>：桌面端本地存储放主进程 + userData 目录（应用级、主进程可读、多窗口一致）；localStorage 太&quot;页层面&quot;；高频热数据不落盘。</p>
+<hr>
+<h2 id="五electron-架构下原生模块打包发布">五、Electron 架构（下）：原生模块、打包发布</h2>
+<h3 id="q38-原生模块是什么为什么要编译">Q38. 原生模块是什么？为什么要编译？</h3>
+<p><strong>先讲背景</strong>：Node 本身是用 C++ 写的，它留了一套&quot;C++ 插件&quot;机制（node-gyp 工具 + binding.gyp 编译配置）——<strong>用 C++ 写性能敏感的模块，编译成 .node 二进制，JS 里 require 直接调用</strong>。什么时候用得上？音频实时处理、图像处理、加密、系统级能力——<strong>JS 单线程慢，C++ 快一个数量级还不占 JS 线程</strong>。</p>
+<p><strong>核心考点：ABI 不匹配问题</strong>（面试官最想听的坑）。ABI = 二进制接口——<strong>C++ 插件是&quot;对着某个特定引擎编译出来的&quot;，换个引擎就得重编</strong>。坑在哪：<strong>Node 和 Electron 是两个不同的引擎</strong>（都基于 V8，但版本和构建配置不同）。如果你 <code>npm install</code> 时插件对着系统 Node 编好了，直接丢进 Electron 里调用，<strong>要么加载报错、要么更阴险地运行时崩</strong>。所以有 electron-rebuild 这类工具专干&quot;<strong>针对 Electron 的 ABI 重新编译</strong>&quot;。</p>
+<p><strong>易混点 1：.node 文件到底是什么</strong>。它就是<strong>动态链接库</strong>（Windows 上的 DLL、macOS 的 dylib、Linux 的 so 的同类），只是按 Node 插件的格式封装——JS <code>require('./addon.node')</code> 时，V8 把它加载进进程内存并执行它的注册逻辑。所以&quot;编译原生模块&quot;= &quot;把你写的 C++ 编成动态库&quot;，没有魔法。</p>
+<p><strong>易混点 2：为什么 Node 和 Electron 的 ABI 一定不通用（可当场验证）</strong>。每个引擎版本有一个 <strong>NODE_MODULE_VERSION</strong>（ABI 版本号）。验证方法：在系统 Node 里跑 <code>node -p &quot;process.versions.modules&quot;</code>，再在 Electron 主进程里跑同样一句——<strong>两个数字不一样</strong>（Node 22 与 Electron 43 各自对着不同 V8 版本编译）。数字不同 = 二进制接口不同 = 混用必崩。electron-rebuild 做的就是把插件&quot;按 Electron 的 ABI 数字重编一遍&quot;。</p>
+<p><strong>易混点 3：pnpm 隐式 node-gyp 坑的完整机制</strong>。npm/pnpm 安装依赖时会自动执行包里的 install 脚本；而带 binding.gyp 的包，其 install 脚本通常就是 <code>node-gyp rebuild</code>——<strong>于是&quot;装依赖&quot;这个动作偷偷变成&quot;对着系统 Node 编译插件&quot;</strong>，产出的 .node 是 Node ABI 的，丢进 Electron 就坏。本项目解法：install 脚本改成 no-op 掐掉隐式编译，编译只走 ensure-native 脚本（明确目标 = Electron ABI）。<strong>口诀：编译动作只允许从&quot;明确知道目标引擎&quot;的入口发生。</strong></p>
+<p><strong>高频追问：能不能不写 C++，用 JS 实现系统音频采集？</strong> 不能。WASAPI 是 Windows 的 <strong>COM 接口</strong>，JS 里没有官方途径直接调 COM 组件——必须有个原生层去要接口、收数据，再转交 JS。<strong>另一个常见追问：&quot;为什么不用 prebuild 下载现成二进制？&quot;</strong> prebuilds 是按平台 + ABI 预编译发布的 .node，能省编译时间，但依赖上游维护（本项目插件是自研的，只能自己编；通用生态库才吃得到 prebuilds 红利）。</p>
+<p><strong>结合本项目</strong>：WASAPI 音频采集插件就是这条路——C++ 写（wasapi_loopback.cc），binding.gyp 配置编译，node-addon-api 做胶水层。而且踩过两个真实坑：</p>
+<ol><li><strong>隐式编译坑</strong>：原生目录的 install 脚本曾被 pnpm 在装依赖时隐式触发，<strong>对着系统 Node 编出坏的产物</strong>——解法是把 install 脚本改成 no-op（什么都不做），编译只走 ensure-native 自动化脚本（明确目标 = Electron ABI）；</li><li><strong>编译自动化</strong>：ensure-native 在 dev 启动前和打包前自动检查/编译插件——<strong>&quot;会编译&quot;和&quot;每次都对&quot;之间的差距，就是脚本化</strong>。</li></ol>
+<p><strong>一句话总结</strong>：原生模块 = C++ 写核心、编译成 .node（本质是动态库）、JS 直调；对 Electron 必须按 Electron ABI 重编（隐式 node-gyp 是坑）；编译交给自动化脚本，别靠记忆。</p>
+<hr>
+<h3 id="q39-n-api-和-threadsafefunctionc-和-js-怎么安全协作">Q39. N-API 和 ThreadSafeFunction：C++ 和 JS 怎么安全协作？</h3>
+<p><strong>先讲 N-API 解决什么问题</strong>：早年 C++ 插件直接对着 V8 的 API 写，<strong>V8 版本一升，插件全得重编</strong>。N-API 定了一套<strong>稳定 ABI</strong>——插件对着 N-API 写，Node/Electron 版本随便升都不用重编。node-addon-api 是在 N-API 之上的 C++ 封装（写起来舒服，Napi:: 命名空间）。</p>
+<p><strong>重点讲 ThreadSafeFunction（TSFN，结合本项目的招牌考点）</strong>。背景：WASAPI 采集跑在<strong>自己的 C++ 线程</strong>里，它不能直接调 JS——<strong>V8 是单线程的，任何线程想碰 JS 都得&quot;回到主线程&quot;</strong>。TSFN 干的就是这件事：<strong>C++ 工作线程把数据（如音频帧）塞进一个线程安全队列，JS 主线程在自己的节奏里取出来</strong>——两边各自安好。</p>
+<p><strong>关键细节（每条都是坑，背下来）</strong>：</p>
+<ol><li><strong>NonBlocking 模式 + 队列满策略</strong>：队列塞满时不能卡住采集线程（音频不等人，一卡就丢音），所以选非阻塞模式——<strong>队列满 64 帧时丢弃最新帧</strong>（丢新的、保旧的，保证时序不跳）；宁可少一帧，不能让采集线程停下等 JS；</li><li><strong>退出竞态（本项目专门修过的 bug）</strong>：应用退出时，采集线程要停、TSFN 要释放。<strong>顺序错就会崩</strong>——如果先释放 TSFN 而采集线程还在往里塞数据，就是野指针。正确顺序：<strong>先 Stop 采集 → join 等线程真正退出 → 最后才释放 TSFN</strong>。这个&quot;资源释放顺序&quot;的坑在提交记录里有真实修复：<code>TSFN 退出竞态修复</code>——面试时讲&quot;我修过跨线程生命周期竞态&quot;，含金量很高；</li><li><strong>JS 侧不阻塞</strong>：回调里只做轻量活（转发给事件总线），重活另排。</li></ol>
+<p><strong>易混点 1：TSFN 的&quot;线程安全&quot;到底安全了什么</strong>。它说的是<strong>队列本身</strong>——内部有锁，C++ 采集线程往里塞、JS 主线程往外取，两个线程同时操作队列也不会互相踩（不会出现读一半的数据）。但注意：<strong>JS 侧的回调仍然在主线程执行</strong>——TSFN 并没有把 JS 变多线程，它只是把&quot;数据搬运&quot;变成了线程安全的。<strong>口诀：队列是安全的，JS 还是单线程的。</strong></p>
+<p><strong>易混点 2：Blocking 和 NonBlocking 两种模式（对比表）</strong>：</p>
+<table><thead><tr><th>模式</th><th>队列满时 C++ 线程会怎样</th><th>适用场景</th></tr></thead><tbody><tr><td>Blocking</td><td>被挂起，等 JS 消费完再继续塞</td><td>数据一帧不能丢（如文件写入）</td></tr><tr><td>NonBlocking</td><td>不等待，本次塞入直接失败/丢弃</td><td>实时流——音频帧过期就没用了</td></tr></tbody></table>
+<p>音频是&quot;过期作废&quot;的数据：这一帧塞不进去，等一毫秒再塞就晚了，<strong>停采集线程等于丢一整段音</strong>。所以本项目选 NonBlocking + 满 64 帧丢最新帧（丢新的、保旧的，时序不跳）。</p>
+<p><strong>易混点 3：为什么释放顺序必须是 Stop → join → release（一图看懂）</strong>。倒过来想：如果先 release 把 TSFN 销毁，采集线程可能<strong>还在往里塞数据</strong>——塞进一个已销毁的队列 = 野指针崩溃。正确顺序的每一步都是&quot;确保没人再用了，才销毁&quot;：</p>
+<pre><code>Stop 发出停止信号 → join 等线程真正退出（此刻起没人再塞） → release 销毁 TSFN</code></pre>
+<p>这就是本项目提交记录里 &quot;TSFN 退出竞态修复&quot; 修的真 bug——<strong>资源销毁的通用原则：先停生产者，再等生产者确认退出，最后销毁共享资源。</strong></p>
+<p><strong>高频追问：为什么不用 Node 的 worker_threads 代替 C++ 线程？</strong> 因为我们要的是<strong>系统级能力</strong>（WASAPI/COM 接口），worker_threads 再强也只是 JS 线程，<strong>拿不到 COM 接口</strong>。C++ 线程的价值不在&quot;多线程&quot;，在&quot;能调 JS 调不到的系统 API&quot;。<strong>追问&quot;回调里能直接做重采样吗？&quot;</strong> 能但别——回调跑在主线程，重活挤占 UI；正确姿势是回调只做轻量转发，重活单独排队。</p>
+<p><strong>一句话总结</strong>：N-API = 稳定 ABI 不用重编；TSFN = C++ 线程往 JS 单线程送数据的线程安全队列；非阻塞 + 丢新保旧防卡采集；释放顺序 Stop → join → release。</p>
+<hr>
+<h3 id="q40-wasapi-采集链路怎么抓系统声音">Q40. WASAPI 采集链路：怎么抓系统声音？</h3>
+<p><strong>先补背景</strong>：本项目要做&quot;转录电脑里正在播放的声音&quot;（视频会议、视频播放器的声音），这叫<strong>系统音频回路采集（loopback）</strong>——不是录麦克风，是把&quot;即将输出到扬声器的声音&quot;抄一份。Windows 上干这事的官方 API 叫 <strong>WASAPI</strong>，它建立在 <strong>COM</strong> 技术之上（Windows 的系统组件技术——用之前要 CoInitializeEx 初始化，用接口得一个个&quot;要&quot;出来）。</p>
+<p><strong>调用链像剥洋葱，五层（背下来就是满分答案）</strong>：</p>
+<ol><li><strong>IMMDeviceEnumerator</strong>：设备的&quot;电话簿&quot;——枚举系统音频设备；</li><li><strong>IMMDevice</strong>：拿到&quot;输出设备&quot;这个对象（默认扬声器）；</li><li><strong>IAudioClient</strong>：在这台设备上开一个音频会话，关键是声明 <strong>AUDCLNT_STREAMFLAGS_LOOPBACK</strong> 标志——这就是&quot;抄扬声器&quot;的模式；同时按设备支持的<strong>共享模式</strong>协商采样格式（48kHz、stereo、float32）；</li><li><strong>IAudioCaptureClient</strong>：真正用来&quot;取货&quot;的接口——不断询问&quot;有没有新的音频缓冲区&quot;，有就拷出来；</li><li><strong>数据出口</strong>：拿到的 PCM 数据经 TSFN（Q39）交回 JS 主线程，再走后续流水线。</li></ol>
+<p><strong>两个工程细节（体现深度）</strong>：</p>
+<ul><li><strong>轮询 vs 事件</strong>：可以注册事件句柄等系统通知&quot;有数据了&quot;（SetEventHandle + WaitForSingleObject），本项目用 10ms 轮询——<strong>音频实时性要求高时，固定小步轮询比事件唤醒的延迟更可控</strong>（事件有唤醒开销和抖动）；轮询线程空闲时让出 CPU，实测开销可忽略；</li><li><strong>静音帧优化</strong>：拿到缓冲区先检查 <code>AUDCLNT_BUFFERFLAGS_SILENT</code> 标志——<strong>没人说话、没有声音时系统会标记静音帧，直接丢弃不上报</strong>，高峰期省掉约一半上行流量和 JS 侧处理量。<strong>&quot;不处理不该处理的数据&quot;是最便宜的优化</strong>。</li></ul>
+<p><strong>易混点 1：麦克风采集 vs loopback 回路采集（必问的辨析）</strong>：</p>
+<table><thead><tr><th>对比项</th><th>麦克风采集（录制）</th><th>loopback 回路采集（本项目）</th></tr></thead><tbody><tr><td>抓谁的声音</td><td>你说话的声音（输入设备）</td><td>电脑正在播放的声音（输出设备）</td></tr><tr><td>典型场景</td><td>录音、视频会议发言</td><td>转录会议/视频里的声音</td></tr><tr><td>API 标志</td><td>普通采集模式</td><td><code>AUDCLNT_STREAMFLAGS_LOOPBACK</code></td></tr><tr><td>额外注意</td><td>需要麦克风权限</td><td>抓的是&quot;即将输出&quot;的副本，设备静音了就没数据</td></tr></tbody></table>
+<p>本项目两个都采（麦克风帧 + 系统声帧双通道上报）——<strong>面试里顺嘴说&quot;双通道采集&quot;，比只说 loopback 有区分度</strong>。</p>
+<p><strong>易混点 2：COM 到底是什么（一句话讲清）</strong>。COM 是 Windows 的<strong>组件对象模型</strong>——系统功能被打包成一个个&quot;组件&quot;，程序通过<strong>接口（Interface）</strong>向组件要服务，而不是直接操作内存。它像餐厅：你拿到的是菜单（接口），菜怎么做的你不管。所以 WASAPI 调用链上全是&quot;要接口&quot;：<code>CoInitializeEx</code> 初始化餐厅 → 要电话簿接口 → 要设备接口 → 要音频客户端接口……<strong>用完的接口要 Release（引用计数减一）</strong>，忘了释放就是桌面端经典的 COM 泄漏——和 JS 的 GC 思维完全不同，C++ 里资源要手还。</p>
+<p><strong>易混点 3：共享模式 vs 独占模式</strong>。共享模式（默认）：多个应用同时用一块声卡，系统混音，loopback 只能工作在共享模式；独占模式：一个应用独享声卡（发烧友播放器追求低延迟高保真用），代价是<strong>别的应用全没声音</strong>。本项目用共享模式是必然的——<strong>工具类应用抢用户的声卡，是不可接受的产品行为</strong>。</p>
+<p><strong>高频追问：用户中途切换默认输出设备（插拔耳机）怎么办？</strong> 监听 Windows 的设备变更通知（<code>IMMNotificationClient</code>），收到通知后<strong>销毁旧链路、按新设备重建一遍</strong>——采集链路是&quot;一次性&quot;的，别想着热切换，重建最干净。本项目采集模块的设计就是&quot;可重复启停&quot;，设备变更 = 自动重启采集。<strong>追问&quot;轮询和事件怎么选&quot;</strong>：轮询简单、延迟可控、不会因事件丢失漏数据；事件省 CPU 但唤醒有抖动。本项目选 10ms 轮询是&quot;实时性优先&quot;的取舍——<strong>任何取舍都要能说出代价</strong>。</p>
+<p><strong>一句话总结</strong>：Enumerator → Device → AudioClient（LOOPBACK 标志）→ CaptureClient 取货 → TSFN 交 JS；10ms 轮询控延迟，静音帧丢弃省流量。</p>
+<hr>
+<h3 id="q41-音频流水线48khz-双声道怎么变成-16khz-单声道">Q41. 音频流水线：48kHz 双声道怎么变成 16kHz 单声道？</h3>
+<p><strong>先讲为什么需要这一步</strong>：WASAPI 给出的原始格式是 <strong>48kHz、双声道、float32</strong>（每个采样点 4 字节，一秒钟 48,000 个采样点 × 2 声道）；而语音识别模型要的是 <strong>16kHz、单声道、int16</strong>。如果原样上传：<strong>数据量是目标格式的 12 倍</strong>（48/16 × 2 × 2）——流量和算力全浪费在模型用不上的信息上。所以采集后立刻做<strong>归一化流水线</strong>。</p>
+<p><strong>三步拆解（每步一个考点）</strong>：</p>
+<ol><li><strong>声道混合</strong>：左右声道取平均（或只取一个），双声道 → 单声道；</li><li><strong>重采样</strong>：48,000 个点/秒 → 16,000 个点/秒（3:1）。<strong>坑点：不能简单跳点</strong>（&quot;每 3 个取 1 个&quot;叫最近邻采样）——那会产生<strong>混叠</strong>（高频声音&quot;折叠&quot;成不存在的低频杂音）。正确做法是<strong>线性插值</strong>：新采样点的值，按它在旧时间轴上的位置，由相邻两个旧点按比例算出来。比最近邻多一次乘加，质量天差地别；再往上还有带滤波器的专业重采样（如 Speex），工程上按需选择；</li><li><strong>量化</strong>：float32（-1.0 ~ 1.0 的小数）→ int16（-32768 ~ 32767 的整数）：乘 32767 后<strong>clamp 到范围</strong>（超界的截断，否则溢出会&quot;回绕&quot;出刺耳爆音——这是量化噪声的来源），再取整。</li></ol>
+<p><strong>流水线形态</strong>：原始帧进来先进<strong>帧累积器</strong>——凑满 1280 字节（16kHz mono int16 下正好 40ms 的帧）才发出去。为什么 40ms？<strong>模型按固定帧长接收</strong>，攒够了才组帧；攒的过程就是天然的小缓冲，抹平采集抖动。</p>
+<p><strong>易混点 1：为什么不能&quot;每 3 个取 1 个&quot;（混叠是什么）</strong>。48k → 16k 正好 3:1，最简单是跳点取样——但<strong>跳点 = 丢失信息</strong>：原始波形里 8kHz 以上的高频成分（16k 采样率最高只能表示 8kHz）被硬丢掉后，会&quot;折叠&quot;成不存在的低频杂音（混叠，alias）。线性插值好在：<strong>新点的值由旧时间轴上相邻两点按距离比例加权算出来</strong>，高频信息虽然还是保不住，但过渡平滑、不会凭空造出刺耳杂音。<strong>口诀：跳点 = 造杂音；插值 = 平滑过渡。</strong></p>
+<p><strong>易混点 2：&quot;数据量是 12 倍&quot;是怎么算出来的（面试要会现场算）</strong>：</p>
+<table><thead><tr><th>维度</th><th>原始（48k stereo float32）</th><th>目标（16k mono int16）</th><th>比值</th></tr></thead><tbody><tr><td>采样率</td><td>48,000 点/秒</td><td>16,000 点/秒</td><td>÷ 3</td></tr><tr><td>声道</td><td>2（左右）</td><td>1</td><td>÷ 2</td></tr><tr><td>每点字节</td><td>4（float32）</td><td>2（int16）</td><td>÷ 2</td></tr></tbody></table>
+<p>3 × 2 × 2 = <strong>12 倍</strong>。三行表一摆，面试官立刻知道你理解的不是背数字。</p>
+<p><strong>易混点 3：clamp 是为了防&quot;回绕爆音&quot;</strong>。int16 范围是 -32768~32767，float 值乘 32767 后如果超界，直接转 int 会发生<strong>回绕</strong>：比如 32768 回绕成 -32768——波形顶端突然跳到反方向底端，耳朵听到的就是&quot;啪&quot;的爆音。所以转换前先 clamp 到边界再取整。<strong>这是量化噪声最粗暴的来源，一行代码防住。</strong></p>
+<p><strong>高频追问：40ms 一帧的 1280 字节是怎么来的？</strong> 现算：16,000 点/秒 × 0.04 秒 = 640 个采样点 × 2 字节/点 = <strong>1280 字节</strong>。帧长是权衡：帧太短（10ms）→ 组帧频繁、每帧处理开销占比高；帧太长（200ms）→ 攒帧等待时间 = 转写延迟增加。40ms 是延迟和开销的中间点，且对齐模型常见输入粒度。<strong>追问&quot;为什么不用 8kHz？&quot;</strong> 人声基频上限约 4kHz，16k 采样率能完整覆盖 0~8kHz（奈奎斯特），是语音识别的行业标准格式——8k 会丢高频细节，48k 则信息冗余。</p>
+<p><strong>结合本项目</strong>：这一整套是纯数据变换，<strong>实现放在 shared 包里</strong>（三端共用同一套算法 + 同一套字节级测试，Q18）——JS 主进程、Python 后端、测试用例跑的是<strong>同一个公式</strong>，不存在&quot;各写各的重采样&quot;造成的音频格式漂移。</p>
+<p><strong>一句话总结</strong>：48k stereo float → 混声道 → 线性插值重采样到 16k（防混叠）→ clamp 量化 int16（防爆音）→ 帧累积 40ms 组帧；数据量 1/12，算法三端共用一套。</p>
+<hr>
+<h3 id="q42-打包electron-builder-怎么把应用变成安装包">Q42. 打包：electron-builder 怎么把应用变成安装包？</h3>
+<p><strong>先讲打包要解决的三件事</strong>：把代码和 Electron 运行时捆在一起、打成各平台的安装包格式、签名（Q44）。主流工具有 electron-builder 和 Electron Forge 两派（JD 里两个都提到了，所以要能对比）：<strong>electron-builder 专注&quot;打包发布&quot;</strong>——配置少、格式全、更新生态成熟；<strong>Forge 是官方&quot;全家桶&quot;</strong>——不止打包，还管插件化脚手架和原生模块编译编排，但发布环节的生态（如自动更新）不如 builder 成熟。<strong>本项目选 electron-builder，理由就是发布链完善</strong>。</p>
+<p><strong>Windows 平台的一个大坑（真实踩过，必讲）</strong>：electron-builder 打 Windows 安装包，默认格式是 <strong>NSIS</strong>（最常见的 .exe 安装器）；<strong>Squirrel.Windows 是另一套安装器技术</strong>（历史上 Electron 默认，现在要单独装 electron-builder-squirrel-windows 包）。两种安装器的更新机制<strong>不互通</strong>——用 electron-updater 做自动更新时<strong>只支持 NSIS</strong>（Q43 呼应）。所以我们的选择链路是：<strong>NSIS 安装器 + electron-updater</strong>，一条链走通。</p>
+<p><strong>另一个工程坑</strong>：<strong>打包前必须确保原生插件已按 Electron ABI 编译</strong>（Q38）——本项目 build 脚本的顺序是 <code>vite build → tsc 编译主进程 → ensure-native 检查插件 → electron-builder</code>，<strong>顺序即依赖</strong>。面试官问&quot;打包流程&quot;，能报出这条带依赖顺序的命令链，比&quot;跑一下 build 命令&quot;强十倍。</p>
+<p><strong>易混点 1：NSIS 和 Squirrel.Windows 是两个&quot;安装器技术&quot;（对比表）</strong>：</p>
+<table><thead><tr><th>对比项</th><th>NSIS</th><th>Squirrel.Windows</th></tr></thead><tbody><tr><td>出身</td><td>老牌开源安装器脚本系统</td><td>Electron 历史上默认的安装器</td></tr><tr><td>安装包形态</td><td>向导式 .exe（可定制界面）</td><td>一键静默安装（无向导）</td></tr><tr><td>配套更新</td><td>electron-updater</td><td>内置 autoUpdater</td></tr><tr><td>在 builder 里</td><td>默认格式</td><td>需单独装 electron-builder-squirrel-windows</td></tr></tbody></table>
+<p><strong>坑就坑在更新机制不互通</strong>：NSIS 装的必须用 electron-updater 更新，Squirrel 装的必须用 autoUpdater——装错配套 = 自动更新永远失败。所以选型要&quot;一条链咬合到底&quot;：本项目 = NSIS + electron-updater（Q43 呼应）。</p>
+<p><strong>易混点 2：asar 是什么（打包必问的格式）</strong>。asar = Electron 的归档格式：把你的代码文件<strong>打成一个 app.asar 大文件</strong>放进安装包，好处是加载快（一次 IO）且不裸露源码目录。但有个坑：<strong>原生模块（.node）和需要以文件形式存在的资源不能待在 asar 里</strong>——所以 electron-builder 用 <code>asarUnpack</code> 把它们解出来放真实目录。面试官问&quot;打包后 node_modules 怎么处理&quot;：生产依赖进 asar、原生模块 asarUnpack、开发依赖根本不进包。</p>
+<p><strong>易混点 3：electron-builder 和 Forge 的分工边界</strong>。Forge 是官方&quot;全家桶&quot;（脚手架 + 插件体系 + 打包 + 发布一体），builder 是社区&quot;专注打包发布&quot;。选型不是对错问题，是<strong>生态深度问题</strong>：builder 的更新服务器适配（GitHub Releases/私有服务器/通用 URL）、NSIS 定制能力、踩坑答案库都更深——<strong>企业项目选它图的是&quot;发布链路每一步都有成熟答案&quot;</strong>。</p>
+<p><strong>高频追问：怎么减小安装包体积？</strong> 三板斧：① Electron 运行时本身占大头，没有&quot;魔法瘦身&quot;，但可以移除用不到的组件/语言包；② 依赖瘦身——开发依赖不进包、按需引入（tree-shaking）；③ asar 开压缩。<strong>追问&quot;能在 Windows 上直接打 macOS 安装包吗？&quot;</strong> 不能——<strong>macOS 包必须在 macOS 上打</strong>（签名公证依赖苹果环境），跨平台打包的标准解法是 CI 矩阵（每个平台各跑一个构建任务）。</p>
+<p><strong>一句话总结</strong>：electron-builder 管打包发布（对 Forge 胜在发布链）；Windows 用 NSIS 安装器（Squirrel 是另一套、更新机制不互通）；打包脚本的顺序就是依赖顺序。</p>
+<hr>
+<h3 id="q43-自动更新怎么做的">Q43. 自动更新怎么做的？</h3>
+<p><strong>先讲原理（三层）</strong>：</p>
+<ol><li><strong>更新服务器</strong>：放最新版本的安装包 + 一份元数据（版本号、文件哈希、下载地址）；electron-builder 用 publish 配置，支持 GitHub Releases、自建服务器、通用 URL 等多种方式；</li><li><strong>客户端检查</strong>：应用启动后（或定时）问服务器&quot;最新版本是多少&quot;——<strong>版本比较用 semver 语义化版本规则</strong>（1.2.3 逐段比较），本地版本旧就进入下载流程；</li><li><strong>下载与安装</strong>：下载新安装包 → 校验哈希（防损坏、防投毒）→ <strong>静默安装</strong>：不是弹一个安装向导让用户点，而是后台把新版本装好，<strong>用户重启应用就自动是新版</strong>。</li></ol>
+<p><strong>Windows 上的平台限制（高频考点，背）</strong>：electron-updater 在 <strong>Windows 只支持 NSIS 安装器</strong>，<strong>不支持 Squirrel.Windows</strong>（Squirrel 要用 Electron 内置的 autoUpdater 模块）。macOS 则相反，标准做法是 Electron 内置 autoUpdater（对接 Squirrel.Mac）。<strong>所以本项目 Windows 链 = electron-builder(NSIS) + electron-updater</strong>——选型互相咬合（Q42 呼应）。另外：macOS 上如果应用<strong>没有签名公证</strong>，自动更新会被系统拦（Q44 呼应）；还有 <strong>Windows 上更新时必须先退出应用</strong>（文件被占用装不进去），所以更新器会在退出时执行安装——这是&quot;为什么 Windows 更新总是重启后生效&quot;的原因。</p>
+<p><strong>再讲一个工程细节</strong>：升级必须<strong>保住 userData</strong>（用户配置、设置）——安装器只替换应用目录，不碰 userData（Q37 讲过的应用级抽屉），这是&quot;升级后用户设置不丢&quot;的机制保证。</p>
+<p><strong>易混点 1：electron-updater 和内置 autoUpdater 是两套东西</strong>。electron-updater（第三方，electron-builder 生态）和 Electron 内置的 autoUpdater 都叫&quot;自动更新&quot;，但<strong>支持的安装器和平台完全不同</strong>——Windows 上 NSIS 装的应用只能用 electron-updater；内置 autoUpdater 在 macOS 走 Squirrel.Mac、在 Windows 走 Squirrel.Windows。<strong>装错配套 = 更新器找不到安装器 = 永远失败</strong>（Q42 的&quot;一条链咬合到底&quot;）。本项目 Windows 链 = electron-builder(NSIS) + electron-updater。</p>
+<p><strong>易混点 2：semver 比较不是字符串比较（经典坑）</strong>。版本号 <code>1.9.0</code> 和 <code>1.10.0</code> 谁新？字符串比会认为 &quot;1.9&quot; &gt; &quot;1.10&quot;（'9' &gt; '1'），<strong>错</strong>——semver 逐段比：1 == 1，10 &gt; 9，所以 1.10.0 更新。更新器内置 semver 规则不用手写，但<strong>面试问&quot;版本怎么比较&quot;，必须答出逐段比较</strong>，暴露你踩过这个坑。</p>
+<p><strong>易混点 3：全量更新 vs 增量更新</strong>。本项目是全量：下载完整新安装包替换（简单可靠）；增量（delta）：只下载新旧版本的差异块，省流量但复杂（差异算法、合并校验、多版本组合爆炸）。<strong>桌面应用的主流仍是全量</strong>——安装包几十 MB，在 Wi-Fi 时代不是主要矛盾；增量的复杂度风险大于收益，除非包体上 GB。</p>
+<p><strong>高频追问：下载的包被篡改怎么办？</strong> 两层防线：① 传输层 HTTPS；② 元数据里带<strong>文件哈希</strong>，下载完先校验，哈希对不上直接丢弃、本次更新作废——防的不只是投毒，还有下载中断造成的损坏文件。<strong>追问&quot;更新失败用户体验怎么兜底&quot;</strong>：失败静默不打扰（下次启动再试），保留旧版本可运行——<strong>更新失败的底线是&quot;旧版不受影响&quot;</strong>。<strong>追问&quot;灰度发布怎么做&quot;</strong>：更新服务器按渠道放包（stable/beta 两个元数据地址），客户端按自己所属渠道取元数据——渠道在安装时就写进应用配置。</p>
+<p><strong>一句话总结</strong>：服务器放包 + 元数据 → 客户端查版本 → 下载校验 → 静默安装重启生效；Windows 只认 NSIS + electron-updater；升级保 userData 不碰用户数据。</p>
+<hr>
+<h3 id="q44-代码签名与公证为什么要签">Q44. 代码签名与公证：为什么要签？</h3>
+<p><strong>先解释为什么</strong>：签名 = 给安装包盖一个<strong>&quot;此包出自 XX 公司、内容没被改过&quot;的防伪章</strong>。不签名的后果：Windows 的 SmartScreen 报&quot;未知发布者&quot;（大红色警告，用户不敢装）；macOS 的 Gatekeeper 直接拒装（弹窗&quot;无法打开，因为它来自身份不明的开发者&quot;）。<strong>分发渠道越正式，签名越是刚需</strong>。</p>
+<p><strong>各平台机制（分清两个概念）</strong>：</p>
+<ul><li><strong>Windows 签名</strong>：买代码签名证书（贵，按年付费），给安装包和 exe 签名。不签 = SmartScreen 警告；</li><li><strong>macOS 公证（notarization）</strong>：签了名还不够——苹果要求把应用<strong>上传给苹果服务器做安全扫描</strong>，通过后苹果签发&quot;公证票据&quot;，Gatekeeper 才完全放行。<strong>签名是&quot;证明你是谁&quot;，公证是&quot;苹果验过货&quot;</strong>。公证还影响自动更新（新版本不公证，更新会被拦，Q43 呼应）；</li><li><strong>内部分发/未上架阶段</strong>：本项目当前阶段走的是内部使用，所以<strong>尚未启用签名公证</strong>——这本身就是一个诚实的工程答案：&quot;我们还没到公开分发阶段，签名公证在发布路线图上&quot;。<strong>面试切忌吹牛</strong>，没做的就说没做 + 说出计划。</li></ul>
+<p><strong>易混点 1：签名和公证是两件事（macOS 上最容易混）</strong>：</p>
+<table><thead><tr><th>对比项</th><th>签名（Signing）</th><th>公证（Notarization）</th></tr></thead><tbody><tr><td>证明什么</td><td>包出自你、内容没被改</td><td>苹果服务器扫描过、没发现恶意行为</td></tr><tr><td>谁来做</td><td>你自己用证书签</td><td>上传苹果服务器验</td></tr><tr><td>只签不公证</td><td>Gatekeeper 仍可能拦</td><td>—</td></tr><tr><td>顺序</td><td>先签</td><td>后公证</td></tr></tbody></table>
+<p><strong>口诀：签名 = 证明你是谁；公证 = 苹果验过货。</strong> 二者是流水线上的两步，不是二选一。</p>
+<p><strong>易混点 2：买了证书签名，SmartScreen 就 100% 不警告了吗？</strong> 不是。SmartScreen 除了验签名，还有<strong>信誉分机制</strong>——新证书、低下载量的应用即使签了名，初期仍可能提示&quot;未知发布者&quot;。签名是必要条件不是充分条件，<strong>信誉要靠真实用户的下载量积累</strong>。面试答出这层，说明你接触过真实分发。</p>
+<p><strong>易混点 3：签名为什么要用时间戳服务器</strong>。证书会过期——如果包上没有时间戳，<strong>证书一过期，签名就失效</strong>（旧包变&quot;未签名&quot;）。签名时向时间戳服务器打一个&quot;此时证书还有效&quot;的戳，之后即使证书过期，签名依然被认可。<strong>这是十年后老版本安装包仍能通过验证的机制</strong>，属于&quot;专业度一票&quot;的细节。</p>
+<p><strong>高频追问：内部工具不签名怎么分发？</strong> 诚实方案：内网分发 + 邮件/IM 指导安装；macOS 上用户右键打开或 <code>xattr -cr</code> 绕过 Gatekeeper。<strong>但不要教用户全局关 SmartScreen/Gatekeeper</strong>——那是把用户整个系统的防线拆了。<strong>追问&quot;签名证书放哪、谁保管？&quot;</strong> 证书是公司级机密资产，应放安全保管（硬件 token / CI 密钥库），CI 构建时引用——<strong>开发者个人电脑上裸放证书 = 出事了全公司安装包信誉一起完蛋</strong>。</p>
+<p><strong>一句话总结</strong>：签名防篡改、证身份；Windows 不签 = SmartScreen 警告，macOS 不签名不公证 = 装不上/更新被拦；公证 = 苹果验货。诚实说明自己项目的阶段。</p>
+<hr>
+<h3 id="q45-electron-vs-tauri你怎么看">Q45. Electron vs Tauri：你怎么看？</h3>
+<p><strong>JD 里没直接问，但 Electron 岗位高频被问&quot;为什么不用 Tauri&quot;，要会答</strong>。先讲 Tauri 是什么：<strong>渲染层也用 Web 技术，但运行时不用打包一整个 Chromium，而是用操作系统自带的 WebView</strong>（Windows 用 WebView2、macOS 用 WKWebView），后端用 Rust 写。卖点是<strong>安装包极小</strong>（几 MB vs Electron 的几十上百 MB）、内存占用低。</p>
+<p><strong>为什么本项目还是 Electron（有理有据的选型）</strong>：</p>
+<ol><li><strong>WebView 碎片化</strong>：系统自带 WebView 版本随系统更新走，不同机器行为不一致——<strong>Electron 把 Chromium 打包进去，所有用户跑的是同一个引擎</strong>（兼容性问题可控，这是企业应用的刚需）；</li><li><strong>成熟生态</strong>：electron-builder / electron-updater / 海量现成方案，团队踩坑有答案可查；Tauri 生态新，遇到冷门问题可能查不到；</li><li><strong>团队技能栈</strong>：团队是 JS/TS 栈，Electron 全链路 TS；Tauri 要写 Rust（原生层）——<strong>技术选型的第一原则是匹配团队能力，不是追新</strong>；</li><li><strong>工程权衡</strong>：Electron 的包体/内存代价我们接受（桌面工具类应用），换来的确定性更值钱。</li></ol>
+<p><strong>但也要展示&quot;不选也有思考&quot;</strong>：如果做的是<strong>极轻量、对包体敏感、愿意养 Rust 能力</strong>的场景（比如小工具、大厂自研外壳），Tauri 是合理的下一代选择。<strong>面试官要的不是&quot;站队&quot;，是&quot;选型的理由能自圆其说&quot;</strong>。</p>
+<p><strong>易混点 1：包体差距的来源要说得准</strong>。Electron 包大不是&quot;框架写得烂&quot;，是<strong>每个用户都要下载一整套 Chromium + Node 运行时</strong>（几十上百 MB）；Tauri 不打包浏览器——<strong>用操作系统预装的 WebView 组件</strong>（Windows 的 WebView2 来自 Edge 内核、macOS 的 WKWebView），后端 Rust 编译成原生二进制，所以只有几 MB。<strong>省的是&quot;运行时&quot;的钱，代价是&quot;运行时归系统管&quot;</strong>（见易混点 2）。</p>
+<p><strong>易混点 2：&quot;用系统 WebView&quot;既是优点也是坑（两面都要会讲）</strong>。优点：包小、内存省、系统级新特性跟着系统走；坑：<strong>碎片化</strong>——用户系统里的 WebView2 版本各不相同（老 Windows 甚至没有，要引导安装），你测过 WebView2 v110，用户机器上是 v95，行为就可能不一样；而 Electron 把 Chromium 打包进去，<strong>一万个用户跑的是同一个引擎版本</strong>。<strong>企业应用的兼容性成本远大于下载包体的成本——这就是&quot;确定性&quot;值钱的逻辑。</strong></p>
+<p><strong>易混点 3：Tauri 的 IPC 模式和 Electron 本质不同</strong>。Electron 渲染进程到主进程是<strong>运行时动态消息</strong>（字符串 channel，参数序列化传过去，类型靠约定/声明文件，Q20/Q32）；Tauri 是 invoke 到<strong>编译期注册的 Rust command</strong>——参数和返回值在编译期校验类型，类型错了<strong>打包时就报错</strong>。这是&quot;静态类型思维&quot;和&quot;JS 动态思维&quot;的差异，选型时团队要评估：<strong>你的团队更习惯&quot;编译器替你查&quot;，还是&quot;约定 + 类型声明文件&quot;</strong>。</p>
+<p><strong>高频追问：为什么 VS Code、Slack、Figma 这些大厂桌面端还在用 Electron？</strong> 三点：① 引擎统一带来的兼容性确定性（企业分发场景的刚需）；② 生态沉淀——编辑器插件体系、自动更新、崩溃上报、内嵌调试工具都是现成的；③ 团队复用 Web 团队能力，一个 JS 团队覆盖全平台。<strong>它们不是&quot;没能力换 Tauri&quot;，是&quot;换的成本远超收益&quot;</strong>——大厂的存量代码和插件生态是最大的沉没成本。<strong>追问&quot;如果新项目从零开始还选 Electron 吗？&quot;</strong> 看团队栈：JS 团队 + 复杂 UI + 要确定性 → 仍是 Electron；有 Rust 储备 + 轻量场景 → Tauri 值得试点。<strong>选型答案永远带场景，不带站队。</strong></p>
+<p><strong>一句话总结</strong>：Tauri 轻但依赖系统 WebView（兼容性碎片）+ 要 Rust；企业应用求确定性，Electron 引擎统一 + 生态成熟；选型匹配团队能力，不追新。</p>
+<hr>
+<h2 id="六性能与问题定位启动慢--内存--cpu--卡顿--崩溃">六、性能与问题定位（启动慢 / 内存 / CPU / 卡顿 / 崩溃）</h2>
+<h3 id="q46-启动慢怎么定位和优化">Q46. 启动慢怎么定位和优化？</h3>
+<p><strong>先给方法论</strong>（这章五个问题共享一套骨架：<strong>先测量定位 → 再对症优化 → 最后设防线防回归</strong>。背下骨架，所有性能问题都能套）：</p>
+<p><strong>定位启动慢的&quot;时间线拆分法&quot;</strong>：启动 = 主进程初始化（原生模块加载、设备初始化）→ 创建窗口 → 加载页面 → 页面首帧 → 应用可交互。<strong>用日志在每个里程碑打点</strong>（timestamp 一减就知道时间花在哪段），再用工具下钻：</p>
+<ul><li><strong>Electron 内置 Content Tracing</strong>：像&quot;启动全程的行车记录仪&quot;，抓主进程和渲染进程的完整 trace，在 Chrome 的 tracing 查看器里看每个阶段的耗时——哪个函数吃了 800ms 一目了然；</li><li><strong>DevTools Performance 面板</strong>：连上渲染进程，看首帧之前的脚本执行、渲染耗时；</li><li><strong>app.getAppMetrics()</strong>：主进程里一行代码拿到所有进程的 CPU/内存基线——<strong>先建立基线，优化后才有对比</strong>。</li></ul>
+<p><strong>高频坑与对策</strong>：</p>
+<ol><li><strong>同步初始化挡路</strong>：启动路径上的同步大 IO（读大文件）、同步编译（原生插件现场编译）都会拖慢——<strong>能懒加载的懒加载，能异步的异步</strong>，只把&quot;首屏必需&quot;放关键路径；</li><li><strong>首屏 JS 太大</strong>：渲染层按路由分割（Q28），首屏只加载首屏；桌面端页面是本地加载（没有网络延迟），瓶颈几乎全在&quot;JS 执行 + 渲染&quot;，所以 JS 体积收益更纯粹；</li><li><strong>原生插件编译不当</strong>：插件编译要前置（Q38 的 ensure-native），<strong>别让用户的第一秒替你的构建背锅</strong>——本项目 dev 首次启动的竞态修复（launch-electron 等 tsc 产物）就是这个思路：<strong>把&quot;准备动作&quot;做完再开门</strong>。</li></ol>
+<p><strong>易混点 1：启动慢要先分清&quot;冷启动&quot;和&quot;热启动&quot;</strong>。冷启动 = 进程从零拉起（首次启动、开机后第一次）；热启动 = 进程还在内存里，只是重新唤起窗口。两者耗时差一个数量级——<strong>测量和汇报时必须分开</strong>，混在一起报个平均值是常见的新手错误（同样的问题 Web 端也存在，Q28 提过的背景）。桌面端还应记录&quot;开机后首次启动&quot;——此时磁盘缓存冷、杀毒软件扫描最活跃，是用户感知最差的一档。</p>
+<p><strong>易混点 2：Electron 启动有个&quot;地板&quot;，优化目标是逼近地板而不是超越它</strong>。任何 Electron 应用启动都先要初始化 Chromium + Node 两套运行时——这是<strong>固定开销</strong>，React/代码再快也快不过这个地板。所以面试谈启动优化，正确口径是&quot;<strong>把启动时间压到运行时地板附近</strong>&quot;：地板之上的部分（插件加载、同步 IO、大 JS）才是可优化空间。答出&quot;地板&quot;概念，说明你真测过，而不是背过优化清单。</p>
+<p><strong>易混点 3：异步化 ≠ 免费提速</strong>。把启动路径上的同步操作改成异步，只是<strong>把耗时挪到启动之后</strong>——总工作量没少。真正的收益只来自两件事：① <strong>懒加载</strong>：不做，直到真的需要（比如悬浮窗首次按快捷键才创建）；② <strong>并行</strong>：让互不依赖的初始化同时跑，而不是排队串行。<strong>口诀：先问&quot;这活能不能不干&quot;，再问&quot;这活能不能一起干&quot;。</strong></p>
+<p><strong>高频追问：怎么确保优化不回归？</strong> 性能测试进 CI/发布检查——启动耗时作为指标在每次发布前跑一遍，超预算报警。桌面端可以用脚本在 CI 里拉起应用、注入打点日志、断言耗时上限。<strong>没有防线的优化会慢慢退化，三个月后回到原样。</strong></p>
+<p><strong>结合本项目</strong>：桌面端有个 Web 端没有的隐藏坑——<strong>窗口打开策略</strong>。有些应用启动时把所有窗口都建好，其实用户先看到的是主窗口——<strong>非首屏窗口懒创建</strong>（悬浮窗第一次按快捷键才开），启动路径更短。汇报成果时用数字：启动耗时从 X 降到 Y——<strong>性能汇报没有数字等于没做</strong>。</p>
+<p><strong>一句话总结</strong>：时间线打点定位瓶颈段 → Content Tracing/Performance 下钻 → 砍关键路径（懒加载、异步、前置编译）；优化成果必须带数字。</p>
+<hr>
+<h3 id="q47-内存泄漏怎么定位桌面端版">Q47. 内存泄漏怎么定位？（桌面端版）</h3>
+<p><strong>先讲与 Web 的区别</strong>：桌面应用<strong>长时间挂着不关</strong>（有人开一整天），Web 页面关了标签就清零——所以桌面端对内存泄漏<strong>敏感得多</strong>，这是 Electron 岗位必问内存的原因。</p>
+<p><strong>定位三步（结合本项目，每步都有对应工具）</strong>：</p>
+<ol><li><strong>建基线 + 看趋势</strong>：<code>app.getAppMetrics()</code> 周期采样每个进程的内存（主进程 + 各渲染进程分开记），画曲线——<strong>泄漏的指纹是&quot;阶梯状上涨、操作后不回落&quot;</strong>（做同一件事 N 遍，每次涨一点、从不回落）。先分清<strong>是哪个进程在漏</strong>：主进程漏是服务逻辑（监听器、定时器、缓存无上限），渲染进程漏是界面逻辑（组件、闭包）；</li><li><strong>抓堆快照对比</strong>：<code>v8.writeHeapSnapshot()</code> 主动落盘堆快照，隔一段时间抓两次，<strong>对比两次快照里&quot;新出现且还活着的对象&quot;</strong>——哪些对象明明该被回收还活着，就是泄漏点。DevTools 里打开快照，按&quot;从全局可达的引用链&quot;一路看，<strong>引用链的源头就是漏点</strong>（比如一个没清掉的 setInterval 握着整条组件链）；</li><li><strong>看引用链修复</strong>：找到漏点后，修法永远是&quot;断开引用链&quot;——清定时器、摘监听器、置空引用（Q29 的四大源）。</li></ol>
+<p><strong>易混点 1：占用高 ≠ 泄漏（分清再动手）</strong>。内存占用高可能是<strong>基线高</strong>——Electron 的 Chromium 运行时本身就吃几百 MB，属于正常；泄漏的指纹不是&quot;高&quot;，是<strong>&quot;阶梯状上涨、操作后不回落&quot;</strong>（Q29 的验证方法同样适用）。误把基线当泄漏去优化，是浪费工时的第一来源。<strong>先画趋势曲线，看的是&quot;斜率&quot;，不是&quot;高度&quot;。</strong></p>
+<p><strong>易混点 2：堆快照对比的标准操作序列（面试能报出来）</strong>：</p>
+<pre><code>1. 手动触发 GC（DevTools 或 --expose-gc 后 global.gc()）→ 让&quot;可回收的&quot;先回收干净
+2. 抓快照 A
+3. 重复执行可疑操作 N 遍（如开关录音 20 次）
+4. 再触发 GC → 抓快照 B
+5. 对比 A/B：B 里&quot;新出现且还活着&quot;的对象 = 泄漏候选</code></pre>
+<p>不先 GC 就对比，快照里全是&quot;还没来得及回收&quot;的正常垃圾，噪音淹没信号。<strong>对比法比单张快照&quot;找最大对象&quot;可靠得多。</strong></p>
+<p><strong>易混点 3：主进程和渲染进程的泄漏源清单（分进程记）</strong>：</p>
+<table><thead><tr><th>进程</th><th>典型泄漏源</th></tr></thead><tbody><tr><td>主进程</td><td>事件监听器不摘（ipcMain.on 成对出现）、定时器不清、缓存无上限增长、TSFN/原生资源不释放</td></tr><tr><td>渲染进程</td><td>组件未卸载时的闭包（Q9 的定时器例子）、订阅未退订（Q33）、全局变量挂组件引用、Detached DOM（JS 引用了已删除的节点）</td></tr></tbody></table>
+<p><strong>先分清是哪个进程在漏，再对表排查</strong>——两个进程的泄漏源几乎不重叠，方向错了全白搭。</p>
+<p><strong>高频追问：有没有&quot;防患于未然&quot;的编码层手段？</strong> 有，三层：① 设计层——订阅 API 返回 cleanup（本项目 preload 的每个 onXxx，Q33），让&quot;忘记清理&quot;变得不可能；② 编码层——WeakMap 存&quot;DOM/窗口 ↔ 处理器&quot;映射，目标被回收时映射自动失效，不会反向拽住目标（Q3 的弱引用思想）；③ 监控层——内存趋势进监控面板，泄漏在&quot;用户投诉之前&quot;被曲线暴露。<strong>排查的终点是设计</strong>——找到漏点修掉只是及格，让这个漏法在结构上不再可能发生才是优秀答案。</p>
+<p><strong>本项目防泄漏的两道设计防线（讲设计比讲排查更有价值）</strong>：</p>
+<ul><li><strong>订阅 API 返回 cleanup</strong>（preload 每个 onXxx 返回移除函数，Q33）——<strong>API 设计层面让&quot;忘记清理&quot;变得不可能</strong>；</li><li><strong>IPC 回调先查 isDestroyed</strong>（Q34）——窗口销毁后，挂在已销毁 webContents 上的监听器是桌面端 IPC 泄漏的第一大源。</li></ul>
+<p><strong>一句话总结</strong>：getAppMetrics 看趋势分进程 → 堆快照对比找引用链源头 → 断链修复 → 设计防线（cleanup 函数 + isDestroyed）让同类泄漏不再发生。</p>
+<hr>
+<h3 id="q48-cpu-占用高怎么定位">Q48. CPU 占用高怎么定位？</h3>
+<p><strong>先区分两种&quot;高&quot;</strong>（面试官最想听你会分辨）：</p>
+<ul><li><strong>持续高</strong>（CPU 长期 30%+）：有东西在<strong>死循环或高频空转</strong>——定时器没清、轮询间隔太短、事件风暴（消息互相触发形成环）；</li><li><strong>尖峰高</strong>（偶尔飙到 100% 又回落）：有<strong>重计算瞬间爆发</strong>——大数组排序、大 JSON 序列化、批量渲染。</li></ul>
+<p><strong>定位三板斧</strong>：</p>
+<ol><li><strong>分进程定位</strong>：<code>app.getAppMetrics()</code> 看是主进程还是渲染进程在吃 CPU（<strong>先分清楚谁在忙</strong>，方向错了全白搭）。渲染进程高 → 连 DevTools Performance 面板，<strong>用 CPU Profile 看火焰图</strong>：横轴是时间、竖起来的是调用栈，<strong>哪条&quot;火柱&quot;最宽，就是哪段代码在烧 CPU</strong>；</li><li><strong>主进程高</strong> → Node 侧 Profile（--cpu-prof / inspector 连上去采样），同样看火焰图找热点函数。我们的经验：<strong>音频流水线热点要特别关注</strong>——重采样、编解码这类逐帧计算，一个低效写法乘上每秒几十帧就是持续高占用；</li><li><strong>看是不是&quot;无效忙碌&quot;</strong>：很多 CPU 高不是算得慢，是<strong>算得没必要</strong>——静音帧还在处理（Q40 的 SILENT 检查就是为这个）、不可见窗口还在渲染动画、转写结果重复处理。<strong>先问&quot;这活该不该干&quot;，再问&quot;这活干得快不快&quot;</strong>——砍掉无效工作的收益往往比优化算法大一个数量级。</li></ol>
+<p><strong>结合本项目两个真实&quot;无效忙碌&quot;案例</strong>：</p>
+<ul><li><strong>静音帧跳过</strong>：WASAPI 静音帧直接丢弃（Q40）——会议室没人说话时，采集-处理-上传整条流水线空转的 CPU 和流量全砍掉；</li><li><strong>backgroundThrottling 陷阱</strong>：Electron 默认在窗口失焦时<strong>冻结渲染进程的定时器</strong>（省电设计）。听起来是好事？但如果你的界面靠定时器驱动（轮询状态、动画帧），失焦后界面就&quot;死了&quot;；更坑的是有人为了规避它<strong>全局关闭节流</strong>，结果应用后台时白烧 CPU。正确姿势：<strong>明确知道哪些定时器需要后台运行，只对它们做豁免处理</strong>——本项目在此处有真实定位记录：界面响应延迟从 4.2s 排查回 1.1s 的社区案例复刻，结论就是节流与豁免的边界没设对。</li></ul>
+<p><strong>易混点 1：火焰图怎么读（三句话包会）</strong>。火焰图横轴是时间、纵轴是<strong>调用栈的深度</strong>（底部是入口函数，越往上越深）；<strong>每一块的宽度 = 这段代码占的 CPU 时间</strong>。读法：找最宽的&quot;火柱&quot;，它就是热点；顺着它的纵向栈一路看，就是完整的调用链。<strong>自下而上读是&quot;谁调用了谁&quot;，宽度看&quot;谁最耗时&quot;</strong>——面试官问&quot;火焰图怎么看&quot;，把这三句答出来就过关。</p>
+<p><strong>易混点 2：事件风暴是怎么来的（识别特征）</strong>。两个事件互相触发形成环：A 状态变了发 B 事件 → B 的处理里又改了 A 状态 → 无限循环，CPU 100% 还查不出&quot;哪个函数忙&quot;（火焰图上全在事件分发）。识别特征：<strong>CPU 高但火焰图没有明显热点、消息日志在疯狂滚动</strong>。修法：状态更新前先比较&quot;值真的变了吗&quot;（不变就不发事件）——<strong>在源头掐断环路</strong>。</p>
+<p><strong>易混点 3：backgroundThrottling 的豁免手段</strong>。两个层次：窗口级——<code>webPreferences: { backgroundThrottling: false }</code> 关闭整个窗口的节流（粗暴，后台也全速跑）；精准级——保持节流默认值，<strong>对真正需要后台运行的事用 <code>powerSaveBlocker</code></strong>（这是 Electron 官方的&quot;我要在后台干活&quot;声明，系统知道你有正当理由）。<strong>口诀：默认节流是保护，豁免要精准——宁可用 powerSaveBlocker 声明意图，也不要全局关节流。</strong></p>
+<p><strong>高频追问：Profile 的采样法和插桩法有什么区别？</strong> 采样法（CPU Profile 默认）：每隔一小段时间暂停线程记录当前栈——<strong>开销小、适合线上，但精确到毫秒的短任务可能漏掉</strong>；插桩法：在每个函数出入口计时——精确但开销大、结果被干扰。定位优先采样，<strong>怀疑短任务再插桩细查</strong>。<strong>追问&quot;主进程没有 DevTools 怎么办&quot;</strong>：Node 的 inspector 协议直接可用——<code>--inspect</code> 启动后 Chrome 里 <code>chrome://inspect</code> 就能连上主进程，体验和 DevTools 一致。</p>
+<p><strong>一句话总结</strong>：先分进程、再上 CPU Profile 火焰图找热点；区分持续高（空转/事件风暴）与尖峰高（重计算）；先砍&quot;没必要干的活&quot;（静音帧、后台动画、节流边界），再优化&quot;干得慢的活&quot;。</p>
+<hr>
+<h3 id="q49-界面卡顿怎么定位">Q49. 界面卡顿怎么定位？</h3>
+<p><strong>先定义卡顿</strong>：不是 CPU 高，而是<strong>&quot;交互没有及时响应&quot;</strong>——点了没反应、动画掉帧。桌面端卡顿的元凶排序：<strong>渲染主线程被占 &gt; 主进程消息堆积 &gt; 窗口合成层问题</strong>。</p>
+<p><strong>定位与对策（按概率排序）</strong>：</p>
+<ol><li><strong>渲染主线程被长任务占</strong>：界面线程同时要干三件事——跑 JS、算布局、画像素。<strong>任何一段同步 JS 超过 50ms，用户就能感知卡顿</strong>（掉帧）。Performance 面板看 <strong>Long Task</strong> 标记——超过 50ms 的任务会被红条标出来，逐个拆：大计算丢 Web Worker、大列表改虚拟渲染（一万行只渲染屏幕上的几十行）、高频 DOM 写操作批量合并（Q6 的读写分离）；</li><li><strong>主进程消息堆积</strong>：渲染进程每发一个 IPC 都要主进程处理，<strong>如果某个 handler 同步干重活（比如同步读大文件），期间所有进程的消息全排队</strong>——表现是&quot;整个应用都顿住&quot;。对策：handler 只做轻量调度，重活异步化/丢给原生模块/丢给 Worker 线程（Electron 有 UtilityProcess 专门干这个）；</li><li><strong>合成层问题</strong>：透明窗口、大阴影、模糊滤镜会逼合成器走慢路径——悬浮窗这类透明置顶窗（Q34）要<strong>克制用 CSS 滤镜和逐帧大动画</strong>，掉帧最容易被肉眼看见。</li></ol>
+<p><strong>桌面端特有的一张牌：UtilityProcess</strong>——Electron 支持在主进程之外再开一个&quot;纯 Node 子进程&quot;（不画界面、不是渲染进程），<strong>把重计算从主进程剥离出去</strong>。这是&quot;CPU 高 + 卡顿&quot;的终极解法：主进程专职调度，重活专职进程干。</p>
+<p><strong>易混点 1：卡顿和 CPU 高是两回事</strong>。CPU 高是&quot;忙&quot;，卡顿是&quot;<strong>该响应的时候没响应</strong>&quot;——一段 200ms 的同步计算每秒只跑一次，CPU 才 20%，但每次它跑起来界面就冻一下。<strong>定位卡顿看的是&quot;长任务&quot;而不是&quot;高占用&quot;</strong>，两者的指标和工具都不同（Q48 看火焰图找热点，这里看 Long Task 找长任务）。</p>
+<p><strong>易混点 2：掉帧的数学（背下这个换算）</strong>。60fps = 每帧预算 <strong>16.6ms</strong>（1000/60）。一帧内 JS 执行 + 样式 + 布局 + 绘制超过 16.6ms，这一帧就丢了；Long Task 的 50ms 标准则是&quot;用户可感知卡顿&quot;的阈值（一条任务卡住主线程 50ms，肉眼能察觉）。<strong>16.6ms 是流畅线，50ms 是感知线</strong>——两个数字都报得出来，说明你不是背概念。</p>
+<p><strong>易混点 3：透明窗口为什么特别容易卡</strong>。普通窗口的合成走&quot;快路径&quot;（GPU 直接拼）；透明窗口（本项目悬浮窗）+ 大阴影 + CSS 滤镜，逼合成器走<strong>慢路径</strong>——每帧要多算一层透明度合成。所以悬浮窗要<strong>克制</strong>：少用 backdrop-filter/blur 这类逐帧滤镜、动画用 transform/opacity（GPU 属性，Q6）、避免大面积半透明层叠。</p>
+<p><strong>高频追问：一万行的列表怎么不卡？</strong> <strong>虚拟滚动（virtualization）</strong>：只渲染屏幕可见的几十行 + 上下各缓冲几行，滚动时按位置计算该渲染哪些行——DOM 节点数从一万降到几十，长任务自然消失。<strong>追问&quot;虚拟滚动后滚动条位置怎么保持&quot;</strong>：容器总高度用&quot;行数 × 行高&quot;撑出来（占位），滚动条自然正常——<strong>DOM 少不代表布局信息少，占位是虚拟滚动的另一半</strong>。</p>
+<p><strong>结合本项目</strong>：渲染层界面保持薄（纯 reducer + 状态展示，Q30），音频处理和文件转换全在主进程/原生模块/C++ 线程——<strong>卡顿的预防从架构层就开始</strong>：让画界面的线程只干画界面的事。面试金句：<strong>界面的流畅不是优化出来的，是架构出来的</strong>。</p>
+<p><strong>一句话总结</strong>：卡顿 = 响应不及时；先找 Long Task（&gt;50ms 逐个拆），再看 IPC handler 是否同步堵车，最后查透明窗合成层；根治 = 界面线程只画界面，重活丢主进程/原生模块/UtilityProcess。</p>
+<hr>
+<h3 id="q50-崩溃怎么定位">Q50. 崩溃怎么定位？</h3>
+<p><strong>先讲桌面端崩溃的两种形态（分清再答）</strong>：</p>
+<ul><li><strong>渲染进程崩溃</strong>：窗口白屏/闪退，但<strong>应用本体还活着</strong>（托盘还在、其他窗口正常）——这是三进程架构的隔离红利（Q30）；</li><li><strong>主进程崩溃</strong>：整个应用直接消失——<strong>最严重</strong>。</li></ul>
+<p><strong>定位三板斧</strong>：</p>
+<ol><li><strong>崩溃现场三件套</strong>：崩溃事件的退出码（render-process-gone 事件自带 reason 和 exitCode）、崩溃前的日志（崩溃时把关键状态落盘）、崩溃转储 dump 文件（Windows 上的 .dmp，用调试器看调用栈）。<strong>日志要&quot;崩溃友好&quot;</strong>——关键事件立即落盘，不能只缓存内存（内存跟进程一起没了）；</li><li><strong>原生模块崩溃优先怀疑</strong>：C++ 插件是崩溃头号嫌疑——<strong>指针生命周期错乱</strong>（用已释放的对象）、<strong>线程竞态</strong>（两个线程同时碰一块内存）、<strong>资源释放顺序</strong>（Q39 的 TSFN Stop→join→release 就是真实修复）。原生模块的调试思路：<strong>最小复现 + 二分定位</strong>——逐步裁剪调用路径，锁定是哪一行 C++ 崩的；</li><li><strong>崩溃后自愈</strong>：渲染进程崩了自动 reload（Q36）——<strong>崩溃处理的目标不是&quot;永不崩&quot;，而是&quot;崩了不丢数据、能恢复&quot;</strong>：关键状态随时落盘（设置已存 userData）、音频/转换任务支持重来（断点续传）。用户对&quot;重启恢复原样&quot;的宽容度远高于&quot;崩了全没了&quot;。</li></ol>
+<p><strong>结合本项目</strong>：崩溃相关真实修复两条——<strong>TSFN 退出竞态</strong>（Q39，退出时采集线程还在写 TSFN 导致野指针崩溃，修法是先停线程再释放）、<strong>窗口销毁后 IPC 触发</strong>（Q34 的 isDestroyed，回调触发时窗口已销毁直接崩）。面试讲这两条时点出共同点：<strong>崩溃的根因往往不是&quot;写错了行代码&quot;，而是&quot;生命周期没管对&quot;——谁先用完谁先死，顺序错了就崩。</strong></p>
+<p><strong>易混点 1：render-process-gone 的 reason 会区分死法（背枚举）</strong>。事件自带的 reason 字段告诉你窗口是怎么没的，不同死法对策不同：</p>
+<table><thead><tr><th>reason</th><th>含义</th><th>对策</th></tr></thead><tbody><tr><td>crashed</td><td>进程真的崩了（段错误等）</td><td>拿 dump 查根因</td></tr><tr><td>oom</td><td>内存耗尽被系统杀</td><td>查内存泄漏（Q47）</td></tr><tr><td>killed</td><td>被外部强杀（任务管理器）</td><td>无法预防，做自愈</td></tr><tr><td>clean-exit / abnormal-exit</td><td>正常退出 / 异常退出</td><td>一般不用处理</td></tr><tr><td>launch-failed / integrity-failure</td><td>拉不起来 / 完整性校验失败</td><td>查安装损坏</td></tr></tbody></table>
+<p><strong>崩溃处理也要&quot;分诊&quot;</strong>——crashed 和 oom 的排查方向完全不同，别一收到事件就无脑 reload。</p>
+<p><strong>易混点 2：崩溃日志为什么必须&quot;立即落盘&quot;</strong>。日志如果只写内存缓冲区、攒一批再写文件——<strong>进程一崩，缓冲区里的日志跟着一起没了，现场全丢</strong>。所以关键日志（状态切换、采集开始/停止、异常栈）要<strong>同步落盘或每次写后 flush</strong>。代价是少量 IO 开销，换来的是&quot;每次崩溃都有现场&quot;——<strong>桌面端的日志纪律比 Web 端严格，因为进程是真会死的</strong>。</p>
+<p><strong>易混点 3：dump 文件怎么分析（流程要能说）</strong>。Windows 上崩溃生成 .dmp，分析用 WinDbg 或 Visual Studio 加载：① dump 记录的是崩溃瞬间的内存和调用栈；② 需要<strong>符号文件</strong>（symbols）把内存地址翻译回函数名——<strong>所以发布包要保留对应版本的符号</strong>（通常放符号服务器），否则 dump 只是一堆十六进制；③ 看崩溃线程的调用栈，最顶上的几帧就是事发点。<strong>口诀：dump 是尸体，符号是身份证——没符号认不出是谁。</strong></p>
+<p><strong>高频追问：用户环境崩了，本地复现不了怎么办？</strong> 三步：① 靠崩溃上报拿现场（dump + 日志 + 版本号 + 操作快照，Q51）；② 现场快照里找&quot;复现配方&quot;（什么操作序列、什么状态）；③ 缩小范围做二分复现（Q50 主文的最小复现法）。<strong>能复现的崩溃都能修；修不掉的，是现场不够。</strong> 这也是为什么桌面端要自建崩溃上报——Web 端有现成平台，桌面端得自己把现场搬回家。</p>
+<p><strong>一句话总结</strong>：先分清渲染进程崩（应用还在）还是主进程崩（全没了）；定位靠退出码 + 日志落盘 + dump；原生模块崩优先查指针生命周期和线程竞态；目标 = 崩了能恢复，不是永不崩。</p>
+<hr>
+<h3 id="q51-桌面端性能监控怎么做">Q51. 桌面端性能监控怎么做？</h3>
+<p><strong>先讲桌面端 vs Web 端的监控差异</strong>：Web 端有现成的性能平台（埋点 SDK、云端分析）；桌面端<strong>没有标准答案，得自己搭</strong>——这恰是 Electron 岗位的加分项。给一套三层方案：</p>
+<ol><li><strong>运行时指标</strong>：<code>app.getAppMetrics()</code> 周期采集各进程 CPU/内存（主进程 + 每个渲染进程分开记），加日志/埋点上报。<strong>桌面端进程多，指标必须按进程分开</strong>——合在一起什么都看不出来（Q47）；</li><li><strong>异常与崩溃上报</strong>：uncaughtException + render-process-gone + 崩溃 dump，带版本号、平台、用户场景快照（采集中的、转换中的状态）。<strong>桌面端崩溃上报最难的是&quot;崩溃时拿不到现场&quot;</strong>，所以关键状态要随时落盘（Q50）；</li><li><strong>用户体验指标</strong>：启动耗时（Q46 的打点）、窗口首帧时间、转写延迟（从&quot;采集到声音&quot;到&quot;显示转写结果&quot;的端到端延迟——本项目核心指标）、下载速度与成功率。<strong>指标要选&quot;用户能感受到的&quot;，不是&quot;工程师觉得重要的&quot;</strong>。</li></ol>
+<p><strong>监控的纪律（三条）</strong>：</p>
+<ul><li><strong>基线先行</strong>：先采一段正常数据当基线，异常是&quot;对比出来的&quot;，不是&quot;绝对值看出来的&quot;；</li><li><strong>发布前回归</strong>：性能指标进 CI/发布检查清单（Q28 第三层的性能预算思想）；</li><li><strong>异常要能复现</strong>：上报数据要带足够的现场快照，让&quot;用户说卡&quot;变成&quot;我复现了，火焰图在这&quot;。</li></ul>
+<p><strong>结合本项目</strong>：核心性能指标是<strong>端到端转写延迟</strong>（声音 → 转写文本上屏）和<strong>静音期资源占用</strong>（Q40 静音帧优化后的 CPU/流量下降）——<strong>用业务指标讲性能，比&quot;内存降了 50MB&quot;更让面试官信服</strong>：性能优化服务于业务体验，不是炫技。</p>
+<p><strong>易混点 1：指标、日志、追踪是三个不同的东西（可观测性三支柱）</strong>。<strong>指标（Metrics）</strong>：聚合数字（启动耗时、CPU 均值）——回答&quot;<strong>有没有问题</strong>&quot;；<strong>日志（Logs）</strong>：离散事件记录（&quot;采集启动失败：设备被占用&quot;）——回答&quot;<strong>发生了什么</strong>&quot;；<strong>追踪（Traces）</strong>：一次完整请求/操作经过的所有环节耗时（一次转写从采集到上屏的每段）——回答&quot;<strong>问题出在哪一段</strong>&quot;。三者互补：指标报警 → 日志查事件 → 追踪定位瓶颈。<strong>面试里把三个词分得清，监控就讲圆了。</strong></p>
+<p><strong>易混点 2：监控自身有开销，采样要会算账</strong>。getAppMetrics 每次调用有成本，一秒采十次和一分钟采一次的开销差 600 倍。原则：<strong>指标采集间隔跟着指标的变化速度走</strong>——CPU/内存在桌面端变化慢，30s~60s 采一次足够；只有&quot;正在定位问题&quot;时才加密采样。<strong>监控不能成为新的性能问题——这是很多桌面应用后台占用的隐藏来源。</strong></p>
+<p><strong>易混点 3：上报数据要脱敏，而且是设计时就脱</strong>。桌面应用离用户机器近，上报内容（文件路径、设备名、转写文本片段）可能含隐私。原则：<strong>只在设计阶段确定字段清单，白名单上报</strong>——不在字段清单里的一律不上传；路径类信息只报&quot;文件扩展名/大小&quot;，不报完整路径和文件名。<strong>追问&quot;转写内容能上报吗&quot;</strong>：用户的生产内容<strong>永不进入监控</strong>——上报状态机、耗时、错误码，不上报正文。这是桌面工具的底线，也保护公司自己（合规）。</p>
+<p><strong>高频追问：监控数据谁来看、怎么看？</strong> 数据回传到自建看板（或 Web 监控平台）后：① 启动耗时按<strong>版本号</strong>分组——新版本发布后曲线拐头，立刻定位是哪个版本引入的退化；② 崩溃按&quot;崩溃率 = 崩溃次数/启动次数&quot;统计——绝对次数没有意义（用户量在变），<strong>比率才是健康度</strong>；③ 设置告警阈值（启动 &gt; 3s、崩溃率 &gt; 1%），超标自动通知。<strong>监控的价值不是&quot;收集了数据&quot;，是&quot;问题发生时有人先于用户知道&quot;。</strong></p>
+<p><strong>一句话总结</strong>：桌面端监控自建三层——进程级 CPU/内存（getAppMetrics）、崩溃现场（日志落盘 + dump）、体验指标（启动/首帧/端到端延迟）；基线先行、发布回归、带现场可复现。</p>
+<hr>
+<h2 id="七ai-工具应用能力">七、AI 工具应用能力</h2>
+<h3 id="q52-你用过哪些-ai-工具分别怎么用">Q52. 你用过哪些 AI 工具？分别怎么用？</h3>
+<p><strong>先给结论：工具不重要，分工重要。</strong> 面试官要听的不是&quot;我会用 ChatGPT&quot;，而是&quot;我知道什么活交给谁干&quot;。按四类分工答：</p>
+<ol><li><strong>编辑器内联工具（Cursor / GitHub Copilot）</strong>：<strong>代码补全和局部改写</strong>——上下文就是当前文件，适合&quot;补一个函数、改一段逻辑&quot;这类小颗粒任务。人看管为主：补全出来扫一眼，对了就收，不对就改；</li><li><strong>命令行智能体（Claude Code）</strong>：<strong>多文件工程任务</strong>——&quot;重构这个模块&quot;&quot;排查这个 bug&quot;&quot;写一组测试&quot;。它的优势是能读整个仓库、能执行命令、能迭代多轮，适合<strong>有明确验收标准的任务</strong>（跑通测试 = 验收）。用它的纪律：任务边界写清楚，产出必须过验证；</li><li><strong>对话式模型（ChatGPT 等网页对话）</strong>：<strong>知识问答、方案调研、压题学习</strong>——&quot;这个 API 和那个 API 的差异&quot;&quot;帮我对比两个方案&quot;。适合开放性问题，不是工程执行；</li><li><strong>（加分项）专门的工程工具</strong>：如 AI 代码评审、AI 生成测试、AI 写文档——<strong>把&quot;重复但有标准&quot;的活交给工具</strong>。</li></ol>
+<p><strong>易混点 1：内联补全和智能体是两种&quot;协作模式&quot;（对比表）</strong>：</p>
+<table><thead><tr><th>对比项</th><th>内联补全（Copilot）</th><th>命令行智能体（Claude Code）</th></tr></thead><tbody><tr><td>上下文范围</td><td>当前文件 + 光标附近</td><td>整个仓库（能读能搜能执行）</td></tr><tr><td>任务粒度</td><td>补一行、改一段</td><td>多文件任务（重构/排查/测试）</td></tr><tr><td>交互方式</td><td>你敲它接，随写随出</td><td>人下任务、它多轮迭代、人验收</td></tr><tr><td>人的角色</td><td>看管（扫一眼收不收）</td><td>验收（跑测试/看 diff 把关）</td></tr></tbody></table>
+<p><strong>把两类分开讲，比笼统说&quot;我用 AI 写代码&quot;专业得多</strong>——面试官一听就知道你真在工作流里用过。</p>
+<p><strong>易混点 2：&quot;工具多&quot;不等于&quot;用得好&quot;</strong>。列十来个工具名是最差答法——面试官要的是<strong>分工逻辑</strong>：什么任务派给什么工具、为什么。宁可只讲透两三个工具的分工，也不要做&quot;工具收藏家&quot;。<strong>追问&quot;你每天实际用的主力是哪个&quot;</strong>：如实说（比如主力是 Claude Code 干工程活），并说清&quot;为什么它适合我的日常任务&quot;——真实使用痕迹装不出来。</p>
+<p><strong>结合本项目</strong>（真实可查）：本项目的提交历史就是 AI 协作的产物——<code>addon 编译全自动化（ensure-native）</code>、<code>TSFN 退出竞态修复</code>、<code>下载镜像固化</code>，这些是 Claude Code 参与设计 + 实现的工程任务；你眼前这份面试资料本身，也是&quot;人出题、AI 查证补充、人把关&quot;协作出来的。<strong>讲 AI 应用，最有说服力的案例就是你正在用的证据。</strong></p>
+<p><strong>一句话总结</strong>：内联补全（Copilot）干小活、智能体（Claude Code）干多文件工程活、对话式（ChatGPT）干调研学习；人会分派、会验收，工具才提效。</p>
+<hr>
+<h3 id="q53-ai-怎么融入你的开发流程覆盖哪些环节">Q53. AI 怎么融入你的开发流程？覆盖哪些环节？</h3>
+<p><strong>JD 里点了七个环节：需求理解、技术调研、代码生成、重构、单测、排查、文档。逐环讲怎么用（结合本项目案例，每个环节都答得出&quot;真干过&quot;）</strong>：</p>
+<ol><li><strong>需求理解</strong>：把模糊需求丢给 AI 做<strong>澄清追问和边界梳理</strong>——&quot;这个功能做给谁、什么场景、不做哪些&quot;，AI 帮你把需求文档化的第一版草稿打出来，人再补业务上下文；</li><li><strong>技术调研</strong>：<strong>让 AI 先给候选方案对比，再让它逐条标注证据来源</strong>，人对关键结论二次验证（官方文档/源码核实）。本项目&quot;Electron 43 二进制懒下载 + fetch 不吃代理&quot;这个坑，就是 AI 调研 + 查证定位出来的——<strong>AI 加速了&quot;找到答案&quot;的过程，但&quot;答案对不对&quot;要人把关</strong>（Q56 呼应）；</li><li><strong>代码生成</strong>：明确输入输出 + 边界条件 + 风格约束（&quot;和现有代码一个风格&quot;），生成第一版，人工过审后进库。<strong>生成代码一律当&quot;候选稿&quot;，不当&quot;成品&quot;</strong>；</li><li><strong>重构</strong>：把&quot;改哪里、为什么改、不动哪里&quot;说清楚，AI 出重构 diff，<strong>必须配测试跑过</strong>才算完成——重构的验收标准是行为不变，没有测试的重构是赌博（本项目从 RN 抽纯 reducer 就是&quot;提取纯逻辑 + 测试保住&quot;的典型）；</li><li><strong>单测</strong>：把函数行为和边界用例列给 AI 生成测试骨架，人补关键断言——<strong>AI 写测试特别合适</strong>：测试是&quot;有明确对错的机械活&quot;，人和 AI 都能当裁判（跑一下就知道了）；</li><li><strong>排查</strong>：把日志、报错栈、相关代码给 AI 一起看——<strong>AI 是&quot;多读了几遍代码的另一个大脑&quot;</strong>，排查效率提升来自&quot;它读得快、不遗漏&quot;，人负责判断方向。本项目 TSFN 退出竞态这种跨线程时序 bug，AI 参与定位后写进了提交记录；</li><li><strong>文档</strong>：提交信息、变更说明、面试资料、README——<strong>文档是 AI 最无争议的提效区</strong>，但要求它&quot;说人话、讲原理&quot;，本文档就是例子。</li></ol>
+<p><strong>易混点 1：七个环节里&quot;AI 干什么&quot;和&quot;人干什么&quot;（一张表收束）</strong>：</p>
+<table><thead><tr><th>环节</th><th>AI 负责</th><th>人负责</th></tr></thead><tbody><tr><td>需求理解</td><td>澄清追问、边界草稿</td><td>补业务上下文、拍板</td></tr><tr><td>技术调研</td><td>找候选方案、列证据</td><td>核实关键结论</td></tr><tr><td>代码生成</td><td>出候选稿</td><td>看懂、验收、合入</td></tr><tr><td>重构</td><td>出 diff</td><td>定边界 + 测试验收</td></tr><tr><td>单测</td><td>生成骨架</td><td>补关键断言</td></tr><tr><td>排查</td><td>并行读代码查资料</td><td>判断方向</td></tr><tr><td>文档</td><td>起草</td><td>核实事实、说人话</td></tr></tbody></table>
+<p>规律一眼可见：<strong>AI 包揽&quot;量大、机械、可验证&quot;的部分，人守住&quot;判断、拍板、负责&quot;的部分</strong>。</p>
+<p><strong>易混点 2：哪些环节 AI 明显不适合</strong>。不是所有环节都该用 AI——<strong>定方向</strong>（需求做什么不做、架构选型）、<strong>担责任</strong>（线上事故谁背锅）、<strong>跨人沟通</strong>（说服团队、对齐预期）这三件是 AI 替代不了的（Q58 呼应）。<strong>用得&quot;克制&quot;本身也是能力</strong>：知道哪些环节用了反而添乱。</p>
+<p><strong>高频追问：这么多环节，哪个提效最明显？</strong> 实话实说：<strong>单测和文档</strong>（有明确对错/格式、机械量大），<strong>排查次之</strong>（AI 读得快），需求理解和架构决策几乎不提效（本质是人的判断）。<strong>能按环节说出&quot;提效程度差异&quot;，比笼统说&quot;都提效了&quot;可信得多。</strong></p>
+<p><strong>一句话总结</strong>：七个环节全都能用 AI，但每环的&quot;人&quot;职责不同——调研和生成要人查证、重构要测试验收、排查要人定方向；AI 负责速度，人负责正确性。</p>
+<hr>
+<h3 id="q54-上下文组织和任务拆解怎么做ai-时代的关键技能">Q54. 上下文组织和任务拆解怎么做？（AI 时代的关键技能）</h3>
+<p><strong>先讲为什么重要</strong>：AI 的输出质量，<strong>一半取决于你喂给它的上下文有多精准</strong>。上下文组织能力 = 把&quot;AI 需要知道什么&quot;挑出来、说清楚的能力。</p>
+<p><strong>上下文组织三原则</strong>：</p>
+<ol><li><strong>只给相关的，别给全部的</strong>：不是把整个仓库塞进去就最好——AI 会被无关信息带偏。给目标文件 + 相邻依赖 + 约束说明。<strong>&quot;删减&quot;和&quot;补充&quot;同样重要</strong>；</li><li><strong>事实和约束分开</strong>：告诉 AI&quot;现状是什么&quot;（代码、文档、日志——不可改的事实）和&quot;你要什么&quot;（任务、边界、风格——你的诉求），<strong>混在一起 AI 就分不清&quot;描述&quot;和&quot;指令&quot;</strong>；</li><li><strong>关键信息不靠它猜</strong>：版本号、平台差异、踩过的坑（比如本项目&quot;对 Electron 43 要配镜像&quot;）——<strong>人能确定的，直接写进上下文</strong>，省掉 AI 试错的时间。</li></ol>
+<p><strong>任务拆解的核心：把大任务拆成&quot;可独立验收&quot;的小任务</strong>。判断标准只有一个：<strong>每一小步跑完之后，你有没有明确的验收动作</strong>（测试绿了、类型过了、行为正确）。好拆解的例子：先搭骨架 → 实现 A 模块 + 跑 A 的测试 → 实现 B 模块 + 跑 B 的测试。坏拆解的例子：&quot;帮我优化这个应用&quot;——没有验收标准，AI 干什么你都只能&quot;感觉还行&quot;。</p>
+<p><strong>结合本项目</strong>：这份文档从&quot;JD 拆解 → 压题 → 分章回答&quot;就是一次任务拆解——每个问题的验收标准是&quot;<strong>原理讲对 + 白话能懂 + 有项目实证</strong>&quot;。工程任务同样如此：ensure-native 拆成&quot;检查产物 → 编译 → 校验 ABI&quot;，每一步的输出都是下一步的输入。</p>
+<p><strong>易混点 1：上下文窗口很大，为什么还要&quot;只给相关的&quot;</strong>。因为窗口大 ≠ 注意力强——<strong>信息越多，AI 越容易&quot;抓不住重点&quot;</strong>（人的注意力会稀释，AI 同理，这就是&quot;大海捞针&quot;现象：长上下文里找关键事实的准确率会下降）。所以&quot;最小充分上下文&quot;是原则：<strong>够用就行，多给有害</strong>。塞整个仓库进去，换来的常常是更平庸的答案。</p>
+<p><strong>易混点 2：&quot;描述&quot;和&quot;指令&quot;混在一起的典型翻车</strong>。看这个例子：</p>
+<pre><code>坏：&quot;现在 storage 用 JSON 文件同步写，高频写会卡，改成异步 + 原子写入，还有要支持过期。&quot;
+好：现状（描述）：storage 是同步 JSON 文件写。
+    要求（指令）：1) 改为异步 + 原子写入；2) 支持 key 过期；3) 不改 IPC 接口。</code></pre>
+<p>第一句里 AI 分不清&quot;你说的事实&quot;和&quot;你要的目标&quot;——<strong>描述用&quot;现状/约束&quot;开头，指令用动词开头，一目了然</strong>。</p>
+<p><strong>易混点 3：能写死的别让它猜，但&quot;写死&quot;也要会选</strong>。版本号、平台、已知坑（&quot;Electron 43 要配 ELECTRON_MIRROR&quot;）这类<strong>事实型信息</strong>必须写死；但<strong>方案选型、实现方式</strong>这类&quot;你想让它帮你想的&quot;不要写死——写死了 AI 就只会执行不会思考，调研的价值就没了。<strong>口诀：事实写死，方案开放。</strong></p>
+<p><strong>高频追问：任务拆多细算合适？</strong> 标准不是&quot;细&quot;，是&quot;<strong>每步有独立验收点</strong>&quot;——一步拆到&quot;跑一个命令能判断对错&quot;就合适了。太粗（&quot;帮我优化应用&quot;）没有验收点；太细（&quot;帮我写第 37 行&quot;）把人变成打字机，AI 的上下文推理优势全浪费。<strong>追问&quot;拆解顺序有讲究吗&quot;</strong>：先拆&quot;有依赖关系的骨架&quot;（上游先做），再拆&quot;可并行的填充&quot;——和任务编排一样，关键路径先走。</p>
+<p><strong>一句话总结</strong>：上下文 = 给相关的、分事实与约束、能确定的写死；拆解 = 每步都有明确验收标准；验收标准越具体，AI 产出越可控。</p>
+<hr>
+<h3 id="q55-提示词prompt怎么写得有效">Q55. 提示词（prompt）怎么写得有效？</h3>
+<p><strong>先纠正一个误区</strong>：提示词技巧不是玄学咒语，本质是<strong>把需求说完整</strong>。五个要素，按&quot;人物-任务-标准&quot;记：</p>
+<ol><li><strong>角色与背景</strong>：&quot;你是一个熟悉 Electron 的资深前端工程师&quot;——给 AI 定知识域，防止它用错误的行话；</li><li><strong>任务本身</strong>：动词 + 对象 + 范围：&quot;重构 stream-client.ts 的重连逻辑，<strong>不动</strong> message 的编解码部分&quot;——<strong>&quot;不动什么&quot;和&quot;动什么&quot;一样重要</strong>；</li><li><strong>上下文材料</strong>：贴代码、贴日志、贴文档路径——<strong>让 AI 读材料，而不是让它凭记忆猜</strong>；</li><li><strong>输出格式</strong>：&quot;先给方案对比，再给代码 diff，最后列出风险点&quot;——格式要求 = 输出结构，结构化的回答才好验收；</li><li><strong>验收标准</strong>：&quot;改完跑 vitest，全绿才算完成&quot;——<strong>把&quot;怎么样算好&quot;写进提示词</strong>，AI 才有明确的完成线。</li></ol>
+<p><strong>两条实战经验</strong>：</p>
+<ul><li><strong>迭代而不是一次到位</strong>：第一版提示词往往缺信息，AI 答偏了就<strong>补约束再问</strong>——对话是收敛过程，不是&quot;一次提示词定胜负&quot;。比如&quot;答案要简单易懂、白话解释、不要省篇幅&quot;就是补的约束（本文档第二版就是这样改出来的）；</li><li><strong>让它先问再答</strong>：复杂任务先让 AI 列出它的疑问（&quot;动手前先问我 5 个问题&quot;）——<strong>AI 的提问清单能帮你发现自己没说清的部分</strong>。</li></ul>
+<p><strong>易混点 1：角色设定不是玄学咒语，是&quot;领域知识激活&quot;</strong>。&quot;你是一个熟悉 Electron 的资深前端工程师&quot;起作用的原因：把 AI 的用词、关注点、假设拉进对应领域——<strong>不说角色，它可能用通用 Web 的思维答 Electron 问题</strong>（比如不知道 preload 有 sandbox 限制）。所以角色设定要具体到领域，而不是&quot;你是一个专家&quot;这种空话。<strong>空话无效，领域有效。</strong></p>
+<p><strong>易混点 2：什么时候迭代补约束，什么时候直接开新对话</strong>。AI 答偏了但<strong>方向还对</strong> → 在原对话里补约束继续收敛（便宜、保留上下文）；答得<strong>完全跑偏或上下文已经很乱</strong>（改了很多轮、混进错误信息）→ 开新对话重写提示词——<strong>已经被错误信息污染的上下文，越补越歪</strong>。判断标准：原对话里有没有&quot;后来被推翻的中间结论&quot;，有就重开。</p>
+<p><strong>易混点 3：&quot;让它先提问&quot;只适合复杂任务，小任务别用</strong>。复杂任务（多约束、多依赖）先问 5 个问题能暴露盲区；但一句话就能说清的小任务（&quot;把这行改成 const&quot;）还让它先提问，就是浪费往返。<strong>技巧的选择也要看任务大小——任何技巧滥用都是低效。</strong></p>
+<p><strong>高频追问：模型越来越聪明，提示词工程会不会过时？</strong> 会退化，不会消失——越强的模型越能&quot;猜出你没说清的部分&quot;，所以<strong>技巧（角色扮演、思维链咒语）在贬值</strong>；但&quot;把需求说完整&quot;（目标、边界、验收标准）永远需要——那是<strong>需求表达能力</strong>，模型再强也读不到你的脑子里。<strong>追问&quot;未来提示词技能的核心是什么&quot;</strong>：从&quot;调教模型&quot;变成&quot;定义问题&quot;——问对问题比写好咒语难得多。</p>
+<p><strong>一句话总结</strong>：提示词 = 角色 + 任务（含不动什么）+ 材料 + 格式 + 验收标准；一次写不准就迭代补约束；复杂任务先让它提问再动手。</p>
+<hr>
+<h3 id="q56-怎么保证-ai-产出质量你的安全边界在哪">Q56. 怎么保证 AI 产出质量？你的安全边界在哪？</h3>
+<p><strong>这是 JD 里的硬性要求（&quot;安全质量边界、不盲目采用&quot;），要答得斩钉截铁。三条铁律：</strong></p>
+<ol><li><strong>一律验证，无一例外</strong>：AI 给的答案——<strong>代码跑测试/类型检查、结论查官方文档或源码、数据查一手来源</strong>。本项目有真实教训：AI 调研的结论曾经和实际版本行为不符（版本升级导致行为变化），靠查证纠回来。<strong>&quot;AI 说的&quot;永远只是&quot;待验证的候选&quot;，不是结论</strong>；</li><li><strong>看懂才合入，看不懂的不放行</strong>：<strong>AI 生成的每一行代码，合入前都要能自己讲清它为什么对</strong>——面试官原话问过类似的：&quot;AI 写的代码你敢不敢上生产？&quot;标准答案：<strong>&quot;敢，前提是我看懂了且测试过了。看不懂的代码，无论人写的还是 AI 写的，都不该进库&quot;</strong>。AI 时代&quot;信任&quot;的定义变了：不信任工具，信任验证流程；</li><li><strong>边界清单</strong>（背下来）：<strong>密钥/凭证绝不发给外部 AI</strong>（代码里混着的 token 要先剥掉）；内部未公开的业务代码不随意上传外部模型；生成物里的许可证/版权风险要查（AI 可能&quot;记住&quot;别人的代码）；敏感数据脱敏后再喂。</li></ol>
+<p><strong>再加一条工程习惯</strong>：AI 生成的代码<strong>必须过和手写代码一样的闸门</strong>（Q19 的 lint → typecheck → test 三道闸）——<strong>闸门面前，AI 写的和人写的没有区别待遇</strong>。这套&quot;不信任个体、信任流程&quot;的态度，正是面试官想看到的判断力。</p>
+<p><strong>易混点 1：&quot;验证&quot;到底验证什么（分层清单）</strong>：</p>
+<table><thead><tr><th>产出类型</th><th>验证手段</th></tr></thead><tbody><tr><td>代码</td><td>跑测试 + 类型检查 + 本地跑通</td></tr><tr><td>技术结论（API 用法、版本行为）</td><td>查官方文档/源码，<strong>尤其核对版本号</strong></td></tr><tr><td>数据/事实</td><td>追到一手来源（官方发布说明、原始 issue）</td></tr><tr><td>第三方库建议</td><td>查 npm 下载量、维护状态、已知坑</td></tr></tbody></table>
+<p><strong>验证手段跟着产出类型走</strong>——&quot;我跑过测试了&quot;不能用来证明&quot;那个 API 说法是对的&quot;，两码事。</p>
+<p><strong>易混点 2：AI 最危险的幻觉区 = &quot;版本相关的事实&quot;</strong>。AI 的知识有截止时间，<strong>&quot;现在最新版本怎么用&quot;&quot;这个默认值哪个版本改的&quot;这类时效性结论，是幻觉重灾区</strong>——本项目真实教训：AI 调研结论曾与当前版本实际行为不符（版本升级导致行为变化），靠查证纠回。<strong>排查优先级：凡是带版本号的结论，一律当&quot;待查证&quot;，不当&quot;已知&quot;。</strong></p>
+<p><strong>易混点 3：安全边界里最容易漏的一条——粘贴代码时顺手把密钥带出去</strong>。复制报错信息/代码片段给 AI 时，里面混着的 token、内网地址、用户数据会被一起带走。<strong>习惯做法：发之前扫一眼敏感模式（token、密码、密钥字样），用环境变量名或占位符替换</strong>。安全边界不是&quot;公司政策&quot;，是<strong>每个人的日常动作</strong>。</p>
+<p><strong>高频追问：团队层面怎么管 AI 代码的质量？</strong> 三个抓手：① <strong>同一道闸门</strong>——AI 代码走和人完全相同的 CI（lint/typecheck/test/评审），没有&quot;AI 绿色通道&quot;；② <strong>评审重点是&quot;为什么&quot;</strong>——AI 代码的问题常出在&quot;方案选错&quot;而非&quot;语法写错&quot;，所以评审时要求作者能讲清设计理由（呼应&quot;看懂才合入&quot;）；③ <strong>留存痕迹</strong>——AI 参与的部分在提交信息里注明，出了问题时能回溯&quot;这段是谁/什么方式产出的&quot;。<strong>追问&quot;AI 生成占比要不要设上限&quot;</strong>：不需要——<strong>质量闸门是论代码的，不是论出身的</strong>。真正该管的是&quot;验证有没有走完&quot;，不是&quot;AI 写了百分之几&quot;。</p>
+<p><strong>一句话总结</strong>：验证优先——跑测试、查文档、看源码；看懂才合入；密钥不外传、数据要脱敏；AI 代码过和人一样的三道闸。</p>
+<hr>
+<h3 id="q57-说一个-ai-提效的真实案例">Q57. 说一个 AI 提效的真实案例</h3>
+<p><strong>选案例的原则：讲&quot;具体的环节对比&quot;，不讲&quot;感觉变快了&quot;。拿本项目真实例子讲（数字对比 + 环节拆解）：</strong></p>
+<p><strong>案例：原生插件构建链自动化（ensure-native）+ 疑难 bug 排查</strong></p>
+<ul><li><strong>场景</strong>：Electron 原生插件（WASAPI 采集）的编译长期靠手工——装依赖时 pnpm 会隐式触发 node-gyp，编译目标错误（对着系统 Node 编译），进 Electron 就崩。排查这种&quot;隐式触发 + ABI 不匹配&quot;的问题，传统方式是读文档、搜 issue、反复试编译——<strong>半天起步，遇到环境差异还不一定复现</strong>；</li><li><strong>AI 的做法</strong>：把报错链、package.json、构建脚本喂给 AI 做调研，定位出&quot;pnpm 隐式 install 触发 + Electron ABI 不匹配&quot;双重根因（其中&quot;Electron 43 二进制懒下载不吃代理&quot;这个坑也是同样方式查证出来的）；随后 AI 出方案 + 实现 ensure-native 自动化脚本（检查产物 → 按 Electron ABI 编译 → 校验），并把 native 目录 install 改成 no-op；</li><li><strong>提效对比</strong>：从&quot;每次环境变动都有人被坑半天&quot;变成&quot;新机器一条命令跑通&quot;——<strong>提效的度量不是&quot;这次省了几小时&quot;，而是&quot;这个坑永远不需要再踩&quot;</strong>；排查类任务的收益则是&quot;定位速度&quot;——AI 把&quot;读代码、查资料&quot;的机械部分并行化，人把时间花在判断方向；</li><li><strong>另一个体感案例</strong>：本文档本身——63 题、逐题查证、白话改写，传统方式查证 + 写作是数天量级，AI 协作下压缩到小时级。<strong>但每一题的项目实证（哪行代码、哪个提交）都是人核实过的</strong>——这正呼应 Q56：AI 负责产能，人负责真实。</li></ul>
+<p><strong>收尾金句</strong>：<strong>AI 提效的真实形态，不是&quot;写得快&quot;，而是&quot;敢做的事变多了&quot;</strong>——以前&quot;查三天才能动手&quot;的任务，现在当天就能试第一版方案。</p>
+<p><strong>易混点 1：提效的度量要算&quot;总账&quot;，不只算&quot;本次&quot;</strong>。新手报数字喜欢说&quot;这次帮我省了 3 小时&quot;；更好算账的是<strong>三类账一起算</strong>：① <strong>一次性账</strong>——这次任务省了多少；② <strong>复利账</strong>——这个坑被永久消灭后，团队每个人以后都不再踩（ensure-native 就是：每次新机器装环境省掉的半天 × N 人 × M 次）；③ <strong>能力账</strong>——以前不敢碰的任务现在敢接了（排查跨线程时序 bug）。<strong>复利账和能力账才是 AI 提效的大头，面试官要听的是账怎么算。</strong></p>
+<p><strong>易混点 2：讲案例要&quot;敢讲失败的那部分&quot;</strong>。全程顺风顺水的案例反而减分（显得没做过真实工作）。标准结构：<strong>过程如实讲（包括 AI 第一次给的结论错了）→ 人怎么发现错 → 怎么纠回来 → 最终结果</strong>。失败-纠偏的弧线，恰好证明你有 Q56 的验证能力——<strong>案例里&quot;人纠过 AI 的错&quot;是加分项，不是减分项</strong>。</p>
+<p><strong>高频追问：AI 提效后，你的时间拿去干什么了？</strong> 答&quot;没省下来，全投在更难的事上&quot;——排查、架构、压题、验证（本项目里 AI 省下的查证时间，投进了&quot;把 63 题逐题核实&quot;这种更重的活）。<strong>追问&quot;有没有 AI 反而拖慢的时候&quot;</strong>：有——简单任务上强行用智能体（为改一行代码开一轮多文件分析）比手改慢得多。<strong>能讲出&quot;何时不用 AI&quot;，判断力就立住了。</strong></p>
+<p><strong>一句话总结</strong>：案例 = ensure-native 自动化（坑永久消灭）+ 排查提速（AI 并行读代码查资料）；度量 = 坑不再踩 + 敢碰更难的活，不只是快。</p>
+<hr>
+<h3 id="q58-ai-时代工程师的核心竞争力是什么">Q58. AI 时代，工程师的核心竞争力是什么？</h3>
+<p><strong>JD 里暗含这道题（&quot;AI 工具应用能力&quot;是硬要求），要答出层次感。三层递进：</strong></p>
+<ol><li><strong>会用工具（入门）</strong>：能选对工具、写清提示词、拆好任务——Q52-Q55 讲的都是这一层。<strong>两年内这会变成&quot;会用搜索引擎&quot;级别的默认技能</strong>，不是差异化优势；</li><li><strong>能验证工具（进阶）</strong>：<strong>AI 产出越强，&quot;敢不敢信&quot;越值钱</strong>。看懂代码、跑通验证、查证结论——判断力（Q56）是 AI 时代的稀缺品：<strong>工具输出 80 分，能把 80 分筛到 95 分的判断力，比&quot;写代码快&quot;贵得多</strong>。所以&quot;AI 写、人审&quot;的人，比&quot;不写只审&quot;的人强，比&quot;只写不审&quot;的人强一个数量级；</li><li><strong>定方向与担责任（终极）</strong>：AI 干不了三件事——<strong>决定做什么</strong>（业务理解、需求判断）、<strong>为结果负责</strong>（出事了背锅的是人，不是工具）、<strong>跨人协作</strong>（对齐团队、传递上下文）。这三件事恰恰是 JD 里&quot;沟通协作、技术判断力、职责、架构决策&quot;的全部含义——<strong>JD 要的不是&quot;会敲代码的人&quot;，是&quot;能用 AI 放大自己判断力、并对结果负责的人&quot;</strong>。</li></ol>
+<p><strong>结合本项目</strong>：面试时可以画一个三角——<strong>人定方向（架构决策、验收标准）→ AI 出产能（实现、调研、测试）→ 人守闸门（验证、复盘、责任）</strong>。你既是 AI 的使用者，也是 AI 的验收官，更是结果的负责人。</p>
+<p><strong>易混点 1：三层不是并列，是&quot;稀缺度递增&quot;</strong>。会用工具的人最多（模型越来越好用，门槛在降）；能验证的人少（需要领域深度，AI 说错你才能听出来）；定方向担责任的人最少（需要业务理解 + 决策勇气 + 沟通能力）。<strong>面试的定位策略：把&quot;会用&quot;一笔带过，把时间花在证明后两层</strong>——举&quot;我纠过 AI 的错&quot;&quot;我拍板过有风险的决策&quot;的例子。</p>
+<p><strong>易混点 2：&quot;AI 写的代码我不写都行&quot;是最危险的错觉</strong>。<strong>判断力和动手能力是一体两面</strong>——不会写的人，也读不懂、验不了、改不动 AI 的产出；AI 时代&quot;不用自己写&quot;成立的前提是&quot;你自己本来就会写&quot;。所以<strong>基本功不是被 AI 淘汰了，是被 AI 提到更高水位</strong>：以前能写出就行，现在要能看出 80 分和 95 分的差别（Q56 的分层验证）。</p>
+<p><strong>高频追问：未来三年，工程师最该练什么？</strong> 三样：① <strong>领域深度</strong>（AI 知识面广但浅，你在 Electron/音频这条垂直线上比它深，才有验证它的资格）；② <strong>系统思维</strong>（任务拆解、边界定义、验收设计——Q54 的整套）；③ <strong>沟通与责任</strong>（把复杂状态对齐给人、为结果负责）。<strong>追问&quot;初级工程师会被替代吗&quot;</strong>：被替代的是&quot;纯执行且不验证&quot;的角色；<strong>会用 AI + 会验证的新人，产出可能超过不拥抱 AI 的老手</strong>——这条线画在&quot;验不验证&quot;，不画在&quot;年资&quot;。</p>
+<p><strong>一句话总结</strong>：会用工具是底线，能验证是竞争力，定方向 + 担责任是护城河；AI 放大的是人的判断力，不是替代判断力。</p>
+<hr>
+<h2 id="八技术负责人视角">八、技术负责人视角</h2>
+<h3 id="q59-架构决策怎么做说说你的决策依据">Q59. 架构决策怎么做？说说你的决策依据</h3>
+<p><strong>面试官考的不是&quot;你选了啥&quot;，而是&quot;你的决策流程靠不靠谱&quot;。给一套四步决策法（结合本项目逐条对号）：</strong></p>
+<ol><li><strong>先定约束再定方案</strong>：决策的第一步不是比较技术，是<strong>列约束</strong>——团队技能栈（只会 JS 就不选 Tauri 的 Rust 原生层，Q45）、平台要求（Windows 优先 → WASAPI + loopback）、分发方式（内部分发 → 签名公证可后置，Q44）、维护能力（坑的社区成熟度）。<strong>约束一变，最优解就变</strong>——没约束的选型讨论都是吵架；</li><li><strong>用&quot;可逆性&quot;分级投入</strong>：决策分<strong>可逆决策</strong>（换 UI 库、改目录结构——试错了改回来代价小，快速试）和<strong>不可逆决策</strong>（进程架构、打包更新链、协议设计——错了要推倒重来，必须充分调研再动）。<strong>把重投入花在不可逆决策上</strong>，轻决策别开长会；</li><li><strong>证据优先</strong>：性能、兼容性、安全类的决策<strong>不做空想</strong>——跑基准测试、查官方文档、做小规模验证（spike）。本项目的镜像方案（Q21）是先查证&quot;Electron 43 行为变化&quot;这个事实再定的策略，不是拍脑袋；</li><li><strong>决策留痕</strong>：重要决策写 ADR（架构决策记录）或至少落在提交信息/文档里——<strong>&quot;当时为什么这么选&quot;半年后比&quot;选了啥&quot;值钱得多</strong>（决策背景不可重建）。</li></ol>
+<p><strong>结合本项目的四个真实决策（每个一句话说清&quot;为什么&quot;）</strong>：① 重主进程架构（界面薄、服务重——稳定性和安全性倒逼）；② 主进程 WS 而非渲染进程 WS（长生命周期服务放主进程，Q30/Q36）；③ 协议规格放 shared 包三端共测（跨端一致性的最高优先级解法，Q18）；④ 原生插件编译走 ensure-native 自动化（把&quot;环境坑&quot;从人的记忆里删除，Q38）。</p>
+<p><strong>易混点 1：&quot;约束&quot;到底是什么（具体清单，别答空话）</strong>。面试说&quot;先列约束&quot;，要能报出约束的类型：<strong>团队技能栈</strong>（会不会 Rust 决定 Tauri 可行性）、<strong>平台与设备</strong>（Windows 优先 → WASAPI）、<strong>时间线</strong>（三个月上线 vs 一年重构，选择完全不同）、<strong>分发与合规</strong>（内部分发 → 签名公证可后置）、<strong>维护能力</strong>（社区成熟度 = 出问题有没有答案）。<strong>约束是决策的输入，不是不做事的借口</strong>——两者差别在于：列完约束后你有没有基于它给出方案。</p>
+<p><strong>易混点 2：可逆/不可逆的判断标准（一张表）</strong>：</p>
+<table><thead><tr><th>决策类型</th><th>例子</th><th>投多少调研</th></tr></thead><tbody><tr><td>可逆（改回来代价小）</td><td>UI 库、目录结构、组件拆分</td><td>快速试，错了再改</td></tr><tr><td>不可逆（错了推倒重来）</td><td>进程架构、打包更新链、跨端协议</td><td>重调研 + spike 验证</td></tr></tbody></table>
+<p>判断口诀：<strong>&quot;改回来要不要动到别人的使用方式/历史数据&quot;</strong>——要，就是不可逆。本项目协议格式就是不可逆决策（改格式 = 三端 + 历史数据全动），所以放 shared 包 + 字节级测试锁死。</p>
+<p><strong>易混点 3：ADR（架构决策记录）写什么</strong>。四段式：<strong>背景</strong>（当时面对什么问题）→ <strong>决策</strong>（选了什么、否决了什么）→ <strong>后果</strong>（带来的好处和代价）→ <strong>替代方案</strong>（为什么没选别的）。<strong>核心价值是&quot;背景&quot;段</strong>——半年后的人最缺的不是&quot;选了啥&quot;，是&quot;当时为什么这么选&quot;，而背景无法从代码里重建。写 ADR 不是文书工作，是给未来的自己留决策现场。</p>
+<p><strong>高频追问：决策后来证明是错的，怎么办？</strong> 三步：① <strong>止损</strong>——评估&quot;错的部分&quot;影响面，能回收的立刻回；② <strong>复盘留痕</strong>——在 ADR 里补一段&quot;后来验证结果&quot;，让错误也产生价值（比删掉记录假装没发生过强一百倍）；③ <strong>承认与修正</strong>——<strong>技术负责人的信用来自&quot;错了就改&quot;，不来自&quot;永远没错&quot;</strong>。面试官问这个是在测你的&quot;责任观&quot;，别答&quot;我会小心不犯错&quot;。</p>
+<p><strong>一句话总结</strong>：决策 = 先列约束 → 按可逆性分级投入 → 证据优先 → 决策留痕；不可逆的架构决策要重调研，轻决策要快速试。</p>
+<hr>
+<h3 id="q60-讲一个你解决的技术难点难点在哪怎么解的">Q60. 讲一个你解决的技术难点，难点在哪、怎么解的</h3>
+<p><strong>用 STAR 结构讲（面试官等着听&quot;难点&quot;两个字，别讲&quot;我实现了 XX 功能&quot;——那不是难点，是工作）</strong>。拿本项目的 TSFN 退出竞态讲：</p>
+<ul><li><strong>S（背景）</strong>：桌面录音应用，音频采集是 C++ 原生模块（WASAPI），数据通过 TSFN 跨线程交回 JS 主线程（Q39/Q40）；</li><li><strong>T（任务）</strong>：退出应用时出现<strong>偶发崩溃</strong>——不是每次都崩，而是有时退出干净、有时直接崩；</li><li><strong>A（行动）——难点就在这</strong>：偶发 = 时序问题。排查方向锁定在<strong>退出瞬间的资源释放顺序</strong>：采集线程还在往 TSFN 塞数据，另一条退出路径已经开始释放 TSFN——<strong>两个线程在&quot;用&quot;和&quot;放&quot;同一个对象上赛跑</strong>，谁先到谁决定崩不崩。解法是把释放顺序固化成正确序列：<strong>先停采集 → join 等线程真正退出 → 最后释放 TSFN</strong>，并补上相关路径的检查。<strong>难点的本质：崩溃不是&quot;代码写错了&quot;，是&quot;生命周期顺序没定义对&quot;</strong>——单线程思维发现不了跨线程的时序窗口，得在&quot;线程到底什么时候退干净&quot;上做文章；</li><li><strong>R（结果）</strong>：修复后反复退出/强杀/边界时序测试不再复现，修复随提交记录留档（<code>TSFN 退出竞态修复</code>）。</li></ul>
+<p><strong>为什么这个案例好</strong>：它串起了 JD 要求的全部关键词——<strong>原生模块 + 多线程 + 竞态 + 崩溃定位 + 生命周期管理</strong>，而且&quot;偶发崩溃&quot;四个字自带难度认证。<strong>选案例的三个标准：有真正的难点（不是熟练活）、你能讲清根因（不是&quot;改了下就好了&quot;）、有验证结果（不是&quot;应该好了&quot;）。</strong></p>
+<p><strong>易混点 1：&quot;难点&quot;和&quot;工作量&quot;是两码事（选案例的第一道筛子）</strong>。&quot;这个功能我写了 3000 行&quot;——那叫工作量大，不叫难点。<strong>难点的三种真形态</strong>：① <strong>找根因难</strong>（偶发、跨线程、要排除法缩小范围）；② <strong>取舍难</strong>（两个方案各有代价，选哪个都不完美）；③ <strong>踩坑难</strong>（文档没有、社区查不到，靠实验摸出来的）。<strong>案例里必须有一个&quot;难在哪&quot;的明确答案</strong>，否则面试官听完只会想&quot;这不就是正常的活吗&quot;。</p>
+<p><strong>易混点 2：偶发 bug 为什么特别难（机制层面讲清）</strong>。偶发 = 存在一个<strong>极窄的时序窗口</strong>：只有&quot;采集线程塞数据&quot;和&quot;释放线程销毁 TSFN&quot;两个动作在微秒级重叠时才崩，其他时候一切正常。所以：日志看不出（崩溃时日志正常）、本地难复现（窗口太窄）、修没修好不敢确定（跑 100 次不崩 ≠ 修好了）。<strong>应对偶发 bug 的通用思路</strong>：不要赌概率，而是<strong>把时序窗口从&quot;可能重叠&quot;改成&quot;不可能重叠&quot;</strong>——固化顺序（Stop → join → release）就是把窗口直接关死。<strong>口诀：偶发问题靠&quot;消灭窗口&quot;解决，不靠&quot;多测几次&quot;证明。</strong></p>
+<p><strong>易混点 3：讲根因要讲到&quot;机制层&quot;，防追问</strong>。面试官会追问&quot;为什么 Stop 之后还要 join？&quot;——答到机制层才算过关：<strong>Stop 只是&quot;发出停止信号&quot;（置标志位），线程收到信号到真正退出还有一段路；join 是&quot;等到线程确认退出&quot;</strong>——不 join 就 release，等于&quot;信号发了但人还没出门，就把房子拆了&quot;。<strong>每个步骤的&quot;为什么&quot;都能用一句话说清机制，这个案例就经得起任意追问。</strong></p>
+<p><strong>高频追问：这个案例如果重来一次，你会提前做什么避免它？</strong> 答&quot;设计层面的预防&quot;：① 资源所有权从一开始就明确<strong>单一 owner</strong>（谁创建谁销毁，杜绝多路径释放）；② 生命周期状态机化（启动中 → 运行中 → 停止中 → 已停止，状态机里明确&quot;哪个状态谁可以碰什么&quot;）；③ 退出路径写<strong>集成测试</strong>（反复启停压测——本项目修复后补的就是这类测试）。<strong>&quot;事后补救&quot;和&quot;事前设计&quot;都能答出来，说明你真复盘过，不是背案例。</strong></p>
+<p><strong>一句话总结</strong>：难点 = 跨线程退出竞态（用和放赛跑）；解法 = 固化释放顺序 Stop → join → release；讲案例要 STAR + 真难点 + 讲清根因 + 有验证。</p>
+<hr>
+<h3 id="q61-沟通协作跨角色跨端怎么推进事情">Q61. 沟通协作：跨角色、跨端怎么推进事情？</h3>
+<p><strong>JD 关键词&quot;沟通协作&quot;，考的是&quot;不写代码的时候你怎么干活&quot;。三条经验：</strong></p>
+<ol><li><strong>把分歧翻译成问题</strong>：技术争论（&quot;用 A 不用 B&quot;）的背后通常是<strong>没对齐的约束</strong>（Q59 第一步）——有人在意性能、有人在意交付时间、有人在意维护成本。<strong>与其争结论，不如把约束摊开</strong>：&quot;你觉得慢，慢到什么数字不能接受？&quot;——<strong>分歧变标准，争论就结束了</strong>；</li><li><strong>文档先行、契约优先</strong>：跨角色（前后端、跨端）协作的最大成本是<strong>隐性知识</strong>——&quot;我以为你知道&quot;。解法是把约定落成<strong>机器可查的东西</strong>：接口类型声明（Q20）、协议测试用例（Q18）、commit 规范（Q22）。<strong>文档会过期，测试不会</strong>——本项目三端协议靠 shared 包的字节级测试对齐，协作成本从&quot;每次联调吵架&quot;降成&quot;跑测试&quot;。<strong>沟通的最高形式是&quot;不需要沟通&quot;</strong>；</li><li><strong>带方案的求助、带数据的反馈</strong>：找别人求助，<strong>先给&quot;我试过的路和卡点&quot;</strong>（证明你尊重对方时间）；给别人反馈，<strong>先给现象和数据</strong>（&quot;转写延迟 4.2s&quot;，而不是&quot;太卡了&quot;）。<strong>技术协作里，可复现的信息才是有效信息</strong>（Q51 呼应）。</li></ol>
+<p><strong>结合本项目</strong>：讲一个真实协作场景——桌面端（fe）和后端（be）的协议对齐：三端各写各的实现时，字节序、UUID 表示、消息时序全靠口头约定，联调时互相怀疑；把编解码规格 + 测试用例挪进 shared 后，<strong>&quot;谁错了&quot;由测试判定，&quot;改没改对&quot;由 CI 判定</strong>——协作从人治变成法治。</p>
+<p><strong>易混点 1：&quot;文档会过期，测试不会&quot;——但文档的活儿测试替代不了</strong>。机器可查的约定（接口形状、协议格式）应该用类型 + 测试承载；但<strong>背景和决策</strong>（为什么协议这么设计、为什么不兼容旧版本）测试写不了，还是要文档（Q59 的 ADR 就是这个分工）。<strong>口诀：契约用测试锁，背景用文档留</strong>——两者各管一段，不是二选一。</p>
+<p><strong>易混点 2：跨端协作的标准流程 = &quot;接口先行，并行开发&quot;</strong>。最慢的协作方式是&quot;我做完你才做&quot;（串行）；最快的是：<strong>先一起把接口契约定下来（类型 + 测试用例进 shared），然后两端各自并行实现</strong>——契约就是两端之间的&quot;合同&quot;，各自对着合同干，合流时直接跑共测。<strong>契约定的越早越细，联调时间越短</strong>——联调吵架的根因几乎都是&quot;契约没定清就开干&quot;。</p>
+<p><strong>易混点 3：&quot;带方案的求助&quot;具体长什么样（模板）</strong>。低效求助：&quot;这个报错怎么解决？&quot;（对方要替你从头排查）；高效求助：<strong>&quot;我在 XX 上试了 A 方案，卡在 Y 报错；试过 B 也没用；怀疑是 Z 原因但不确定——你能帮我看下 Z 的假设对不对吗？&quot;</strong>——<strong>把&quot;我试过的路&quot;和&quot;我卡的点&quot;交出去，对方只需要做判断，不需要从头做排查</strong>。尊重对方时间，就是沟通能力的体现。</p>
+<p><strong>高频追问：遇到跨端互相甩锅（&quot;是你的问题&quot;）怎么办？</strong> 不辩论，<strong>把&quot;谁的问题&quot;翻译成&quot;哪条测试没过&quot;</strong>——测试是第三方裁判，没人能跟测试争。所以&quot;契约 + 共测&quot;不只是技术方案，更是<strong>协作的政治方案</strong>：它把争论从&quot;人对人&quot;变成&quot;代码对测试&quot;，人际关系成本直接归零。</p>
+<p><strong>一句话总结</strong>：分歧翻译成约束标准；约定落成类型和测试（机器可查），文档会过期测试不会；求助带方案、反馈带数据。</p>
+<hr>
+<h3 id="q62-技术判断力比如该不该上这个新技术你怎么判断">Q62. 技术判断力：比如&quot;该不该上这个新技术&quot;你怎么判断？</h3>
+<p><strong>给一个可复用的判断框架（面试官要的是框架，不是单个结论）：</strong></p>
+<ol><li><strong>动机审查</strong>：&quot;想上&quot;和&quot;该上&quot;是两件事——<strong>新技术解决的是真问题，还是&quot;别人在用我也想用&quot;？</strong> 先把&quot;不上的代价&quot;写出来，代价写不出，动机就不成立；</li><li><strong>成本全景</strong>：不是&quot;上手难度&quot;，而是<strong>全生命周期成本</strong>——学习成本（团队多少人要学）、迁移成本（旧代码怎么办）、维护成本（出问题社区有没有答案）、招聘成本（市场上有没有人会）。<strong>Tauri 的选择题（Q45）就是成本全景的实例</strong>；</li><li><strong>风险对冲</strong>：<strong>新东西永远先试点再推广</strong>——找一块风险可控的模块试跑（本项目把新方案先用在工具链脚本上，而不是核心链路），跑出真数据再决定扩不扩。<strong>&quot;用数据说话&quot;是对抗盲目追新的唯一武器</strong>；</li><li><strong>退出策略</strong>：问一句&quot;<strong>如果这东西死了，我们怎么退</strong>&quot;——有替代路径的可以试，绑死单点的要慎重。锁进供应商/工具链越深，退出代价越大。</li></ol>
+<p><strong>再加一个 AI 时代的判断力</strong>（呼应 Q56/Q58）：<strong>新工具（包括 AI 工具）同样过这套框架</strong>——不因为&quot;大家都在用&quot;就直接上，也不因为&quot;是 AI 就信&quot;。<strong>判断力的核心是同一套标准：动机、成本、风险、退路。</strong></p>
+<p><strong>易混点 1：&quot;新&quot;不等于&quot;合适&quot;，要看技术在成熟度曲线的哪一段</strong>。新技术有两类：<strong>爬坡期</strong>（火但没人踩过生产坑——出了问题社区没答案）和<strong>成熟期</strong>（热度过了，但生产验证充分——Electron/Tauri 的对比就是这个例子，Q45）。判断口诀：<strong>团队的技术栈越薄、可投入的维护人力越少，越要选成熟期技术</strong>；只有&quot;有人专门养&quot;的场景才敢追爬坡期。<strong>追新不是勇气，是成本核算。</strong></p>
+<p><strong>易混点 2：试点（spike）怎么选才有效</strong>。试点项目要满足三个条件：<strong>风险可控</strong>（挂了不伤核心链路）、<strong>可逆</strong>（随时能退回旧方案）、<strong>有代表性</strong>（试出来的结论能推广到正式场景）。本项目把新方案先用在工具链脚本上而不是核心采集链路，就是这个逻辑。<strong>试点最大的价值不是&quot;跑通&quot;，是&quot;拿到数据&quot;</strong>——性能数据、踩坑记录、团队上手反馈，三样齐了再谈推广。</p>
+<p><strong>易混点 3：调研结论很好但团队没人会，怎么判断？</strong> 这就是成本全景里的<strong>学习成本 + 招聘成本</strong>要进场的时候：新技术再香，如果市场上有经验的人少（招不到人）、团队学习曲线陡（三个月爬坡），&quot;上新技术&quot;的真实成本可能翻倍。<strong>口诀：技术选型选的是&quot;团队未来三年能养得起的技术&quot;，不是&quot;看起来最好的技术&quot;。</strong></p>
+<p><strong>高频追问：判断力怎么练出来？</strong> 三条：① <strong>多记&quot;失败样本&quot;</strong>——每次决策后复盘&quot;当时哪个约束我漏了&quot;（Q59 的决策留痕就是练判断力的本子）；② <strong>先写结论再查证据</strong>——决策前先写下&quot;我倾向于选 A，因为……&quot;，然后去找反证，<strong>逼自己证伪而不是证实</strong>；③ <strong>小决策上多授权、大决策上多怀疑</strong>——判断力是决策次数喂出来的，但不可逆决策上要故意放慢。<strong>追问&quot;有标准答案吗&quot;</strong>：没有——<strong>判断力的本质不是&quot;总能选对&quot;，是&quot;选错了能早发现、能止损、能复盘&quot;。</strong></p>
+<p><strong>一句话总结</strong>：判断 = 动机审查（真问题才上）+ 成本全景（全生命周期）+ 试点先行 + 退出策略；对 AI 工具用同一套标准，不追新也不盲信。</p>
+<hr>
+<h3 id="q63-面试收尾你怎么反问面试官">Q63. 面试收尾：你怎么反问面试官？</h3>
+<p><strong>先讲为什么反问环节要重视</strong>：这是你<strong>唯一主动获取信息的机会</strong>——团队状况、岗位真实难度、评价标准。问得好的问题，既是收集情报，也是最后一次展示判断力。</p>
+<p><strong>三类好问题（按优先级）</strong>：</p>
+<ol><li><strong>问团队与协作</strong>：&quot;这个岗位平时和哪些角色协作最多？（比如 Electron 岗常问：原生层、后端、产品哪边压力大）&quot;——<strong>展示你关心协作而非单打</strong>，同时探出岗位的真实定位；</li><li><strong>问技术现状</strong>：&quot;团队现在的桌面端架构是怎样的？接下来最想解决的技术债是什么？&quot;——<strong>探出&quot;他们为什么招人&quot;</strong>：是补人还是救火，直接影响你入职后的预期；如果面试官说得含糊，说明团队还没想清楚（这本身是情报）；</li><li><strong>问评价与成长</strong>：&quot;这个岗位前三个月做出什么，你们会觉得'招对了'？&quot;——<strong>把模糊的期望变成可执行的验收标准</strong>（面试官会记住你问了这个——因为它证明你想的是&quot;交付结果&quot;，不是&quot;上班&quot;）。</li></ol>
+<p><strong>两类雷区</strong>：别问&quot;公司做什么的&quot;（自己查得到的问题 = 没做准备）；别问&quot;我表现怎么样&quot;（让面试官尴尬且得不到真话）。</p>
+<p><strong>易混点 1：反问的目的不是&quot;显得好奇&quot;，是&quot;收集情报 + 展示判断力&quot;</strong>。每个问题都有双重功能：<strong>问技术债</strong>——探出&quot;他们为什么招人&quot;（补位还是救火），同时展示你关心的是系统健康而非打卡；<strong>问验收标准</strong>——把模糊期望变成可执行的三个月目标（对方答不上来 = 团队管理不清晰，这本身是你该知道的情报）；<strong>问协作对象</strong>——探出岗位真实定位（是纯写代码还是跨端协调岗），同时展示你有协作意识。<strong>反问环节是你面试里最后一个&quot;双向选择&quot;的窗口。</strong></p>
+<p><strong>易混点 2：雷区补充——三种&quot;听着聪明实则减分&quot;的反问</strong>。① <strong>显摆式反问</strong>：&quot;你们为什么不用 Tauri？它比 Electron 轻多了&quot;——技术选型是团队约束的结果（Q59），<strong>刚见面的外人用质疑口吻问选型，只会显得傲慢</strong>；改成探询式：&quot;团队当时选 Electron 主要考虑哪些约束？&quot;同一个情报，两种姿态；② <strong>薪资待遇</strong>（留给 HR 环节）；③ <strong>&quot;你们加班多吗&quot;</strong>——问法本身暴露预期，真有顾虑改成&quot;团队现在的工作节奏和发布节奏是怎样的&quot;。</p>
+<p><strong>易混点 3：面试官说&quot;我的问题问完了，你有什么要问的吗&quot;——冷场预案</strong>。准备 3 个问题保底（2 个通用的 + 1 个针对这场面试的），最通用且安全的：<strong>&quot;团队现在最想解决的技术债是什么？&quot;</strong>（人人都能答、信息量大）、<strong>&quot;这个岗位前三个月做到什么程度，你们会觉得'招对了'？&quot;</strong>（逼对方给标准）。<strong>一个都不问 = 最差答案</strong>——等于告诉对方&quot;我对这个岗位没有思考&quot;。</p>
+<p><strong>结合本项目</strong>（如果面的是本项目类似岗位）：&quot;音频链路目前是 Windows 原生模块方案，团队有没有 macOS/多平台的规划？原生层后续是自研还是外包/开源？&quot;——<strong>问&quot;业务相关且技术具体&quot;的问题，证明你听懂了他的技术栈还思考过演进</strong>。</p>
+<p><strong>一句话总结</strong>：反问 = 问协作、问技术债、问验收标准；展示判断力、收集情报；别问查得到的问题。</p>
+<hr>
+<h2 id="高频一页速记表考前翻">高频一页速记表（考前翻）</h2>
+<p><strong>一、前端基础</strong></p>
+<table><thead><tr><th>题</th><th>考点</th><th>一句话</th></tr></thead><tbody><tr><td>Q1</td><td>事件循环</td><td>单线程厨师：宏任务排队、微任务插队，长任务卡 UI</td></tr><tr><td>Q2</td><td>闭包</td><td>函数带着行李箱（词法作用域）出门；保留引用不是拷贝</td></tr><tr><td>Q3</td><td>Promise</td><td>外卖订单状态机：pending 变 fulfilled/rejected，then 注册回调</td></tr><tr><td>Q4</td><td>V8 GC</td><td>可达性判死活；新生代 Scavenge 快搬、老生代三色标记</td></tr><tr><td>Q5</td><td>TypeScript</td><td>蒙眼开车前套缰绳；any 摆烂、unknown 谨慎、never 兜底</td></tr><tr><td>Q6</td><td>渲染流水线</td><td>装修队：重排（动结构）&gt; 重绘（动颜色）&gt; 合成（GPU 层）</td></tr><tr><td>Q7</td><td>事件模型</td><td>快递员：捕获（下楼）→ 目标（敲门）→ 冒泡（上楼），可委托</td></tr></tbody></table>
+<p><strong>二、React</strong></p>
+<table><thead><tr><th>题</th><th>考点</th><th>一句话</th></tr></thead><tbody><tr><td>Q8</td><td>组件化</td><td>乐高积木：props 入、JSX 出，状态私有</td></tr><tr><td>Q9</td><td>Hooks</td><td>点名册顺序：靠调用顺序认人，禁止条件调用</td></tr><tr><td>Q10</td><td>状态管理</td><td>红绿灯：状态机 + action 驱动，单向流动</td></tr><tr><td>Q11</td><td>虚拟 DOM</td><td>草稿纸先改再画，diff O(n) 靠三个假设</td></tr><tr><td>Q12</td><td>Fiber</td><td>可中断爬楼梯：链表遍历 + 时间片，双缓冲提交</td></tr><tr><td>Q13</td><td>路由</td><td>门牌号 ↔ 页面映射，懒加载按需取</td></tr><tr><td>Q14</td><td>memo 三件套</td><td>引用相等防误渲染：memo 包组件、useMemo 缓存值、useCallback 缓存函数</td></tr></tbody></table>
+<p><strong>三、工程化</strong></p>
+<table><thead><tr><th>题</th><th>考点</th><th>一句话</th></tr></thead><tbody><tr><td>Q15</td><td>Vite</td><td>开发不打包 + esbuild 预构建，生产 Rollup</td></tr><tr><td>Q16</td><td>Webpack</td><td>loader 翻译单文件，plugin 干预全流程</td></tr><tr><td>Q17</td><td>pnpm</td><td>全局仓库 + 硬链接，幽灵依赖直接报错</td></tr><tr><td>Q18</td><td>monorepo</td><td>边界 + 依赖方向；shared 包放协议和共测</td></tr><tr><td>Q19</td><td>ESLint 9</td><td>flat config；开发轻量、CI 全量</td></tr><tr><td>Q20</td><td>TS 治理</td><td>strict + 多 tsconfig + 跨进程类型契约</td></tr><tr><td>Q21</td><td>环境坑</td><td>镜像固化、启动竞态、编译自动化</td></tr><tr><td>Q22</td><td>Git 规范</td><td>commit 写&quot;为什么&quot;，git log 是第二份简历</td></tr></tbody></table>
+<p><strong>四、浏览器/网络/性能</strong></p>
+<table><thead><tr><th>题</th><th>考点</th><th>一句话</th></tr></thead><tbody><tr><td>Q23</td><td>URL 到页面</td><td>DNS → 建连 → 请求 → 解析渲染五站</td></tr><tr><td>Q24</td><td>HTTPS</td><td>非对称协商、对称传输、证书验身份</td></tr><tr><td>Q25</td><td>HTTP 版本</td><td>1.1 串行 → 2 多路复用 → 3 换 QUIC；流数据走 WS</td></tr><tr><td>Q26</td><td>缓存</td><td>强缓存不问、协商缓存确认；哈希文件名 + 长缓存</td></tr><tr><td>Q27</td><td>跨域</td><td>浏览器扣响应，CORS 服务器开门；CSRF 靠 Token</td></tr><tr><td>Q28</td><td>性能三层</td><td>加载 / 运行 / 工程（先测量）；桌面端本地加载 + 主进程分担</td></tr><tr><td>Q29</td><td>内存泄漏</td><td>四大源：计时器、监听器、闭包、游离 DOM；快照对比</td></tr></tbody></table>
+<p><strong>五、Electron（Q30-Q45）</strong></p>
+<table><thead><tr><th>题</th><th>考点</th><th>一句话</th></tr></thead><tbody><tr><td>Q30</td><td>三进程</td><td>物业（主进程）/ 住户（渲染）/ 服务窗口（preload）</td></tr><tr><td>Q31</td><td>安全三件套</td><td>nodeIntegration 关、contextIsolation 开、sandbox 开；remote 已死</td></tr><tr><td>Q32</td><td>IPC</td><td>invoke 挂号信、send 广播；传的是克隆</td></tr><tr><td>Q33</td><td>preload</td><td>薄转发：白名单分类 + 返回 cleanup + 类型契约</td></tr><tr><td>Q34</td><td>多窗口</td><td>状态集中主进程；悬浮窗穿透 + 置顶；isDestroyed</td></tr><tr><td>Q35</td><td>生命周期</td><td>单实例锁；退出倒序关停；macOS 关窗不退</td></tr><tr><td>Q36</td><td>异常恢复</td><td>指数退避重连 + generation 计数器防竞态</td></tr><tr><td>Q37</td><td>本地存储</td><td>主进程 + userData；冷热数据分家</td></tr><tr><td>Q38</td><td>原生模块</td><td>C++ 编译 .node；对 Electron 必须按 ABI 重编</td></tr><tr><td>Q39</td><td>TSFN</td><td>线程安全队列；丢新保旧；Stop → join → release</td></tr><tr><td>Q40</td><td>WASAPI</td><td>五层调用链；LOOPBACK 抄扬声器；静音帧丢弃</td></tr><tr><td>Q41</td><td>重采样</td><td>混声道 → 线性插值防混叠 → clamp 量化；1/12 数据量</td></tr><tr><td>Q42</td><td>打包</td><td>electron-builder + NSIS；脚本顺序即依赖顺序</td></tr><tr><td>Q43</td><td>自动更新</td><td>查版本 → 下载校验 → 静默装；Windows 只认 NSIS</td></tr><tr><td>Q44</td><td>签名公证</td><td>防篡改证身份；公证 = 苹果验货</td></tr><tr><td>Q45</td><td>Tauri</td><td>轻但 WebView 碎片 + 要 Rust；选型匹配团队</td></tr></tbody></table>
+<p><strong>六、性能定位（Q46-Q51）</strong></p>
+<table><thead><tr><th>题</th><th>考点</th><th>一句话</th></tr></thead><tbody><tr><td>Q46</td><td>启动慢</td><td>打点拆分 + Content Tracing；砍关键路径</td></tr><tr><td>Q47</td><td>内存泄漏</td><td>getAppMetrics 分进程 + 堆快照对比</td></tr><tr><td>Q48</td><td>CPU 高</td><td>火焰图找热点；先砍无效忙碌（静音帧、节流边界）</td></tr><tr><td>Q49</td><td>卡顿</td><td>Long Task &gt; 50ms；界面线程只画界面</td></tr><tr><td>Q50</td><td>崩溃</td><td>退出码 + 日志落盘 + dump；崩了能恢复</td></tr><tr><td>Q51</td><td>监控</td><td>进程级指标 + 崩溃现场 + 业务指标（端到端延迟）</td></tr></tbody></table>
+<p><strong>七、AI 工具（Q52-Q58）</strong></p>
+<table><thead><tr><th>题</th><th>考点</th><th>一句话</th></tr></thead><tbody><tr><td>Q52</td><td>工具分工</td><td>补全干小活、智能体干工程、对话式干调研</td></tr><tr><td>Q53</td><td>七环节</td><td>每环人机分工不同：AI 管速度，人管正确</td></tr><tr><td>Q54</td><td>上下文/拆解</td><td>给相关的、每步有验收标准</td></tr><tr><td>Q55</td><td>提示词</td><td>角色 + 任务 + 材料 + 格式 + 验收</td></tr><tr><td>Q56</td><td>质量边界</td><td>验证优先、看懂才合入、密钥不外传</td></tr><tr><td>Q57</td><td>提效案例</td><td>ensure-native 坑永久消灭 + 排查提速</td></tr><tr><td>Q58</td><td>竞争力</td><td>会用 → 能验证 → 定方向担责任</td></tr></tbody></table>
+<p><strong>八、技术负责人（Q59-Q63）</strong></p>
+<table><thead><tr><th>题</th><th>考点</th><th>一句话</th></tr></thead><tbody><tr><td>Q59</td><td>架构决策</td><td>约束先行 + 可逆性分级 + 留痕</td></tr><tr><td>Q60</td><td>技术难点</td><td>STAR + 真难点 + 讲清根因</td></tr><tr><td>Q61</td><td>沟通协作</td><td>分歧变标准；约定变测试</td></tr><tr><td>Q62</td><td>技术判断</td><td>动机 / 成本 / 试点 / 退路</td></tr><tr><td>Q63</td><td>反问</td><td>问协作、问技术债、问验收标准</td></tr></tbody></table>
+<hr>
+<p><em>本文档基于岗位 JD 压题整理，项目实证均来自 audio-capture 仓库真实代码与提交记录；技术细节以官方文档为准，面试前建议按&quot;速记表 → 项目实证 → 追问&quot;三层过一遍。</em></p>
+</main>
+<script>
+(function(){
+  var sb = document.getElementById('sidebar');
+  var menuBtn = document.getElementById('menuBtn');
+  menuBtn.addEventListener('click', function(){ document.body.classList.toggle('sidebar-open'); });
+  sb.addEventListener('click', function(e){
+    var a = e.target.closest('a.toc-link');
+    if (a && window.innerWidth <= 900) document.body.classList.remove('sidebar-open');
+  });
+
+  // 章节折叠/展开
+  document.querySelectorAll('.ch-toggle').forEach(function(tg){
+    tg.addEventListener('click', function(){ tg.closest('.toc-chapter').classList.toggle('collapsed'); });
+  });
+
+  // 搜索过滤
+  var filter = document.getElementById('filter');
+  filter.addEventListener('input', function(){
+    var q = this.value.trim().toLowerCase();
+    document.querySelectorAll('.toc li').forEach(function(li){ li.style.display = ''; });
+    document.querySelectorAll('.toc-chapter').forEach(function(ch){ ch.classList.remove('collapsed'); });
+    if (!q) return;
+    document.querySelectorAll('.toc li').forEach(function(li){
+      var t = (li.getAttribute('data-t') || '').toLowerCase();
+      var show = t.indexOf(q) !== -1;
+      if (!show && li.classList.contains('toc-chapter')){
+        li.querySelectorAll('.sub .toc-q').forEach(function(sub){
+          if ((sub.getAttribute('data-t') || '').toLowerCase().indexOf(q) !== -1) show = true;
+        });
+      }
+      li.style.display = show ? '' : 'none';
+    });
+  });
+
+  // 滚动高亮（scrollspy）
+  var hs = Array.prototype.slice.call(document.querySelectorAll('.content h2[id], .content h3[id]'));
+  var lastActive = null;
+  var ticking = false;
+  function spy(){
+    ticking = false;
+    var y = window.scrollY + 130;
+    var cur = null;
+    for (var k = 0; k < hs.length; k++){ if (hs[k].offsetTop <= y) cur = hs[k]; else break; }
+    if (!cur || cur.id === lastActive) return;
+    lastActive = cur.id;
+    document.querySelectorAll('.toc a.active').forEach(function(x){ x.classList.remove('active'); });
+    var link = document.querySelector('.toc a[href="#' + cur.id + '"]');
+    if (!link) return;
+    link.classList.add('active');
+    var ch = link.closest('.toc-chapter');
+    if (ch) ch.classList.remove('collapsed');
+    var tocBox = document.getElementById('toc');
+    var r = link.getBoundingClientRect(), b = tocBox.getBoundingClientRect();
+    if (r.top < b.top || r.bottom > b.bottom){ link.scrollIntoView({ block: 'nearest' }); }
+  }
+  window.addEventListener('scroll', function(){
+    if (ticking) return; ticking = true; requestAnimationFrame(spy);
+  }, { passive: true });
+  spy();
+})();
+</script>
+</body>
+</html>

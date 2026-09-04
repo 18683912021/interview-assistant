@@ -1,0 +1,9 @@
+# 公共忽略
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+*.local
+# 密钥文件（严禁提交）
+.env
+.env.*
