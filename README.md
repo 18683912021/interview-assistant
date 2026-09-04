@@ -11,7 +11,6 @@
 | `mobile/` | Android App | React Native 0.78.3（纯 CLI）+ Kotlin 原生采集模块 |
 | `desktop/` | PC 桌面端（主力） | Electron 43 + React 19 + Vite + Tailwind + WASAPI/macOS 原生音频 addon |
 | `backend/` | 后端服务 | FastAPI + SQLAlchemy async（Postgres/Redis）+ 火山豆包 ASR + DeepSeek LLM |
-| `docs/` | 文档 | 产品需求（product-description）、JD 压题、面试追问、桌面端架构 |
 
 ## 环境要求
 
@@ -77,5 +76,3 @@ docker compose up -d --build     # 服务器（47.108.205.102）端口 8010
 - `mobile/docs/AUDIO_PROTOCOL_V1.md` — 音频流协议 v1（两端 WebSocket 帧约定）
 - `mobile/docs/MIGRATION_MATRIX.md` — 移动端/桌面端功能迁移对照
 - `desktop/docs/Storybook*.md` — 组件库入门与改造方案
-- `docs/product-description/*` — 需求源文档（核心功能/产品规划/桌面端架构/研发阶段）
-- `docs/JD压题与参考答案.md/.html`、`docs/桌面端面试追问.md` — 面试复习资料
