@@ -16,8 +16,15 @@ export interface ControllerState {
   error: { code: string; stage: string; message: string; recoverable: boolean } | null;
   streamMessage: string | null;
   conversation: ConversationMessage[];
-  pendingLLMQueue: string[];
+  pendingLLMQueue: LLMPendingItem[];
   currentStreamingAIId: string | null;
+  currentRequestId: string | null;
+}
+
+/** llm_query 队列元素：requestId 用于过滤被取消的旧请求的回包（防竞态污染新气泡） */
+export interface LLMPendingItem {
+  bubbleId: string;
+  requestId: string | null;
 }
 
 export type Action =
@@ -27,10 +34,10 @@ export type Action =
   | { type: 'levels'; value: ControllerState['levels'] }
   | { type: 'error'; value: ControllerState['error'] }
   | { type: 'transcription'; text: string; isFinal: boolean; source: 'mic' | 'system'; timestamp: number }
-  | { type: 'llm_start'; question_text: string; language: string; timestamp: number }
-  | { type: 'llm_chunk'; chunk_index: number; delta: string; timestamp: number }
-  | { type: 'llm_done'; full_answer: string; timestamp: number; error?: string }
-  | { type: 'llm_query_sent'; aiBubbleId: string; insertedAfterId: string; timestamp: number }
+  | { type: 'llm_start'; question_text: string; language: string; timestamp: number; requestId?: string | null }
+  | { type: 'llm_chunk'; chunk_index: number; delta: string; timestamp: number; requestId?: string | null }
+  | { type: 'llm_done'; full_answer: string; timestamp: number; error?: string; requestId?: string | null }
+  | { type: 'llm_query_sent'; aiBubbleId: string; insertedAfterId: string; timestamp: number; requestId?: string | null }
   | { type: 'llm_answer_error'; aiBubbleId: string }
   | { type: 'reset' };
 
@@ -46,6 +53,7 @@ export const INITIAL_STATE: ControllerState = {
   conversation: [],
   pendingLLMQueue: [],
   currentStreamingAIId: null,
+  currentRequestId: null,
 };
 
 // ── Helpers ──
@@ -82,7 +90,7 @@ export function interviewReducer(state: ControllerState, action: Action): Contro
     case 'error':
       return { ...state, error: action.value };
     case 'reset':
-      return { ...INITIAL_STATE, conversation: [], pendingLLMQueue: [], currentStreamingAIId: null };
+      return { ...INITIAL_STATE, conversation: [], pendingLLMQueue: [], currentStreamingAIId: null, currentRequestId: null };
 
     // ── Transcription → bubble ──
     case 'transcription': {
@@ -175,26 +183,34 @@ export function interviewReducer(state: ControllerState, action: Action): Contro
       return {
         ...state,
         conversation: capConversation(insertAfter(state.conversation, action.insertedAfterId, aiMsg)),
-        pendingLLMQueue: [...state.pendingLLMQueue, action.aiBubbleId],
+        pendingLLMQueue: [...state.pendingLLMQueue, { bubbleId: action.aiBubbleId, requestId: action.requestId ?? null }],
       };
     }
 
     case 'llm_start': {
-      if (state.pendingLLMQueue.length === 0) { return state; }
-      const aiBubbleId = state.pendingLLMQueue[0]!;
-      const restQueue = state.pendingLLMQueue.slice(1);
+      if (state.pendingLLMQueue.length === 0) return state;
+      let head = state.pendingLLMQueue[0]!;
+      // 带 request_id 的消息优先精确匹配（快速连点时队列顺序可能与服务端返回顺序交错）
+      if (action.requestId) {
+        const found = state.pendingLLMQueue.find(q => q.requestId === action.requestId);
+        if (found) head = found;
+      }
+      const restQueue = state.pendingLLMQueue.filter(q => q !== head);
       return {
         ...state,
         pendingLLMQueue: restQueue,
-        currentStreamingAIId: aiBubbleId,
+        currentStreamingAIId: head.bubbleId,
+        currentRequestId: head.requestId,
         conversation: capConversation(state.conversation.map(m =>
-          m.id === aiBubbleId ? { ...m, text: '', status: 'streaming' as ConversationBubbleStatus } : m,
+          m.id === head.bubbleId ? { ...m, text: '', status: 'streaming' as ConversationBubbleStatus } : m,
         )),
       };
     }
 
     case 'llm_chunk': {
-      if (!state.currentStreamingAIId) { return state; }
+      if (!state.currentStreamingAIId) return state;
+      // 已取消的旧请求回包直接丢弃，防止污染新气泡
+      if (action.requestId && action.requestId !== state.currentRequestId) return state;
       return {
         ...state,
         conversation: capConversation(state.conversation.map(m =>
@@ -205,11 +221,13 @@ export function interviewReducer(state: ControllerState, action: Action): Contro
 
     case 'llm_done': {
       const targetId = state.currentStreamingAIId;
-      if (!targetId) { return state; }
+      if (!targetId) return state;
+      if (action.requestId && action.requestId !== state.currentRequestId) return state;
       const isError = !!action.error;
       return {
         ...state,
         currentStreamingAIId: null,
+        currentRequestId: null,
         conversation: capConversation(state.conversation.map(m =>
           m.id === targetId
             ? { ...m, text: isError ? m.text || action.full_answer : action.full_answer, status: isError ? 'error' as const : 'done' as const }
@@ -224,7 +242,7 @@ export function interviewReducer(state: ControllerState, action: Action): Contro
         conversation: capConversation(state.conversation.map(m =>
           m.id === action.aiBubbleId ? { ...m, status: 'error' as const } : m,
         )),
-        pendingLLMQueue: state.pendingLLMQueue.filter(id => id !== action.aiBubbleId),
+        pendingLLMQueue: state.pendingLLMQueue.filter(q => q.bubbleId !== action.aiBubbleId),
       };
     }
 

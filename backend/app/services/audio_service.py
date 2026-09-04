@@ -144,6 +144,7 @@ class TrackReceiver:
     expected_backfill_bytes: int | None = None
     expected_backfill_sha256: str | None = None
     complete: bool = False
+    _last_flush: float = field(default=0.0, repr=False)
 
     @property
     def realtime_path(self) -> Path:
@@ -166,7 +167,12 @@ class TrackReceiver:
                 self.realtime_file = self.realtime_path.open("ab")
             self.realtime_tracker.accept(header.sequence, len(payload))
             self.realtime_file.write(payload)
-            self.realtime_file.flush()
+            # 40ms 一帧的同步 flush 会间歇打断 asyncio 事件循环（磁盘忙时反压给推流端）；
+            # 节流到 1s 一次，崩溃时可接受丢失 ≤1s 缓冲（canonical 修复依赖 backfill）
+            now = time.monotonic()
+            if now - self._last_flush >= 1.0:
+                self.realtime_file.flush()
+                self._last_flush = now
             return self.realtime_tracker.to_ack(self.session_id, self.source, "realtime")
 
         if self.backfill_file is None:

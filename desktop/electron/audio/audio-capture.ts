@@ -43,6 +43,7 @@ export class AudioCaptureManager extends EventEmitter {
   private wasapi: any = null;
   private tracks = new Map<TrackName, TrackState>();
   private levelsTimer: NodeJS.Timeout | null = null;
+  private silenceTimer: NodeJS.Timeout | null = null;
   private lastLevels: AudioLevels = { mic: 0, system: 0 };
 
   constructor() {
@@ -149,6 +150,23 @@ export class AudioCaptureManager extends EventEmitter {
     // ── 4. levels 定时上报（500ms，对齐移动端 engine） ──
     this.levelsTimer = setInterval(() => this.reportLevels(), 500);
 
+    // 无信号检测：8s 后仍一帧未发出（系统无播放流 / 麦克风未授权 / 设备不可用），
+    // 上屏明确提示，避免 UI 显示"连接中"却全程无声、无从排查
+    this.silenceTimer = setTimeout(() => {
+      if (this.state !== 'capturing') return;
+      const frames = [...this.tracks.values()].reduce((n, t) => n + t.seq, 0);
+      if (frames === 0) {
+        this.emit('error', {
+          code: 'E_NO_SIGNAL',
+          stage: 'capture',
+          message: this.tracks.has('system') && !this.tracks.has('mic')
+            ? '未检测到系统音频信号（8 秒）。请确认电脑正在播放声音、默认输出设备已启用'
+            : '未检测到音频信号（8 秒）。请确认麦克风已授权且系统正在播放声音',
+          recoverable: true,
+        });
+      }
+    }, 8000);
+
     return { startedAtUtc: this.startedAtUtc };
   }
 
@@ -204,6 +222,7 @@ export class AudioCaptureManager extends EventEmitter {
     this.stream.disconnect();
     this.tracks.clear();
     if (this.levelsTimer) { clearInterval(this.levelsTimer); this.levelsTimer = null; }
+    if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
     this.lastLevels = { mic: 0, system: 0 };
     this.sessionId = null;
     this.state = 'completed';

@@ -4,16 +4,21 @@ const TEST_HOSTS = {
   company:  '192.168.7.149',  // 公司 WiFi
   local:    'localhost',      // 本机
   android:  '10.0.2.2',      // Android 模拟器
-  server:   '47.108.205.102', // 已部署服务器（agent_app/workspace/.env VITE_API_HOST）
+  server:   'interview.iyouzi.cc', // 生产服务器（nginx 反代 80/443，DNS 需已解析）
 } as const;
 
 /** 联调时在这里选一个环境 */
 const ACTIVE_HOST: string = TEST_HOSTS.server;
 
-export const STREAM_URL: string = `ws://${ACTIVE_HOST}:8010/api/ws/audio/stream`;
+/** 域名反代环境走 HTTPS/WSS（server 公网部署）；局域网/本机联调保持明文。
+ *  部署后 8010 仅监听 127.0.0.1，公网必须经 nginx 站点访问。 */
+const SECURE_HOSTS: ReadonlySet<string> = new Set([TEST_HOSTS.server]);
+const secure = SECURE_HOSTS.has(ACTIVE_HOST);
+
+export const STREAM_URL: string = `${secure ? 'wss' : 'ws'}://${ACTIVE_HOST}/api/ws/audio/stream`;
 
 /** REST API 基础地址，简历上传等 HTTP 接口使用。 */
-export const API_BASE: string = `http://${ACTIVE_HOST}:8010`;
+export const API_BASE: string = `${secure ? 'https' : 'http'}://${ACTIVE_HOST}`;
 
 // ── 共享设置（跨 Tab 读写） ──
 export type AppLanguage = 'zh' | 'en';

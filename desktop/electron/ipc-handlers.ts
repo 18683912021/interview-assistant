@@ -137,6 +137,15 @@ export function registerIpcHandlers(): void {
     return contentProtectionOn;
   });
 
+  // 打开外部链接（macOS BlackHole 安装指引等）
+  ipcMain.handle('window:open-external', (_e, url: string) => {
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+      shell.openExternal(url);
+      return { ok: true };
+    }
+    return { ok: false, error: 'E_URL' };
+  });
+
   // ── 文件转换 ──
   ipcMain.handle('file:libreoffice-status', () => {
     return { available: getLibreOfficePath() !== null };

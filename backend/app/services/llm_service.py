@@ -91,6 +91,19 @@ class LLMService:
             )
         return self._client
 
+    async def warmup(self) -> None:
+        """预热 DeepSeek 链路（HTTP2 握手 + 首包探测）。
+
+        实测首次请求含连接建立约 1.1s；在面试开始时预热，首个 llm_query 不再付该成本。
+        失败静默（仅少 1.1s，不影响功能）。
+        """
+        try:
+            client = await self._get_client()
+            await client.get("https://api.deepseek.com/v1/models")
+            logger.info("LLM warmup 完成（HTTP2 链路已预热）")
+        except Exception:
+            logger.warning("LLM warmup 失败（忽略，首次回答略慢）")
+
     async def stream_answer(
         self,
         question: str,

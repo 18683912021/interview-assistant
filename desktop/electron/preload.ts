@@ -84,6 +84,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setAlwaysOnTop: (on: boolean) => ipcRenderer.invoke('window:set-always-on-top', on),
     toggleContentProtection: () => ipcRenderer.invoke('window:toggle-content-protection'),
     getContentProtection: () => ipcRenderer.invoke('window:get-content-protection'),
+    openExternal: (url: string) => ipcRenderer.invoke('window:open-external', url),
   },
 
   // 存储（IPC → 主进程文件系统）

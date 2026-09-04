@@ -10,6 +10,7 @@
 import { useReducer, useCallback, useEffect, useRef } from 'react';
 import { interviewReducer, INITIAL_STATE, genId } from '../store/interview-reducer';
 import { MAIN_STREAM_URL, getProgLang, getLanguage } from '../config';
+import { enumerateAudioInputs, loadSavedSystemDevice } from '../utils/audioDevices';
 import type { ConversationMessage } from '../store/types';
 
 interface MicHandle {
@@ -23,6 +24,22 @@ export function useAudioCapture() {
   const api = window.electronAPI?.audio;
   const micRef = useRef<MicHandle | null>(null);
   const sysRef = useRef<MicHandle | null>(null);
+  // 对话引用：sendLLMQuery/retryLLM 依赖它读取点击的气泡，ref 形式保证回调引用稳定
+  // （React.memo 列表组件在流式渲染时不会因回调变化失效）
+  const conversationRef = useRef(state.conversation);
+  conversationRef.current = state.conversation;
+  // LLM chunk 合并缓冲：50ms 窗口内多个 chunk 一次 dispatch，降低高频 re-render
+  const chunkBufRef = useRef<{ deltas: string[]; requestId: string | null; timer: ReturnType<typeof setTimeout> | null }>({ deltas: [], requestId: null, timer: null });
+
+  const flushChunk = useCallback(() => {
+    const buf = chunkBufRef.current;
+    if (buf.timer) { clearTimeout(buf.timer); buf.timer = null; }
+    if (buf.deltas.length === 0) return;
+    const delta = buf.deltas.join('');
+    buf.deltas = [];
+    dispatch({ type: 'llm_chunk', chunk_index: 0, delta, requestId: buf.requestId, timestamp: Date.now() });
+    buf.requestId = null;
+  }, []);
 
   // ── 事件订阅（主进程 → IPC → reducer，对齐移动端事件流） ──
   useEffect(() => {
@@ -35,13 +52,27 @@ export function useAudioCapture() {
         dispatch({ type: 'transcription', text: evt.text, isFinal: evt.is_final, source: evt.source, timestamp: Date.now() });
       }),
       api.onLLMStart((evt: any) => {
-        dispatch({ type: 'llm_start', question_text: evt.question_text, language: evt.language, timestamp: Date.now() });
+        flushChunk();
+        dispatch({ type: 'llm_start', question_text: evt.question_text, language: evt.language, requestId: evt.request_id ?? null, timestamp: Date.now() });
       }),
       api.onLLMChunk((evt: any) => {
-        dispatch({ type: 'llm_chunk', chunk_index: evt.chunk_index ?? 0, delta: evt.delta, timestamp: Date.now() });
+        const buf = chunkBufRef.current;
+        if (buf.deltas.length === 0) buf.requestId = evt.request_id ?? null;  // 记录本批所属请求
+        buf.deltas.push(evt.delta ?? '');
+        if (!buf.timer) {
+          buf.timer = setTimeout(() => {
+            buf.timer = null;
+            if (buf.deltas.length === 0) return;
+            const delta = buf.deltas.join('');
+            buf.deltas = [];
+            dispatch({ type: 'llm_chunk', chunk_index: evt.chunk_index ?? 0, delta, requestId: buf.requestId, timestamp: Date.now() });
+            buf.requestId = null;
+          }, 50);
+        }
       }),
       api.onLLMDone((evt: any) => {
-        dispatch({ type: 'llm_done', full_answer: evt.full_answer, timestamp: Date.now(), error: evt.error });
+        flushChunk();
+        dispatch({ type: 'llm_done', full_answer: evt.full_answer, requestId: evt.request_id ?? null, timestamp: Date.now(), error: evt.error });
       }),
       api.onStreamState((evt: any) => {
         if (evt?.state) dispatch({ type: 'streamState', value: evt.state });
@@ -121,19 +152,17 @@ export function useAudioCapture() {
     micRef.current = null;
   }, []);
 
-  // ── macOS 系统音频采集：getDisplayMedia（SCK 系统选择器）→ 同 mic 管线 → audio:system-frame ──
-  // Windows 上系统音频由主进程 WASAPI 采集，此处直接跳过
+  // ── macOS 系统音频采集 ──
+  // 系统输出监听在 macOS 上无公开 API（Chromium 的 getDisplayMedia 不提供系统音频），
+  // Electron 官方推荐用虚拟声卡（BlackHole 等）路由后按普通输入设备采集：
+  //   首选  BlackHole 类虚拟声卡（getUserMedia 采集，稳定可靠）；
+  //   兜底  getDisplayMedia 窗口/应用音频（仅新版 Chromium 的窗口源可能带音频）；
+  //   失败  明确引导安装 BlackHole，不再出现"已连接却无声"的静默失败。
   const startSystemCapture = useCallback(async (): Promise<void> => {
     if (!api || sysRef.current) return;
     if (!/Mac/i.test(navigator.userAgent)) return;
-    try {
-      // SCK 音频随视频源一起授权（音频仅对窗口/App 源可用）；
-      // 只消费音频轨，视频轨保留引用但不渲染
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      if (stream.getAudioTracks().length === 0) {
-        stream.getTracks().forEach(t => t.stop());
-        throw new Error('所选来源无音频（请选择面试通话窗口，而不是整个屏幕）');
-      }
+
+    const attachPipeline = async (stream: MediaStream): Promise<void> => {
       const ctx = new AudioContext({ sampleRate: 16000 });
       await ctx.audioWorklet.addModule('./mic-processor.js');
       const source = ctx.createMediaStreamSource(stream);
@@ -144,14 +173,55 @@ export function useAudioCapture() {
       node.port.onmessage = makeFrameSender((frame) => api.sendSystemFrame(frame));
       source.connect(node);
       sysRef.current = { ctx, stream, node };
+    };
+
+    // 1) 虚拟声卡优先：系统输出已路由到 BlackHole 等虚拟卡时，它就是普通音频输入设备
+    try {
+      const devices = await enumerateAudioInputs();
+      const savedId = await loadSavedSystemDevice();
+      const virtuals = devices.filter(d => d.isVirtual);
+      const target = (savedId && virtuals.find(d => d.deviceId === savedId)) || virtuals[0];
+      if (target) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: { exact: target.deviceId },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            channelCount: 1,
+          },
+        });
+        await attachPipeline(stream);
+        return;
+      }
     } catch (e: any) {
-      // 系统音频失败不阻断整体流程（麦克风继续），错误上屏提示
-      const reason = e?.name === 'NotAllowedError'
-        ? '系统音频权限被拒绝，请到 系统设置 → 隐私与安全性 → 屏幕录制 授权后重试'
-        : e?.name === 'AbortError'
-          ? '已取消系统音频选择，仅采集麦克风'
-          : (e?.message || '系统音频采集失败');
-      dispatch({ type: 'error', value: { code: 'E_SYSTEM', stage: 'capture', message: reason, recoverable: true } });
+      if (e?.name === 'NotAllowedError') {
+        dispatch({ type: 'error', value: { code: 'E_SYSTEM', stage: 'capture', message: '麦克风权限被拒绝，请到 系统设置 → 隐私与安全性 → 麦克风 授权后重试', recoverable: true } });
+      } else {
+        dispatch({ type: 'error', value: { code: 'E_SYSTEM', stage: 'capture', message: `系统音频（虚拟声卡）打开失败：${e?.message || e}`, recoverable: true } });
+      }
+      return;
+    }
+
+    // 2) 无虚拟声卡 → getDisplayMedia 窗口音频兜底（仅"窗口"源可能带音频）
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      if (stream.getAudioTracks().length === 0) {
+        stream.getTracks().forEach(t => t.stop());
+        throw new Error('所选来源无音频（请选择面试通话窗口，而不是整个屏幕）');
+      }
+      await attachPipeline(stream);
+      return;
+    } catch (e: any) {
+      // 3) 无既无虚拟卡、窗口音频又不可用 → 明确引导用户安装 BlackHole
+      const message = e?.message === '所选来源无音频（请选择面试通话窗口，而不是整个屏幕）'
+        ? '所选来源无音频。macOS 仅支持从"面试通话窗口"采集音频；如需采集整个系统输出，请安装 BlackHole 虚拟声卡（见「系统音频」面板的安装指引）'
+        : e?.name === 'NotAllowedError'
+          ? '系统音频权限被拒绝，请到 系统设置 → 隐私与安全性 → 屏幕录制 授权后重试；或在「系统音频」面板安装 BlackHole，无需屏幕录制权限'
+          : e?.name === 'AbortError'
+            ? '已取消系统音频选择，本次仅采集麦克风'
+            : `系统音频采集失败：${e?.message || e}。建议安装 BlackHole 虚拟声卡（见「系统音频」面板安装指引）`;
+      dispatch({ type: 'error', value: { code: 'E_SYSTEM_GUIDE', stage: 'capture', message, recoverable: true } });
     }
   }, [api, makeFrameSender]);
 
@@ -208,7 +278,7 @@ export function useAudioCapture() {
 
   // ── 发送 LLM 查询（点击气泡触发） ──
   const sendLLMQuery = useCallback((bubbleId: string) => {
-    const conv = state.conversation;
+    const conv = conversationRef.current;
     const clickedMsg = conv.find((m: ConversationMessage) => m.id === bubbleId);
     if (!clickedMsg || clickedMsg.role === 'ai') return;
     const idx = conv.findIndex((m: ConversationMessage) => m.id === bubbleId);
@@ -216,16 +286,18 @@ export function useAudioCapture() {
     if (nextMsg && nextMsg.role === 'ai' && nextMsg.status === 'done') return;
 
     const aiBubbleId = genId('llm');
-    dispatch({ type: 'llm_query_sent', aiBubbleId, insertedAfterId: clickedMsg.id, timestamp: Date.now() });
+    const requestId = genId('llmreq');
+    dispatch({ type: 'llm_query_sent', aiBubbleId, insertedAfterId: clickedMsg.id, requestId, timestamp: Date.now() });
     api?.sendControl({
       type: 'llm_query', text: clickedMsg.text, language: getLanguage(),
       track: getProgLang().toLowerCase(), bubble_source: clickedMsg.role === 'interviewer' ? 'system' : 'mic',
+      request_id: requestId,
     });
-  }, [state.conversation, api]);
+  }, [api]);
 
   // ── Retry LLM ──
   const retryLLM = useCallback((aiBubbleId: string) => {
-    const conv = state.conversation;
+    const conv = conversationRef.current;
     const aiMsg = conv.find((m: ConversationMessage) => m.id === aiBubbleId);
     if (!aiMsg || aiMsg.role !== 'ai' || aiMsg.status !== 'error') return;
     const aiIdx = conv.findIndex((m: ConversationMessage) => m.id === aiBubbleId);
@@ -234,12 +306,14 @@ export function useAudioCapture() {
     if (clickedMsg.role === 'ai') return;
 
     const newAiId = genId('llm');
-    dispatch({ type: 'llm_query_sent', aiBubbleId: newAiId, insertedAfterId: clickedMsg.id, timestamp: Date.now() });
+    const requestId = genId('llmreq');
+    dispatch({ type: 'llm_query_sent', aiBubbleId: newAiId, insertedAfterId: clickedMsg.id, requestId, timestamp: Date.now() });
     api?.sendControl({
       type: 'llm_query', text: clickedMsg.text, language: getLanguage(),
       track: getProgLang().toLowerCase(), bubble_source: clickedMsg.role === 'interviewer' ? 'system' : 'mic',
+      request_id: requestId,
     });
-  }, [state.conversation, api]);
+  }, [api]);
 
   return { state, dispatch, start, stop, sendLLMQuery, retryLLM };
 }

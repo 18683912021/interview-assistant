@@ -153,24 +153,46 @@ async def audio_stream(ws: WebSocket):
                             await send_error(ws, "E_LLM_UNAVAILABLE", "LLM 服务不可用，请检查 API Key")
                             continue
 
+                        # request_id：新协议下新旧请求互相隔离，取消无须串行等待
+                        request_id = payload.get("request_id")
+
                         # 取消正在进行的旧回答，立即响应新请求
                         if llm_worker_task is not None and not llm_worker_task.done():
                             llm_worker_task.cancel()
-                            try:
-                                await asyncio.wait_for(llm_worker_task, timeout=2.0)
-                            except (asyncio.CancelledError, asyncio.TimeoutError):
-                                pass
+                            if not request_id:
+                                # 老客户端（无 request_id）：等待旧任务完全退出，
+                                # 防止其 llm_done 覆盖新气泡
+                                try:
+                                    await asyncio.wait_for(llm_worker_task, timeout=2.0)
+                                except (asyncio.CancelledError, asyncio.TimeoutError):
+                                    pass
+                            # 有 request_id：不等待，旧任务后台退场（其 llm_done 带旧 id，
+                            # 前端按 id 过滤），新请求零延迟启动
 
                         track = payload.get("track", "javascript")
+                        # llm_start 由 handler 立即发送（在 create_task 前）：快速连点/取消旧任务
+                        # 时新回答的提示零延迟上屏（worker 内发送会与旧任务退场竞争）
+                        await ws.send_json({
+                            "type": "llm_start",
+                            "question_text": text_val,
+                            "language": language,
+                            "request_id": request_id,
+                            "timestamp": int(_time.time() * 1000),
+                        })
                         llm_worker_task = asyncio.create_task(
-                            _llm_single(ws, text_val, language, track, llm_service, llm_config)
+                            _llm_single(ws, text_val, language, track, llm_service, llm_config, request_id=request_id)
                         )
                         logger.info("LLM 新请求: lang=%s track=%s text=%.60s", language, track, text_val)
                     else:
                         # 非 llm_query 控制消息（session_start / track_start 等）
                         was_new = v1_session is None
                         v1_session = await handle_control_message(ws, payload, v1_session)
-                        # 新会话建立后，按轨迹创建 ASR 连接（LLM worker 按需启动）
+                        # 新会话建立后：预热 DeepSeek 连接（首个 llm_query 免 ~1.1s 握手），
+                        # 并按轨迹创建 ASR 连接（LLM worker 按需启动）
+                        if was_new and v1_session is not None:
+                            if llm_service is None and os.getenv("ANTHROPIC_API_KEY"):
+                                llm_service = LLMService()
+                                asyncio.create_task(llm_service.warmup())
                         if was_new and v1_session is not None and _ASR_READY:
                             if sender_task is None:
                                 sender_task = asyncio.create_task(
@@ -443,6 +465,7 @@ async def _llm_single(
     track: str,
     llm_service: LLMService,
     llm_config: dict[str, Any],
+    request_id: str | None = None,
 ):
     """处理单次 LLM 请求——被新请求取消时立即停止。
 
@@ -453,7 +476,6 @@ async def _llm_single(
     """
     model: str = llm_config.get("model") or "deepseek-v4-flash"
     max_tokens: int = llm_config.get("max_tokens") or LLM_MAX_TOKENS
-    ts = int(_time.time() * 1000)
     full_answer: str = ""
 
     try:
@@ -468,27 +490,24 @@ async def _llm_single(
 
         sender_task = asyncio.create_task(_chunk_sender())
 
-        await ws.send_json({
-            "type": "llm_start",
-            "question_text": question,
-            "language": language,
-            "timestamp": ts,
-        })
-
         chunk_index: int = 0
         async for chunk, is_final in llm_service.stream_answer(
             question, model=model, max_tokens=max_tokens, language=language, track=track,
         ):
             full_answer += chunk
+            if chunk:
+                chunk_queue.put_nowait({
+                    "type": "llm_chunk",
+                    "chunk_index": chunk_index,
+                    "delta": chunk,
+                    "request_id": request_id,
+                    "timestamp": int(_time.time() * 1000),
+                })
+                chunk_index += 1
             if is_final:
+                # is_final 常与最后一个 content 块同包（DeepSeek 也可能整段一块返回），
+                # 内容已入队（done 时前端全量替换，不重复）；空串仅表示结束
                 break
-            chunk_queue.put_nowait({
-                "type": "llm_chunk",
-                "chunk_index": chunk_index,
-                "delta": chunk,
-                "timestamp": int(_time.time() * 1000),
-            })
-            chunk_index += 1
 
         chunk_queue.put_nowait(None)
         await sender_task
@@ -496,6 +515,7 @@ async def _llm_single(
         await ws.send_json({
             "type": "llm_done",
             "full_answer": full_answer,
+            "request_id": request_id,
             "timestamp": int(_time.time() * 1000),
         })
         logger.info("LLM 完成: %.50s → %d chunks", question, chunk_index + 1)
@@ -512,6 +532,7 @@ async def _llm_single(
             await ws.send_json({
                 "type": "llm_done",
                 "full_answer": full_answer,
+                "request_id": request_id,
                 "timestamp": int(_time.time() * 1000),
             })
         except Exception:
@@ -530,6 +551,7 @@ async def _llm_single(
                 "type": "llm_done",
                 "full_answer": f"[生成失败] {exc}",
                 "error": str(exc),
+                "request_id": request_id,
                 "timestamp": int(_time.time() * 1000),
             })
         except Exception:

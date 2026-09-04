@@ -68,7 +68,8 @@ export function allowMediaPermissions(): void {
     callback(permission === 'media' || permission === 'display-capture');
   });
 
-  // macOS 系统音频：渲染进程 getDisplayMedia 走 ScreenCaptureKit 系统选择器（macOS 15+）。
+  // macOS 系统音频兜底路径：渲染进程 getDisplayMedia 走 ScreenCaptureKit 系统选择器
+  // （仅"窗口/应用"源可能带音频；首选方案是 BlackHole 虚拟声卡 + getUserMedia，见 useAudioCapture）
   // useSystemPicker=true 时 handler 不会被调用，空回调兜底 macOS 15 以下（授予空流，渲染进程侧报错提示）
   session.defaultSession.setDisplayMediaRequestHandler(
     (_req, callback) => callback({}),

@@ -3,9 +3,10 @@
  *
  * 布局：左控制面板 250px | 中对话流 | 右实时面板 270px（可折叠）
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Square, Mic, Volume2, FileText, ChevronDown, PanelRightClose, PanelRightOpen, Lock, ArrowDown, Zap, Globe } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
+import { Play, Square, Mic, Volume2, FileText, ChevronDown, PanelRightClose, PanelRightOpen, Lock, ArrowDown, Zap, Globe, RefreshCw } from 'lucide-react';
 import { useAudioCapture } from '../hooks/useAudioCapture';
+import { enumerateAudioInputs, loadSavedSystemDevice, saveSystemDevice, type AudioInputDevice } from '../utils/audioDevices';
 import { saveInterview } from '../api/interview';
 import { hasResume, getIntro } from '../api/resume';
 import { getProgLang, setProgLang, type ProgLang } from '../config';
@@ -18,6 +19,7 @@ import MicLevelBar from '../components/MicLevelBar';
 import PulsingDot from '../components/PulsingDot';
 
 const LANGS: ProgLang[] = ['JavaScript', 'Python', 'Java', 'C++', 'C#', 'Go'];
+const BLACKHOLE_URL = 'https://existential.audio/blackhole/';
 
 function fmtTimer(s: number) { return `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
@@ -33,6 +35,28 @@ export default function InterviewScreen() {
   const [hasIntro, setHasIntro] = useState(false);
   const capturing = state.captureState === 'capturing';
   const { confirm, toast } = useToast();
+  const isMac = /Mac/i.test(navigator.userAgent);
+
+  // ── macOS 系统音频源（BlackHole 虚拟声卡）设备枚举 ──
+  const [sysDevices, setSysDevices] = useState<AudioInputDevice[]>([]);
+  const [sysDeviceId, setSysDeviceId] = useState('');
+  const [sysDevicesLoading, setSysDevicesLoading] = useState(false);
+
+  const refreshSysDevices = useCallback(async () => {
+    if (!isMac) return;
+    setSysDevicesLoading(true);
+    try {
+      const devs = await enumerateAudioInputs();
+      const virtuals = devs.filter(d => d.isVirtual);
+      const saved = await loadSavedSystemDevice();
+      setSysDevices(virtuals);
+      setSysDeviceId((saved && virtuals.some(d => d.deviceId === saved) ? saved : virtuals[0]?.deviceId) || '');
+    } finally {
+      setSysDevicesLoading(false);
+    }
+  }, [isMac]);
+
+  useEffect(() => { if (isMac) refreshSysDevices(); }, [isMac, refreshSysDevices]);
 
   useEffect(() => { hasResume().then(d => setHasIntro(d.has_intro)).catch(()=>{}); }, []);
   useEffect(() => {
@@ -86,36 +110,88 @@ export default function InterviewScreen() {
     finally { setIntroLoading(false); }
   };
 
-  const intMsgs = state.conversation.filter(m => m.role === 'interviewer');
+  const intMsgs = useMemo(() => state.conversation.filter(m => m.role === 'interviewer'), [state.conversation]);
 
   return (
     <div className="flex-1 flex overflow-hidden">
-      {/* ═══ 左 · 控制面板 250px ═══ */}
-      <aside className="w-[250px] shrink-0 bg-zinc-50 dark:bg-[#0F0F11] border-r border-zinc-200 dark:border-zinc-800 flex flex-col">
-        <div className="p-4 pb-3">
-          <button onClick={capturing ? handleStop : handleStart}
-            className={`w-full h-11 rounded-xl text-[13px] font-bold flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.98]
-              ${capturing
-                ? 'bg-red-500 hover:bg-red-600 text-white shadow-sm shadow-red-500/20 hover:shadow-md'
-                : 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-100 shadow-sm hover:shadow-md'
-              }`}
-            title={capturing ? '结束面试' : '开始面试'}
-          >
-            {capturing ? <><Square className="w-3.5 h-3.5" fill="currentColor"/>结束面试</> : <><Play className="w-3.5 h-3.5" fill="currentColor"/>开始面试</>}
-          </button>
+      {/* ═══ 左 · 控制面板 230px ═══ */}
+      <aside className="w-[230px] shrink-0 bg-zinc-50 dark:bg-[#0F0F11] border-r border-zinc-200 dark:border-zinc-800 flex flex-col">
+        <div className="p-4">
+          {/* 会话卡片：状态 + 计时 + 主 CTA 一体（面试中焦点一眼可见） */}
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#141416] shadow-sm overflow-hidden">
+            <div className="px-4 pt-3.5 pb-3 text-center border-b border-zinc-100 dark:border-zinc-800/70">
+              <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">{capturing ? '面试进行中' : '面试时长'}</div>
+              <div className={`text-[30px] tabular-nums font-extrabold tracking-wider transition-colors duration-300 ${capturing ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-300 dark:text-zinc-600'}`}>{fmtTimer(timer)}</div>
+            </div>
+            <div className="p-3">
+              <button onClick={capturing ? handleStop : handleStart}
+                className={`w-full h-11 rounded-xl text-[13px] font-bold flex items-center justify-center gap-2 transition-all duration-150 active:scale-[0.98]
+                  ${capturing
+                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-sm shadow-red-500/25 hover:shadow-md'
+                    : 'bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-600 text-white shadow-sm shadow-indigo-500/30 hover:shadow-md hover:shadow-indigo-500/30'
+                  }`}
+                title={capturing ? '结束面试' : '开始面试'}>
+                {capturing ? <><Square className="w-3.5 h-3.5" fill="currentColor"/>结束面试</> : <><Play className="w-3.5 h-3.5" fill="currentColor"/>开始面试</>}
+              </button>
+              <div className="mt-2.5 flex items-center justify-center min-h-[18px]">
+                {capturing && state.streamState === 'ready' && <Status color="green" text="已连接 · 转录中"/>}
+                {state.streamState === 'reconnecting' && <Status color="amber" text="重连中…"/>}
+                {state.streamState === 'dead' && <Status color="red" text="连接失败"/>}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* 计时器 */}
-        <div className={`mx-4 py-3 rounded-xl mb-4 text-center border transition-all duration-300 ${capturing ? 'bg-indigo-50 dark:bg-indigo-500/5 border-indigo-100 dark:border-indigo-500/10 shadow-sm' : 'bg-white dark:bg-[#141416] border-zinc-100 dark:border-zinc-800'}`}>
-          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">面试时长</div>
-          <div className={`text-[28px] tabular-nums font-extrabold tracking-wider transition-colors duration-300 ${capturing ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-300 dark:text-zinc-600'}`}>{fmtTimer(timer)}</div>
-        </div>
+        {/* 采集错误（addon 缺失/无信号等）醒目上屏 */}
+        {state.error && (
+          <div className="px-4 pb-3">
+            <div className="text-[11px] text-red-500 leading-relaxed break-words rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 px-3 py-2.5">{state.error.message}</div>
+          </div>
+        )}
 
         {/* 音频电平 */}
         <div className="px-4 flex flex-col gap-2 mb-4">
           <AudioRow icon={Mic} label="麦克风" lvl={state.levels.mic} />
           <AudioRow icon={Volume2} label="系统音频" lvl={state.levels.system} />
         </div>
+
+        {/* macOS 系统音频源：虚拟声卡（BlackHole）——macOS 无系统音频拦截 API */}
+        {isMac && (
+          <div className="px-4 mb-3">
+            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1 mb-1.5 block">系统音频源</label>
+            {sysDevices.length > 0 ? (
+              <div className="relative">
+                <select
+                  value={sysDeviceId}
+                  onChange={e => { setSysDeviceId(e.target.value); saveSystemDevice(e.target.value); }}
+                  className="w-full h-10 pl-3 pr-8 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#141416] text-[13px] font-medium text-zinc-900 dark:text-zinc-100 outline-none focus:border-indigo-400 dark:focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 cursor-pointer appearance-none transition-all duration-150"
+                  title="系统输出需路由到该虚拟声卡（音频 MIDI 设置 → 多输出设备）">
+                  {sysDevices.map(d => (<option key={d.deviceId} value={d.deviceId}>{d.label}</option>))}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" strokeWidth={1.5}/>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 p-3 text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                macOS 无法直接截取系统声音，需安装虚拟声卡 <b>BlackHole</b>：安装后在「音频 MIDI 设置」新建多输出设备（扬声器 + BlackHole），并把它设为系统输出。
+                <button
+                  onClick={() => (window as any).electronAPI?.window?.openExternal?.(BLACKHOLE_URL)}
+                  className="mt-1.5 block text-[12px] font-semibold text-indigo-500 hover:text-indigo-600 transition-colors">
+                  打开下载页 ↗
+                </button>
+              </div>
+            )}
+            <div className="mt-1.5 flex items-center gap-3 text-[10px] text-zinc-400">
+              <button
+                onClick={refreshSysDevices}
+                disabled={sysDevicesLoading}
+                className="flex items-center gap-1 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors disabled:opacity-50">
+                <RefreshCw className={`w-3 h-3 ${sysDevicesLoading ? 'animate-spin' : ''}`} strokeWidth={2}/>
+                刷新设备
+              </button>
+              {sysDevices.length > 0 && <span className="truncate">采集时优先使用所选设备</span>}
+            </div>
+          </div>
+        )}
 
         {/* 赛道 */}
         <div className="px-4 mb-3">
@@ -161,32 +237,31 @@ export default function InterviewScreen() {
             <span>自我介绍</span>
           </button>
         </div>
-
-        {/* 连接状态 */}
-        <div className="px-4 mt-auto pb-4 space-y-1.5">
-          {capturing && state.streamState === 'ready' && <Status color="green" text="已连接 · 转录中"/>}
-          {state.streamState === 'reconnecting' && <Status color="amber" text="重连中…"/>}
-          {state.streamState === 'dead' && <Status color="red" text="连接失败"/>}
-          {state.error && <div className="text-[11px] text-red-500 leading-relaxed break-words">{state.error.message}</div>}
-        </div>
       </aside>
 
       {/* ═══ 中 · 对话流 ═══ */}
       <main className="flex-1 flex flex-col min-w-0 relative">
         {state.conversation.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-5 text-center px-8">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-              <Mic className="w-7 h-7 text-zinc-400" strokeWidth={1.5}/>
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center px-8 relative">
+            {/* 氛围光晕 */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div className="absolute -top-28 left-1/2 -translate-x-1/2 w-[620px] h-[300px] rounded-full bg-indigo-500/[0.07] dark:bg-indigo-500/10 blur-3xl" />
+              <div className="absolute bottom-0 right-8 w-72 h-72 rounded-full bg-violet-500/[0.05] dark:bg-violet-500/10 blur-3xl" />
             </div>
-            <div>
-              <div className="text-base font-bold text-zinc-900 dark:text-white mb-1.5">准备开始面试</div>
-              <div className="text-sm text-zinc-500 max-w-sm leading-relaxed">点击左侧「开始面试」启动，系统自动转写面试官语音。<br/>点击转写气泡即可获取 AI 实时回答。</div>
+            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/25 flex items-center justify-center">
+              <Mic className="w-9 h-9 text-white" strokeWidth={1.8}/>
             </div>
-            <div className="grid grid-cols-3 gap-3 mt-4 max-w-md">
+            <div className="relative">
+              <div className="text-lg font-bold text-zinc-900 dark:text-white mb-2">准备开始面试</div>
+              <div className="text-sm text-zinc-500 max-w-sm leading-relaxed">
+                点击左侧「开始面试」，系统自动转写面试官语音；<br/>点击任意转写气泡即可获取 AI 实时回答。
+              </div>
+            </div>
+            <div className="relative grid grid-cols-3 gap-3 mt-1 max-w-md">
               {[{ icon: Mic, label: '实时转写', desc: '精准捕获面试官提问' }, { icon: Zap, label: 'AI 回答', desc: 'DeepSeek 驱动高质量应答' }, { icon: Globe, label: '多赛道', desc: '6 种编程语言面试' }].map((f, i) => {
                 const Fi = f.icon;
-                return <div key={i} className="p-4 rounded-xl bg-white dark:bg-[#141416] border border-zinc-200 dark:border-zinc-800 text-center">
-                  <Fi className="w-5 h-5 text-zinc-400 mx-auto mb-2" strokeWidth={1.5}/>
+                return <div key={i} className="p-4 rounded-2xl bg-white dark:bg-[#141416] border border-zinc-200 dark:border-zinc-800 text-center shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-500/20">
+                  <Fi className="w-5 h-5 text-indigo-500/80 dark:text-indigo-400/80 mx-auto mb-2" strokeWidth={1.5}/>
                   <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">{f.label}</div>
                   <div className="text-[11px] text-zinc-400 mt-1">{f.desc}</div>
                 </div>;
@@ -198,56 +273,13 @@ export default function InterviewScreen() {
         )}
       </main>
 
-      {/* ═══ 右 · 实时面板 270px ═══ */}
-      {!rightCollapsed && (
-        <aside className="w-[270px] shrink-0 bg-zinc-50 dark:bg-[#0F0F11] border-l border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">实时面板</span>
-            <button onClick={() => setRightCollapsed(true)} className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors duration-150" title="折叠面板">
-              <PanelRightClose className="w-4 h-4" strokeWidth={1.5}/>
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-5">
-            <section>
-              <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">实时转写</h3>
-              <div className="space-y-2">
-                {intMsgs.slice(-5).reverse().map(m => (
-                  <div key={m.id} className="p-3 rounded-xl bg-white dark:bg-[#141416] border border-zinc-100 dark:border-zinc-800 text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed transition-all duration-150 hover:shadow-sm">
-                    {m.text || <span className="text-zinc-300 italic">识别中…</span>}
-                  </div>
-                ))}
-                {intMsgs.length === 0 && (
-                  <div className="text-[13px] text-zinc-400 italic p-3 rounded-xl bg-white dark:bg-[#141416] border border-zinc-100 dark:border-zinc-800">等待语音输入…</div>
-                )}
-              </div>
-            </section>
-            {state.conversation.length > 0 && (
-              <section>
-                <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">对话目录</h3>
-                <div className="space-y-0.5">
-                  {state.conversation.map(m => (
-                    <div key={m.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] cursor-pointer hover:bg-white dark:hover:bg-[#141416] transition-colors duration-150 truncate" title={m.text.slice(0,80)}>
-                      <span className="shrink-0 text-[10px]">{m.role==='interviewer'?'🎙':m.role==='ai'?'🤖':'👤'}</span>
-                      <span className={`truncate ${m.status==='streaming'?'text-indigo-500 font-medium':m.status==='error'?'text-red-500':'text-zinc-500'}`}>
-                        {m.text.slice(0,24)||(m.status==='loading'?'思考中…':'')}{m.text.length>24?'…':''}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        </aside>
-      )}
-
-      {/* 折叠后面板的展开按钮 */}
-      {rightCollapsed && (
-        <button onClick={() => setRightCollapsed(false)}
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-7 h-16 rounded-l-xl bg-zinc-50 dark:bg-[#0F0F11] border border-r-0 border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-white dark:hover:bg-[#141416] transition-all duration-150 shadow-sm"
-          title="展开实时面板">
-          <PanelRightOpen className="w-4 h-4" strokeWidth={1.5}/>
-        </button>
-      )}
+      {/* ═══ 右 · 实时面板 270px（memo：只有对话变化才重渲染） ═══ */}
+      <RealtimePanel
+        collapsed={rightCollapsed}
+        intMsgs={intMsgs}
+        conversation={state.conversation}
+        onToggle={() => setRightCollapsed(c => !c)}
+      />
 
       {/* ── 自我介绍阅读面板 ── */}
       {showIntro && (
@@ -312,7 +344,7 @@ export default function InterviewScreen() {
   );
 }
 
-function AudioRow({ icon: Icon, label, lvl }: { icon: any; label: string; lvl: number }) {
+const AudioRow = memo(function AudioRow({ icon: Icon, label, lvl }: { icon: any; label: string; lvl: number }) {
   const pct = Math.round(lvl * 100);
   return (
     <div className="p-2.5 rounded-xl bg-white dark:bg-[#141416] border border-zinc-100 dark:border-zinc-800 transition-shadow duration-150 hover:shadow-sm">
@@ -323,15 +355,15 @@ function AudioRow({ icon: Icon, label, lvl }: { icon: any; label: string; lvl: n
       <MicLevelBar level={pct}/>
     </div>
   );
-}
+});
 
-function Status({ color, text }: { color: string; text: string }) {
+const Status = memo(function Status({ color, text }: { color: string; text: string }) {
   const c = color==='green'?'text-emerald-500':color==='amber'?'text-amber-500':'text-red-500';
   return <div className={`flex items-center gap-1.5 text-[12px] font-medium ${c}`}><PulsingDot/>{text}</div>;
-}
+});
 
-/** 对话列表：自动滚动、FAB 回到底部、时间间隔分隔线 */
-function ConversationList({ messages, onTriggerLLM, onRetryLLM }: {
+/** 对话列表：自动滚动、FAB 回到底部、时间间隔分隔线（memo：消息引用不变时不重渲染） */
+const ConversationList = memo(function ConversationList({ messages, onTriggerLLM, onRetryLLM }: {
   messages: any[]; onTriggerLLM?: (id: string) => void; onRetryLLM?: (id: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -382,4 +414,67 @@ function ConversationList({ messages, onTriggerLLM, onRetryLLM }: {
       )}
     </div>
   );
-}
+});
+
+/** 右 · 实时面板（memo：conversation/intMsgs 引用不变时不重渲染，LLM 流式期间仅左侧对话流更新） */
+const RealtimePanel = memo(function RealtimePanel({ collapsed, intMsgs, conversation, onToggle }: {
+  collapsed: boolean;
+  intMsgs: any[];
+  conversation: any[];
+  onToggle: () => void;
+}) {
+  if (collapsed) {
+    return (
+      <button onClick={onToggle}
+        className="absolute right-0 top-1/2 -translate-y-1/2 w-7 h-16 rounded-l-xl bg-zinc-50 dark:bg-[#0F0F11] border border-r-0 border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-white dark:hover:bg-[#141416] transition-all duration-150 shadow-sm"
+        title="展开实时面板">
+        <PanelRightOpen className="w-4 h-4" strokeWidth={1.5}/>
+      </button>
+    );
+  }
+  return (
+    <aside className="w-[240px] shrink-0 bg-zinc-50 dark:bg-[#0F0F11] border-l border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">实时面板</span>
+          {intMsgs.length > 0 && (
+            <span className="text-[10px] font-semibold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 rounded-full px-1.5 py-0.5">{intMsgs.length} 条</span>
+          )}
+        </div>
+        <button onClick={onToggle} className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors duration-150" title="折叠面板">
+          <PanelRightClose className="w-4 h-4" strokeWidth={1.5}/>
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        <section>
+          <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">实时转写</h3>
+          <div className="space-y-2">
+            {intMsgs.slice(-5).reverse().map(m => (
+              <div key={m.id} className="p-3 rounded-xl bg-white dark:bg-[#141416] border border-zinc-100 dark:border-zinc-800 text-[13px] text-zinc-700 dark:text-zinc-300 leading-relaxed transition-all duration-150 hover:shadow-sm">
+                {m.text || <span className="text-zinc-300 italic">识别中…</span>}
+              </div>
+            ))}
+            {intMsgs.length === 0 && (
+              <div className="text-[13px] text-zinc-400 italic p-3 rounded-xl bg-white dark:bg-[#141416] border border-zinc-100 dark:border-zinc-800">等待语音输入…</div>
+            )}
+          </div>
+        </section>
+        {conversation.length > 0 && (
+          <section>
+            <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">对话目录</h3>
+            <div className="space-y-0.5">
+              {conversation.map(m => (
+                <div key={m.id} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] cursor-pointer hover:bg-white dark:hover:bg-[#141416] transition-colors duration-150 truncate" title={m.text.slice(0,80)}>
+                  <span className="shrink-0 text-[10px]">{m.role==='interviewer'?'🎙':m.role==='ai'?'🤖':'👤'}</span>
+                  <span className={`truncate ${m.status==='streaming'?'text-indigo-500 font-medium':m.status==='error'?'text-red-500':'text-zinc-500'}`}>
+                    {m.text.slice(0,24)||(m.status==='loading'?'思考中…':'')}{m.text.length>24?'…':''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </aside>
+  );
+});

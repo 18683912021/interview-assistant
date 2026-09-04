@@ -105,6 +105,35 @@ input, textarea {
   background: var(--color-text-tertiary);
 }
 
+/* ── 文本选中 ── */
+::selection {
+  background: rgba(99, 102, 241, 0.18);
+}
+
+/* ── 键盘聚焦环（桌面 App 质感） ── */
+:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.45);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── 交互动效统一：所有可点元素的过渡更跟手 ── */
+button, a, select {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── AI 建议卡（streaming）呼吸光晕：强调"正在生成" ── */
+@keyframes aiGlow {
+  0%, 100% { box-shadow: 0 4px 24px rgba(99, 102, 241, 0.10); }
+  50% { box-shadow: 0 4px 32px rgba(99, 102, 241, 0.22); }
+}
+
+.ai-glow {
+  animation: aiGlow 2.4s ease-in-out infinite;
+}
+
 /* ── 动画 ── */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }

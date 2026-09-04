@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { MessageSquare, Mic, Wrench, User, Shield, ShieldOff } from 'lucide-react';
+import { MessageSquare, Mic, Wrench, User, Shield, ShieldOff, Moon, Sun } from 'lucide-react';
 import { AuthContext } from './utils/AuthContext';
 import { useDarkMode } from './theme/tokens';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -24,7 +24,7 @@ import { ToastProvider } from './components/Toast';
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [checking, setChecking] = useState(true);
-  useDarkMode();
+  const { dark, toggle: toggleDark } = useDarkMode();
 
   useEffect(() => {
     verifyToken().then(email => { setIsLoggedIn(!!email); setChecking(false); });
@@ -47,8 +47,8 @@ export default function App() {
     <AuthContext.Provider value={{ logout }}>
       <ToastProvider>
         <HashRouter>
-          <KeyboardShortcutHandler />
-          {isLoggedIn ? <AuthenticatedApp /> : <AuthScreen onLogin={() => setIsLoggedIn(true)} />}
+      <KeyboardShortcutHandler />
+      {isLoggedIn ? <AuthenticatedApp dark={dark} onToggleDark={toggleDark} /> : <AuthScreen onLogin={() => setIsLoggedIn(true)} />}
         </HashRouter>
       </ToastProvider>
     </AuthContext.Provider>
@@ -58,7 +58,7 @@ export default function App() {
 /* ═══════════════════════════════════════════
    登录后的完整 App 壳
    ═══════════════════════════════════════════ */
-function AuthenticatedApp() {
+function AuthenticatedApp({ dark, onToggleDark }: { dark: boolean; onToggleDark: () => void }) {
   const location = useLocation();
   const activeKey = location.pathname.replace('/', '') || 'interview';
 
@@ -71,7 +71,7 @@ function AuthenticatedApp() {
   return (
     <div className="h-full flex flex-col bg-white dark:bg-[#0A0A0B] select-none">
       {/* ── Toolbar ── */}
-      <Toolbar tabs={tabs} activeKey={activeKey} />
+      <Toolbar tabs={tabs} activeKey={activeKey} dark={dark} onToggleDark={onToggleDark} />
 
       {/* ── 页面内容 ── */}
       <div className="flex-1 flex overflow-hidden">
@@ -94,9 +94,11 @@ function AuthenticatedApp() {
 /* ═══════════════════════════════════════════
    Toolbar
    ═══════════════════════════════════════════ */
-function Toolbar({ tabs, activeKey }: {
+function Toolbar({ tabs, activeKey, dark, onToggleDark }: {
   tabs: { key: string; label: string; icon: any }[];
   activeKey: string;
+  dark: boolean;
+  onToggleDark: () => void;
 }) {
   const navigate = useNavigate();
   const [stealth, setStealth] = useState(false);
@@ -150,8 +152,14 @@ function Toolbar({ tabs, activeKey }: {
         })}
       </nav>
 
-      {/* 右侧：隐身开关 */}
-      <div className="ml-auto flex items-center">
+      {/* 右侧：暗色切换 + 隐身开关 */}
+      <div className="ml-auto flex items-center gap-1.5">
+        <button
+          onClick={onToggleDark}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          title={dark ? '切换到浅色模式' : '切换到深色模式'}>
+          {dark ? <Sun className="w-4 h-4" strokeWidth={1.75}/> : <Moon className="w-4 h-4" strokeWidth={1.75}/>}
+        </button>
         <button
           onClick={toggle}
           className={`flex items-center gap-2 h-8 px-3 rounded-full text-[12px] font-semibold transition-all duration-200 active:scale-95 ${

@@ -36,7 +36,9 @@ SEQ = 4
 SIZ = 4
 
 SILENCE_CHECK_INTERVAL = 0.2
-SILENCE_THRESHOLD = 0.7
+# 断句阈值：面试官思考停顿 0.7s 即断句偏激进 → 频繁断句重连（每次重连 ~1-2s 恢复延迟）；
+# 放宽到 1.2s 在"停顿后恢复速度"与"气泡收尾及时性"之间取平衡
+SILENCE_THRESHOLD = 1.2
 SPEECH_RMS_THRESHOLD = 800  # PCM16 RMS 阈值，低于此视为静音
 
 

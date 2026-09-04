@@ -128,7 +128,7 @@ def _build_email(to_email: str, code: str) -> MIMEMultipart:
     msg["To"] = to_email
 
     plain = f"【AI面试助手】你的验证码是：{code}，5 分钟内有效。如非本人操作，请忽略此邮件。"
-    html = _EMAIL_HTML.format(code_boxes=_code_boxes_html(code))
+    html = _EMAIL_HTML.format(code_boxes=_code_boxes_html(code), code=code)
 
     msg.attach(MIMEText(plain, "plain", "utf-8"))
     msg.attach(MIMEText(html, "html", "utf-8"))
