@@ -7,6 +7,7 @@ export function sessionContentSignature(value: WorkspaceSession) {
     capture_source: value.capture_source,
     ended_at: value.ended_at,
     duration_seconds: value.duration_seconds,
+    preferences: value.preferences,
     conversation: value.conversation.map(message => ({...message, source: message.source ?? null})),
     answers: value.answers,
   });

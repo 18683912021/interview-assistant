@@ -1,3 +1,5 @@
+import type {WorkspaceSession} from '../api/workspace';
+
 type Message = {id: string; revision?: number};
 type Answer = {
   id: string;
@@ -5,6 +7,7 @@ type Answer = {
   source_revisions: number[];
   status: string;
   text: string;
+  context_snapshot?: Record<string, unknown>;
 };
 
 export function hasRevisedSources(answer: Answer, messages: Message[]) {
@@ -19,12 +22,15 @@ export function findReusableAnswer<T extends Answer>(
   answers: T[],
   messages: Message[],
   messageId: string,
+  preferences?: WorkspaceSession['preferences'],
 ): T | undefined {
   return [...answers]
     .reverse()
     .find(
       answer =>
         answer.source_message_ids.includes(messageId) &&
+        (!preferences || Object.entries(preferences).every(([key, value]) =>
+          answer.context_snapshot?.[key] === value)) &&
         !hasRevisedSources(answer, messages) &&
         (answer.status === 'loading' || answer.status === 'streaming' || !!answer.text),
     );

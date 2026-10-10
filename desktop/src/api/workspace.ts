@@ -20,10 +20,17 @@ export interface Settings {
   font_size: 14 | 16 | 18;
   language: 'zh' | 'en' | 'auto';
   answer_length: 'brief' | 'standard' | 'detailed';
-  answer_style: 'conversational' | 'structured';
+  answer_style: 'conversational' | 'structured' | 'written';
   microphone_id: string;
   system_device_id: string;
 }
+export const ANSWER_STYLES = [
+  {value: 'conversational', label: '自然口述', description: '自然短句，适合现场组织语言'},
+  {value: 'structured', label: '结构化要点', description: '结论与关键要点，方便快速扫读'},
+  {value: 'written', label: '标准书面', description: '完整展开原理、步骤与例子，适合深入回答'},
+] as const;
+export const answerStyleLabel = (style: unknown) =>
+  ANSWER_STYLES.find(option => option.value === style)?.label || '自然口述';
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   font_size: 16,

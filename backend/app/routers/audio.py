@@ -32,7 +32,7 @@ from app.services.audio_service import (
     V1AudioSession,
     storage_root,
 )
-from app.services.llm_service import LLMService
+from app.services.llm_service import LLMService, answer_token_budget
 from app.services.stt_streaming import StreamingASRSession
 
 logger = logging.getLogger("audio")
@@ -575,7 +575,7 @@ async def _llm_single(ws, question: str, language: str, track: str,
     request_id = request_id or str(uuid.uuid4())
     context = context or {}
     source_message_ids, source_revisions = source_message_ids or [], source_revisions or []
-    max_tokens = llm_config.get("max_tokens") or {"short": 600, "brief": 600, "balanced": 1200, "standard": 1200, "detailed": 2400}.get(context.get("answer_length"), 1200)
+    max_tokens = llm_config.get("max_tokens") or answer_token_budget(context)
     model = llm_config.get("model")
     full_answer, status, error = "", "completed", None
     metadata = {}

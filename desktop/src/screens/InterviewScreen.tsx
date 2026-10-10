@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import {
   DEFAULT_SETTINGS,
+  ANSWER_STYLES,
+  answerStyleLabel,
   getJobs,
   getResumes,
   getSettings,
@@ -365,7 +367,7 @@ export default function InterviewScreen() {
       );
       return;
     }
-    const saved = findReusableAnswer(state.answers, state.conversation, id);
+    const saved = findReusableAnswer(state.answers, state.conversation, id, session?.preferences);
     if (saved) {
       chooseAnswer(saved.id);
       return;
@@ -657,6 +659,28 @@ export default function InterviewScreen() {
             <button className="link-button small" onClick={() => navigate('/materials')}>
               管理岗位和简历 <ArrowUpRight size={12} style={{display: 'inline'}} />
             </button>
+            <div className="field-row">
+              <label className="field">
+                回答方式
+                <select value={settings.answer_style} onChange={e => setSettings(value => ({...value,
+                  answer_style: e.target.value as Settings['answer_style']}))}>
+                  {ANSWER_STYLES.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <small>{ANSWER_STYLES.find(option => option.value === settings.answer_style)?.description}</small>
+              </label>
+              <label className="field">
+                回答长度
+                <select value={settings.answer_length} onChange={e => setSettings(value => ({...value,
+                  answer_length: e.target.value as Settings['answer_length']}))}>
+                  <option value="brief">简短</option>
+                  <option value="standard">适中</option>
+                  <option value="detailed">详细</option>
+                </select>
+                <small>本场使用，默认偏好可在设置中保存。</small>
+              </label>
+            </div>
           </div>
           <aside className="setup-preview">
             <div className="setup-preview-top">
@@ -1002,7 +1026,7 @@ export default function InterviewScreen() {
                 onChange={e => chooseAnswer(e.target.value)}>
                 {state.answers.map((value, index) => (
                   <option key={value.id} value={value.id}>
-                    {index + 1}. {value.question_text.slice(0, 20)}
+                    {index + 1}. {value.question_text.slice(0, 20)} · {answerStyleLabel(value.context_snapshot?.answer_style)}
                   </option>
                 ))}
               </select>
@@ -1021,6 +1045,31 @@ export default function InterviewScreen() {
               </button>
             )}
           </header>
+          <div className="answer-preferences">
+            <label>
+              表达
+              <select aria-label="本场回答方式" value={session.preferences.answer_style}
+                disabled={busy || generating || session.status === 'completed'}
+                onChange={e => setSession(value => value ? {...value, preferences: {...value.preferences,
+                  answer_style: e.target.value as Settings['answer_style']}} : value)}>
+                {ANSWER_STYLES.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              长度
+              <select aria-label="本场回答长度" value={session.preferences.answer_length}
+                disabled={busy || generating || session.status === 'completed'}
+                onChange={e => setSession(value => value ? {...value, preferences: {...value.preferences,
+                  answer_length: e.target.value as Settings['answer_length']}} : value)}>
+                <option value="brief">简短</option>
+                <option value="standard">适中</option>
+                <option value="detailed">详细</option>
+              </select>
+            </label>
+            <span>用于新回答</span>
+          </div>
           <div
             className="answer-scroll"
             ref={answerScroll}
@@ -1037,6 +1086,9 @@ export default function InterviewScreen() {
               <div
                 className={`answer-document${generating && !answer.text ? ' answer-document-waiting' : ''}`}>
                 <div className="answer-question">{answer.question_text}</div>
+                <div className="answer-format-label">
+                  {answerStyleLabel(answer.context_snapshot?.answer_style)}
+                </div>
                 {hasRevisedSources(answer, state.conversation) && (
                   <p className="notice">
                     原句已有修正，这里保留的是当时选中的问题与回答。需要时可重新回答。
@@ -1101,7 +1153,8 @@ export default function InterviewScreen() {
                   className="link-button"
                   disabled={!live || state.streamState !== 'ready'}
                   onClick={() => request(answer.source_message_ids)}>
-                  重新回答
+                  {answer.context_snapshot?.answer_style !== session.preferences.answer_style
+                    ? `按${answerStyleLabel(session.preferences.answer_style)}回答` : '重新回答'}
                 </button>
               ))}
           </footer>

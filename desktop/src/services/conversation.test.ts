@@ -26,4 +26,13 @@ describe('answer selection', () => {
       findReusableAnswer([{...answer, status: 'error', text: ''}], messages, 'one'),
     ).toBeUndefined();
   });
+  it('keeps style variants separate and reopens only matching preferences', () => {
+    const preferences = {language: 'zh', answer_length: 'standard', answer_style: 'written'} as const;
+    const spoken = {...answer, context_snapshot: {...preferences, answer_style: 'conversational'}};
+    const written = {...answer, id: 'written', context_snapshot: {...preferences}};
+    expect(findReusableAnswer([spoken], messages, 'one', preferences)).toBeUndefined();
+    expect(findReusableAnswer([written, spoken], messages, 'one', preferences)).toBe(written);
+    expect(findReusableAnswer([written], messages, 'one', {...preferences, answer_length: 'detailed'})).toBeUndefined();
+    expect(findReusableAnswer([written], messages, 'one', {...preferences, language: 'en'})).toBeUndefined();
+  });
 });

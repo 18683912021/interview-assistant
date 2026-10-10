@@ -33,7 +33,7 @@ MAX_TEXT = 100_000
 class Preferences(BaseModel):
     language: Literal["zh", "en", "auto"] = "zh"
     answer_length: Literal["brief", "standard", "detailed"] = "standard"
-    answer_style: Literal["conversational", "structured"] = "conversational"
+    answer_style: Literal["conversational", "structured", "written"] = "conversational"
 
 
 class Message(BaseModel):
@@ -134,7 +134,7 @@ class SettingsPatch(BaseModel):
     font_size: Literal[14, 16, 18] | None = None
     language: Literal["zh", "en", "auto"] | None = None
     answer_length: Literal["brief", "standard", "detailed"] | None = None
-    answer_style: Literal["conversational", "structured"] | None = None
+    answer_style: Literal["conversational", "structured", "written"] | None = None
     microphone_id: str | None = Field(default=None, max_length=500)
     system_device_id: str | None = Field(default=None, max_length=500)
 

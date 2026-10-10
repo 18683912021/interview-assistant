@@ -9,7 +9,7 @@ import {
   Palette,
   UserRound,
 } from 'lucide-react';
-import {getSettings, saveSettings, DEFAULT_SETTINGS, type Settings} from '../api/workspace';
+import {getSettings, saveSettings, DEFAULT_SETTINGS, ANSWER_STYLES, type Settings} from '../api/workspace';
 import {resetPassword, sendCode, updateProfile} from '../api/auth';
 import {AUTH_EXPIRED_EVENT, messageOf} from '../api/client';
 import {isVirtualDeviceName} from '../utils/audioDevices';
@@ -514,7 +514,9 @@ export default function SettingsScreen() {
                     </label>
                     <label className="setting-row">
                       <span>
-                        回答长度<small>优先呈现可快速阅读的要点</small>
+                        回答长度<small>{settings.answer_style === 'written'
+                          ? '书面模式内容更充分；选“详细”可进一步展开'
+                          : '优先呈现可快速阅读的要点'}</small>
                       </span>
                       <select
                         value={settings.answer_length}
@@ -527,14 +529,15 @@ export default function SettingsScreen() {
                       </select>
                     </label>
                     <label className="setting-row">
-                      <span>表达方式</span>
+                      <span>表达方式<small>{ANSWER_STYLES.find(option => option.value === settings.answer_style)?.description}</small></span>
                       <select
                         value={settings.answer_style}
                         onChange={e =>
                           change('answer_style', e.target.value as Settings['answer_style'])
                         }>
-                        <option value="conversational">自然口述</option>
-                        <option value="structured">结构化要点</option>
+                        {ANSWER_STYLES.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </label>
                     <p className="notice">

@@ -275,6 +275,39 @@ button.bubble-answer-count:hover {
   color: var(--muted);
   margin: -12px 0 22px;
 }
+
+.answer-preferences {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.answer-preferences label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.answer-preferences select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 6px;
+  font: inherit;
+}
+.answer-preferences > span {
+  margin-left: auto;
+  font-size: 10px;
+}
+.answer-format-label {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 11px;
+}
 .answer-source-line .link-button {
   display: flex;
   align-items: center;

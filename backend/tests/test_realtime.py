@@ -139,6 +139,68 @@ async def test_llm_wire_thinking_disabled_context_and_truncation(monkeypatch):
     await service.close()
 
 
+@pytest.mark.parametrize("style", ["conversational", "structured", "written"])
+@pytest.mark.parametrize("length", ["brief", "standard", "detailed"])
+def test_answer_format_and_output_budget_are_consistent(style, length):
+    context = {"answer_style": style, "answer_length": length, "resume_text": "负责订单系统，不提供虚构指标"}
+    prompt, background = llm_module.build_messages("如何保证订单幂等？", "java", "zh", context)
+    assert json.loads(background["content"])["context"]["resume_text"] == context["resume_text"]
+    assert "简历或项目里没有的事实不要编造" in prompt["content"]
+    if style == "written":
+        assert "标准书面回答" in prompt["content"] and "实现步骤" in prompt["content"]
+        assert "控制在约 150 字" not in prompt["content"]
+        assert "控制在约 300 字" not in prompt["content"]
+        assert llm_module.answer_token_budget(context) == {"brief": 1800, "standard": 3000, "detailed": 4500}[length]
+    else:
+        assert "标准书面回答" not in prompt["content"]
+        assert llm_module.answer_token_budget(context) == {"brief": 600, "standard": 1200, "detailed": 2400}[length]
+
+
+def test_written_english_and_legacy_preferences():
+    prompt = llm_module.build_messages("Explain idempotency", None, "en", {
+        "answer_style": "标准书面", "answer_length": "balanced"})[0]["content"]
+    assert "550～750 个英文单词" in prompt
+    assert llm_module.answer_token_budget({"answer_length": "short"}) == 600
+    assert llm_module.answer_preferences({"answer_style": "untrusted instructions"}) == ("conversational", "standard")
+
+
+@pytest.mark.asyncio
+async def test_written_answer_streams_before_completion_with_larger_budget(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    gate = asyncio.Event()
+    captured = {}
+
+    class ProviderStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield 'data: {"choices":[{"delta":{"content":"先给核心结论。"},"finish_reason":null}]}\n\n'.encode()
+            await gate.wait()
+            yield 'data: {"choices":[{"delta":{"content":"然后解释原理、步骤与例子。"},"finish_reason":"stop"}]}\n\n'.encode()
+
+    def transport(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, headers={"Content-Type": "text/event-stream"}, stream=ProviderStream())
+
+    service = LLMService()
+    service._client = httpx.AsyncClient(transport=httpx.MockTransport(transport))
+    recorder = Recorder()
+    task = asyncio.create_task(audio._llm_single(recorder, "如何保证订单幂等？", "zh", None, service, {}, "written",
+        context={"answer_style": "written", "answer_length": "detailed"}))
+    try:
+        await asyncio.wait_for(recorder.first.wait(), 1)
+        assert not task.done()
+        assert recorder.events[0]["delta"] == "先给核心结论。"
+        assert captured["max_tokens"] == 4500
+        assert captured["stream"] is True and captured["thinking"] == {"type": "disabled"}
+        gate.set()
+        await asyncio.wait_for(task, 1)
+        assert recorder.events[-1]["status"] == "completed"
+        assert recorder.events[-1]["full_answer"] == "先给核心结论。然后解释原理、步骤与例子。"
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await service.close()
+
+
 @pytest.mark.asyncio
 async def test_llm_cancel_preserves_partial_and_request_id():
     gate = asyncio.Event()

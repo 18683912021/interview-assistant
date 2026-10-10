@@ -148,6 +148,23 @@ async def test_parallel_saves_and_settings_do_not_overwrite_new_data(environment
 
 
 @pytest.mark.asyncio
+async def test_written_preference_settings_and_history_round_trip(environment):
+    client, _ = environment
+    preferences = {"language": "zh", "answer_length": "detailed", "answer_style": "written"}
+    assert (await client.put("/api/workspace/settings", json=preferences)).status_code == 200
+    settings = (await client.get("/api/workspace/settings")).json()
+    assert all(settings[key] == value for key, value in preferences.items())
+    data = snapshot(preferences=preferences)
+    path = f"/api/workspace/interviews/{data['id']}"
+    assert (await client.put(path, json=data)).status_code == 200
+    assert (await client.get(path)).json()["preferences"] == preferences
+    # A later default change must not rewrite the saved interview.
+    assert (await client.put("/api/workspace/settings", json={"answer_style": "conversational"})).status_code == 200
+    assert (await client.get(path)).json()["preferences"] == preferences
+    assert (await client.put("/api/workspace/settings", json={"answer_style": "unknown"})).status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_failed_media_cleanup_can_retry_without_restoring_snapshot(environment, monkeypatch):
     client, _ = environment
     data = snapshot()

@@ -49,4 +49,7 @@ it('does not save or invalidate a review merely by restoring a manual question w
   expect(sessionContentSignature({...session, conversation: edited.conversation})).not.toBe(
     sessionContentSignature(session),
   );
+  expect(sessionContentSignature({...session, preferences: {...session.preferences, answer_style: 'written'}})).not.toBe(
+    sessionContentSignature(session),
+  );
 });
