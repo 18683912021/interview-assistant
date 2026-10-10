@@ -17,9 +17,23 @@ class MicCaptureProcessor extends AudioWorkletProcessor {
     super();
     this.buffer = new Float32Array(FRAME); // 当前累积缓冲
     this.count = 0;                        // 已累积样本数
+    this.stopped = false;
+    this.port.onmessage = ({ data }) => {
+      if (!data || data.type !== 'flush') return;
+      // Freeze this capture before acknowledging, so audio produced after the
+      // user's stop cannot arrive behind the terminal acknowledgement.
+      this.stopped = true;
+      if (this.count > 0) {
+        const tail = this.buffer.slice(0, this.count).buffer;
+        this.port.postMessage(tail, [tail]);
+        this.count = 0;
+      }
+      this.port.postMessage({ type: 'flushed', id: data.id });
+    };
   }
 
   process(inputs) {
+    if (this.stopped) return false;
     const input = inputs[0] && inputs[0][0];
     if (!input) return true;
 

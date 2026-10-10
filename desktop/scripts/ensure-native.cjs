@@ -1,142 +1,226 @@
-/**
- * ensure-native.cjs —— 确保 WASAPI addon 与当前 Electron 版本匹配（跨环境自愈）
- *
- * 背景：build/ 与 dist-electron/ 都不进 git。换机器/换环境后 addon 要么不存在，
- * 要么是旧 Electron ABI 编译的——手动重编容易漏做、拿错 target、或被 wasapi_loopback.cc
- * 里"无 --target"的旧命令坑到（拿系统 Node 头文件编译，任何 Electron 都加载不了）。
- *
- * 本脚本接管全流程，predev 与 build 都会经过它：
- *  1. 平台守卫：非 win32 直接跳过（addon 仅 Windows；macOS 系统音频走渲染进程 SCK）
- *  2. 依赖漂移检查：node_modules/electron 必须已安装，且与 package.json 声明版本一致；
- *     native 目录依赖（node-addon-api）缺失时自动 pnpm install（全新克隆后首次 predev 自愈）
- *  3. ABI 检查：marker（build/Release/.electron-target）与已安装 Electron 版本比对，
- *     缺失/失配/源码（.cc/.gyp）比产物新，则用 Electron 官方 headers 重编
- *     （--target --dist-url，见 Electron 官方文档 "Using Native Node Modules" 的手动方式）
- *  4. 拷贝到 dist-electron（tsc 不复制 .node；冒烟从 dist-electron 加载，故先拷贝）
- *  5. 重编后自动跑 smoke-addon 冒烟（真实 Electron 主进程：加载 addon + 采集 1s）
+/** Validate WASAPI for the requested Electron + platform + architecture.
+ * Default smoke only loads the addon. Recording requires an explicit hardware smoke.
+ * https://www.electronjs.org/docs/latest/tutorial/using-native-node-modules
  */
-const { spawnSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-
+const {spawnSync} = require('node:child_process');
+const {createHash} = require('node:crypto');
+const {createRequire} = require('node:module');
+const fs = require('node:fs');
+const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
-const NATIVE_DIR = path.join(ROOT, 'electron', 'audio', 'native');
-const ADDON_PATH = path.join(NATIVE_DIR, 'build', 'Release', 'wasapi_loopback.node');
-const MARKER_PATH = path.join(NATIVE_DIR, 'build', 'Release', '.electron-target');
-const DEST_DIR = path.join(ROOT, 'dist-electron', 'audio', 'native', 'build', 'Release');
+const PE_MACHINES = {ia32: 0x14c, x64: 0x8664, arm64: 0xaa64};
+const hash = value => createHash('sha256').update(value).digest('hex');
 
-// Electron 43+ 的二进制在首次 require('electron') 时懒下载（@electron/get 走
-// undici fetch，默认不吃 HTTP(S)_PROXY，直连 GitHub 在本网络下必失败）。
-// 项目 .npmrc 的 electron_mirror 仅在经 pnpm 启动的脚本里以 npm_config_* 可见，
-// 直接 node 调用时在此兜底读取（环境变量已显式设置时不覆盖）。
-if (!process.env.ELECTRON_MIRROR && !process.env.npm_config_electron_mirror && !process.env.NPM_CONFIG_ELECTRON_MIRROR) {
-  const npmrc = path.join(ROOT, '.npmrc');
-  if (fs.existsSync(npmrc)) {
-    const m = fs.readFileSync(npmrc, 'utf8').match(/^electron_mirror\s*=\s*(\S+)\s*$/m);
-    if (m) process.env.ELECTRON_MIRROR = m[1];
-  }
-}
-
-function log(msg) {
-  console.log(`[ensure-native] ${msg}`);
-}
-function fail(msg) {
-  console.error(`[ensure-native] ${msg}`);
-  process.exit(1);
-}
-
-// ── 1. 平台守卫 ──
-if (process.platform !== 'win32') {
-  log('跳过（WASAPI addon 仅 Windows，macOS 系统音频走 ScreenCaptureKit）');
-  process.exit(0);
-}
-
-// ── 2. 依赖漂移检查 ──
-let electronPath;
-try {
-  electronPath = require('electron'); // npm 包导出 Electron 二进制路径；二进制缺失时会懒下载
-} catch (e) {
-  fail(`electron 不可用：${e?.message || e}（若是二进制下载失败，检查网络/代理后重试）`);
-}
-const installedVersion = JSON.parse(
-  fs.readFileSync(path.join(path.dirname(require.resolve('electron')), 'package.json'), 'utf8'),
-).version;
-const declaredVersion = JSON.parse(
-  fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'),
-).devDependencies.electron;
-if (installedVersion !== declaredVersion) {
-  fail(`node_modules/electron ${installedVersion} 与 package.json 声明的 ${declaredVersion} 不一致，请先执行 pnpm install`);
-}
-
-// ── 2.5 native 目录依赖（node-addon-api）不进 git，全新环境需先安装 ──
-if (!fs.existsSync(path.join(NATIVE_DIR, 'node_modules', 'node-addon-api'))) {
-  log('native 目录依赖缺失（node-addon-api），执行 pnpm install ...');
-  const runInstall = (args) =>
-    spawnSync('pnpm', args, { cwd: NATIVE_DIR, stdio: 'inherit', shell: process.platform === 'win32' });
-  const lockExists = fs.existsSync(path.join(NATIVE_DIR, 'pnpm-lock.yaml'));
-  const r = runInstall(lockExists ? ['install', '--frozen-lockfile'] : ['install']);
-  if (r.status !== 0) {
-    fail('native 目录依赖安装失败（需 pnpm 可用且网络正常）');
-  }
-}
-
-// ── 3. ABI 检查：addon + marker 缺一不可，marker 必须等于已安装版本，
-//      且源码（.cc/.gyp）不得新于产物（addon 作者改代码后必须自动重编）──
-function rebuildReasons() {
-  const reasons = [];
-  if (!fs.existsSync(ADDON_PATH)) reasons.push('addon 不存在');
-  else if (!fs.existsSync(MARKER_PATH)) reasons.push('缺少编译版本标记');
-  else if (fs.readFileSync(MARKER_PATH, 'utf8').trim() !== installedVersion)
-    reasons.push('addon 编译时的 Electron 版本与当前不一致');
-  else {
-    const addonMtime = fs.statSync(ADDON_PATH).mtimeMs;
-    for (const src of ['wasapi_loopback.cc', 'binding.gyp']) {
-      const p = path.join(NATIVE_DIR, src);
-      if (fs.existsSync(p) && fs.statSync(p).mtimeMs > addonMtime) reasons.push(`${src} 有更新`);
+function sourceHash(nativeDir) {
+  // mtimes are unreliable after copying artifacts or checking out another commit.
+  const files = [];
+  const visit = directory => {
+    for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+      if (['build', 'node_modules', '.git'].includes(entry.name)) continue;
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(absolute);
+      else if (
+        /\.(?:cc|cpp|c|h|hpp|gyp|gypi)$/.test(entry.name) ||
+        ['package.json', 'pnpm-lock.yaml'].includes(entry.name)
+      )
+        files.push(absolute);
     }
+  };
+  visit(nativeDir);
+  const digest = createHash('sha256');
+  for (const file of files.sort()) {
+    digest.update(path.relative(nativeDir, file).split(path.sep).join('/'));
+    digest.update('\0');
+    digest.update(fs.readFileSync(file));
+    digest.update('\0');
   }
-  return reasons;
+  return digest.digest('hex');
 }
 
-let rebuilt = false;
-const reasons = rebuildReasons();
-if (reasons.length > 0) {
-  log(`${reasons.join('、')}，用 Electron ${installedVersion} 官方 headers 重编 addon ...`);
-  const r = spawnSync(
-    'npx',
-    ['node-gyp', 'rebuild', `--target=${installedVersion}`, '--dist-url=https://electronjs.org/headers'],
-    { cwd: NATIVE_DIR, stdio: 'inherit', shell: process.platform === 'win32' },
-  );
-  if (r.status !== 0) {
-    fail(
-      'node-gyp 编译失败。请确认：1) 已安装 VS2022「使用 C++ 的桌面开发」工作负载；' +
-        '2) 若 headers 下载失败，检查 HTTP_PROXY/HTTPS_PROXY 代理设置（本项目有 Clash 代理前科）',
+function peArchitecture(bytes) {
+  if (bytes.length < 64 || bytes.toString('ascii', 0, 2) !== 'MZ') return null;
+  const offset = bytes.readUInt32LE(0x3c);
+  if (offset > bytes.length - 6 || bytes.toString('ascii', offset, offset + 4) !== 'PE\0\0')
+    return null;
+  const machine = bytes.readUInt16LE(offset + 4);
+  return Object.keys(PE_MACHINES).find(arch => PE_MACHINES[arch] === machine) ?? null;
+}
+
+function inspectArtifact(nativeDir, target) {
+  const addon = path.join(nativeDir, 'build', 'Release', 'wasapi_loopback.node');
+  const marker = path.join(nativeDir, 'build', 'Release', '.electron-target');
+  if (!fs.existsSync(addon)) return ['WASAPI addon 不存在'];
+  let metadata;
+  try {
+    metadata = JSON.parse(fs.readFileSync(marker, 'utf8'));
+  } catch {
+    return ['缺少完整的 Electron/架构编译记录（旧版本标记需要重建）'];
+  }
+  const problems = [];
+  if (!metadata || metadata.format !== 1) return ['编译记录格式不匹配'];
+  for (const key of ['electronVersion', 'platform', 'arch']) {
+    if (metadata[key] !== target[key])
+      problems.push(`${key} 不匹配：需要 ${target[key]}，现有 ${metadata[key]}`);
+  }
+  if (metadata.sourceHash !== sourceHash(nativeDir)) problems.push('原生源码或依赖已更新');
+  const bytes = fs.readFileSync(addon);
+  if (metadata.addonHash !== hash(bytes)) problems.push('addon 与编译记录不一致');
+  if (peArchitecture(bytes) !== target.arch)
+    problems.push(`addon 不是 Windows ${target.arch} 二进制`);
+  return problems;
+}
+
+function configureElectronMirror(root) {
+  if (
+    process.env.ELECTRON_MIRROR ||
+    process.env.npm_config_electron_mirror ||
+    process.env.NPM_CONFIG_ELECTRON_MIRROR
+  )
+    return;
+  const npmrc = path.join(root, '.npmrc');
+  if (!fs.existsSync(npmrc)) return;
+  const match = fs.readFileSync(npmrc, 'utf8').match(/^electron_mirror\s*=\s*(\S+)\s*$/m);
+  if (match) process.env.ELECTRON_MIRROR = match[1];
+}
+
+function installedNodeGyp(root) {
+  // Use the toolchain from the project's locked electron-builder dependency tree.
+  // npx node-gyp could silently fetch a different release on a clean Windows host.
+  const builder = createRequire(require.resolve('electron-builder', {paths: [root]}));
+  const library = createRequire(builder.resolve('app-builder-lib'));
+  const rebuild = createRequire(library.resolve('@electron/rebuild'));
+  return rebuild.resolve('node-gyp/bin/node-gyp.js');
+}
+
+function ensureNative({
+  root = ROOT,
+  platform = process.platform,
+  arch = process.arch,
+  electronVersion,
+  hostPlatform = process.platform,
+  hostArch = process.arch,
+} = {}) {
+  const log = message => console.log(`[ensure-native] ${message}`);
+  if (platform !== 'win32') {
+    log(`跳过 ${platform}（WASAPI 仅 Windows，macOS 保持 ScreenCaptureKit 路径）`);
+    return;
+  }
+  if (!PE_MACHINES[arch]) throw new Error(`WASAPI 不支持目标架构 ${arch}`);
+  const declaredVersion = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+    .devDependencies.electron;
+  const entry = require.resolve('electron', {paths: [root]});
+  const installedVersion = JSON.parse(
+    fs.readFileSync(path.join(path.dirname(entry), 'package.json'), 'utf8'),
+  ).version;
+  const version = electronVersion ?? installedVersion;
+  if (installedVersion !== declaredVersion || version !== installedVersion) {
+    throw new Error(
+      `Electron 版本不一致（声明 ${declaredVersion}，安装 ${installedVersion}，打包 ${version}），请先 pnpm install`,
     );
   }
-  fs.writeFileSync(MARKER_PATH, installedVersion);
-  log(`重编完成，已记录编译版本 ${installedVersion}`);
-  rebuilt = true;
-} else {
-  log(`addon 与 Electron ${installedVersion} 匹配，跳过重编`);
+  const nativeDir = path.join(root, 'electron', 'audio', 'native');
+  const addon = path.join(nativeDir, 'build', 'Release', 'wasapi_loopback.node');
+  const marker = path.join(nativeDir, 'build', 'Release', '.electron-target');
+  const target = {electronVersion: version, platform, arch};
+  const problems = inspectArtifact(nativeDir, target);
+  if (problems.length) {
+    if (hostPlatform !== 'win32') {
+      throw new Error(
+        `${problems.join('；')}。不能在 ${hostPlatform} 上编译 WASAPI；请在 Windows ${arch} 构建，或提供相同 Electron/架构/源码的已验证原生产物。已阻止生成缺少系统音频功能的 Windows 安装包。`,
+      );
+    }
+    log(`${problems.join('；')}，重建 Electron ${version} / Windows ${arch}`);
+    configureElectronMirror(root);
+    // A failed build/load must not leave an apparently valid artifact for packaging.
+    fs.rmSync(marker, {force: true});
+    const run = (command, args, cwd, env = process.env) => {
+      const result = spawnSync(command, args, {
+        cwd,
+        stdio: 'inherit',
+        env,
+        shell: command === 'pnpm',
+      });
+      if (result.error || result.status !== 0)
+        throw new Error(`${command} 失败：${result.error?.message ?? `exit ${result.status}`}`);
+    };
+    if (!fs.existsSync(path.join(nativeDir, 'node_modules', 'node-addon-api'))) {
+      run(
+        'pnpm',
+        [
+          'install',
+          ...(fs.existsSync(path.join(nativeDir, 'pnpm-lock.yaml')) ? ['--frozen-lockfile'] : []),
+        ],
+        nativeDir,
+      );
+    }
+    run(
+      process.execPath,
+      [
+        installedNodeGyp(root),
+        'rebuild',
+        `--target=${version}`,
+        `--arch=${arch}`,
+        '--dist-url=https://electronjs.org/headers',
+      ],
+      nativeDir,
+    );
+    if (peArchitecture(fs.readFileSync(addon)) !== arch)
+      throw new Error(`node-gyp 生成的文件不是 Windows ${arch} addon`);
+    if (arch !== hostArch) {
+      throw new Error(
+        `已编译 ${arch}，但当前 Electron 是 ${hostArch}，无法执行加载验证。请在 Windows ${arch} 构建环境完成验证后打包。`,
+      );
+    }
+    const electronPath = require(entry);
+    // Node mode uses installed Electron without opening any audio device or window.
+    run(
+      electronPath,
+      [
+        path.join(root, 'scripts', 'smoke-addon.cjs'),
+        '--addon',
+        addon,
+        `--expect-electron=${version}`,
+        `--expect-arch=${arch}`,
+      ],
+      root,
+      {...process.env, ELECTRON_RUN_AS_NODE: '1'},
+    );
+    fs.writeFileSync(
+      marker,
+      JSON.stringify(
+        {
+          format: 1,
+          ...target,
+          sourceHash: sourceHash(nativeDir),
+          addonHash: hash(fs.readFileSync(addon)),
+        },
+        null,
+        2,
+      ),
+    );
+  }
+  const destination = path.join(root, 'dist-electron', 'audio', 'native', 'build', 'Release');
+  fs.mkdirSync(destination, {recursive: true});
+  fs.copyFileSync(addon, path.join(destination, 'wasapi_loopback.node'));
+  fs.copyFileSync(marker, path.join(destination, '.electron-target'));
+  log(`已验证并复制 Electron ${version} / Windows ${arch} addon（未录音）`);
 }
 
-// ── 4. 拷贝到 dist-electron（冒烟从 dist-electron 加载，必须先拷贝）──
-fs.mkdirSync(DEST_DIR, { recursive: true });
-fs.copyFileSync(ADDON_PATH, path.join(DEST_DIR, 'wasapi_loopback.node'));
-log('addon 已拷贝到 dist-electron/audio/native/build/Release/');
-
-// ── 5. 重编后自动冒烟（真实 Electron 主进程：加载 addon + 采集 1s）──
-if (rebuilt) {
-  log('运行 smoke-addon 冒烟验证 ...');
-  const env = { ...process.env };
-  delete env.ELECTRON_RUN_AS_NODE; // VSCode 集成终端会注入该变量，让 Electron 变纯 Node
-  const r = spawnSync(electronPath, [path.join(__dirname, 'smoke-addon.cjs')], {
-    cwd: ROOT,
-    stdio: 'inherit',
-    env,
-  });
-  if (r.status !== 0) {
-    fail(`冒烟验证失败（exit ${r.status}），请按上方输出排查`);
+function cliTarget(args) {
+  const target = {};
+  for (const arg of args) {
+    const match = arg.match(/^--(platform|arch|electron-version)=(.+)$/);
+    if (!match) throw new Error(`未知参数 ${arg}；使用 --platform=win32 --arch=x64`);
+    target[match[1] === 'electron-version' ? 'electronVersion' : match[1]] = match[2];
   }
-  log('冒烟验证通过');
+  return target;
+}
+module.exports = {ensureNative, inspectArtifact, peArchitecture, sourceHash, cliTarget};
+if (require.main === module) {
+  try {
+    ensureNative(cliTarget(process.argv.slice(2)));
+  } catch (error) {
+    console.error(`[ensure-native] ${error.message}`);
+    process.exitCode = 1;
+  }
 }

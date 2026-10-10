@@ -12,8 +12,11 @@
 """
 
 import logging
+import asyncio
 import smtplib
 import os
+import ssl
+import certifi
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
@@ -21,13 +24,16 @@ from email.utils import formataddr
 logger = logging.getLogger("email")
 
 _SMTP_HOST = os.getenv("SMTP_HOST", "")
-_SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+try:
+    _SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+except ValueError:
+    _SMTP_PORT = 0
 _SMTP_USER = os.getenv("SMTP_USER", "")
 _SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 _FROM_NAME = os.getenv("SMTP_FROM_NAME", "AI面试助手")
 
 # ── 邮件模板 ──
-_EMAIL_SUBJECT = "【AI面试助手】邮箱验证码"
+_PURPOSE_ACTIONS = {"login": "登录账号", "register": "注册账号", "reset_password": "重置密码"}
 
 _EMAIL_HTML = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -62,7 +68,7 @@ _EMAIL_HTML = """<!DOCTYPE html>
       <td style="padding:36px 36px 28px;">
         <p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#1F2937;">你好，</p>
         <p style="margin:0 0 28px;font-size:14px;color:#6B7280;line-height:24px;">
-          你正在登录 <strong style="color:#374151;">AI 面试助手</strong>。请使用以下验证码完成身份验证：
+          你正在<strong style="color:#374151;">{action}</strong>。请使用以下验证码完成身份验证：
         </p>
 
         <!-- 验证码 -->
@@ -120,15 +126,16 @@ def _code_boxes_html(code: str) -> str:
     return "".join(tds)
 
 
-def _build_email(to_email: str, code: str) -> MIMEMultipart:
+def _build_email(to_email: str, code: str, purpose: str = "login") -> MIMEMultipart:
     """构建 HTML 验证码邮件。"""
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = _EMAIL_SUBJECT
+    action = _PURPOSE_ACTIONS[purpose]
+    msg["Subject"] = f"【AI面试助手】{action}验证码"
     msg["From"] = formataddr((_FROM_NAME, _SMTP_USER))
     msg["To"] = to_email
 
-    plain = f"【AI面试助手】你的验证码是：{code}，5 分钟内有效。如非本人操作，请忽略此邮件。"
-    html = _EMAIL_HTML.format(code_boxes=_code_boxes_html(code), code=code)
+    plain = f"【AI面试助手】你正在{action}，验证码是：{code}，5 分钟内有效。如非本人操作，请忽略此邮件。"
+    html = _EMAIL_HTML.format(code_boxes=_code_boxes_html(code), code=code, action=action)
 
     msg.attach(MIMEText(plain, "plain", "utf-8"))
     msg.attach(MIMEText(html, "html", "utf-8"))
@@ -141,11 +148,11 @@ def get_smtp_config() -> dict:
         "host": _SMTP_HOST,
         "port": _SMTP_PORT,
         "user": _SMTP_USER,
-        "configured": bool(_SMTP_HOST and _SMTP_USER and _SMTP_PASSWORD),
+        "configured": bool(_SMTP_HOST and _SMTP_USER and _SMTP_PASSWORD and 1 <= _SMTP_PORT <= 65535),
     }
 
 
-async def send_code_email(to_email: str, code: str) -> None:
+async def send_code_email(to_email: str, code: str, purpose: str = "login") -> None:
     """发送验证码邮件。
 
     Args:
@@ -156,20 +163,27 @@ async def send_code_email(to_email: str, code: str) -> None:
         RuntimeError: SMTP 未配置
         smtplib.SMTPException: 发送失败
     """
-    if not _SMTP_HOST or not _SMTP_USER or not _SMTP_PASSWORD:
+    await asyncio.to_thread(_send_code_email, to_email, code, purpose)
+
+
+def _send_code_email(to_email: str, code: str, purpose: str) -> None:
+    if not get_smtp_config()["configured"]:
         raise RuntimeError("SMTP 未配置，请设置 SMTP_HOST / SMTP_USER / SMTP_PASSWORD 环境变量")
 
-    msg = _build_email(to_email, code)
+    msg = _build_email(to_email, code, purpose)
+    context = ssl.create_default_context(cafile=os.getenv("SSL_CERT_FILE") or certifi.where())
 
     # SSL 直连（端口 465）
     if _SMTP_PORT == 465:
-        with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT, timeout=15) as server:
+        with smtplib.SMTP_SSL(_SMTP_HOST, _SMTP_PORT, timeout=15, context=context) as server:
             server.login(_SMTP_USER, _SMTP_PASSWORD)
             server.send_message(msg)
     else:
         # STARTTLS（端口 587 等）
         with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT, timeout=15) as server:
-            server.starttls()
+            server.ehlo()
+            server.starttls(context=context)
+            server.ehlo()
             server.login(_SMTP_USER, _SMTP_PASSWORD)
             server.send_message(msg)
 

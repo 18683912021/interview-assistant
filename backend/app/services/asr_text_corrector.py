@@ -163,7 +163,7 @@ def _pinyin_fuzzy_correct(text: str, threshold: float = 0.72) -> str:
                 best_term = pt.term
         if best_score >= threshold and best_term != segment and len(best_term) <= len(segment) * 2:
             result = result.replace(segment, best_term)
-            logger.info("拼音纠正 [%.0f%%]: %.20s → %.20s", best_score * 100, segment, best_term)
+            logger.debug("拼音纠正完成，匹配度=%.0f%%", best_score * 100)
     return result
 
 
@@ -194,6 +194,6 @@ def correct_asr_text(text: str, track_key: str | None = None) -> str:
     text = re.sub(r'\s{2,}', ' ', text).strip()
 
     if text != original:
-        logger.info("ASR 纠正: %.50s → %.50s", original, text)
+        logger.debug("ASR 纠正完成，输入长度=%d，输出长度=%d", len(original), len(text))
 
     return text

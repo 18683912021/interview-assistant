@@ -1,10 +1,9 @@
 /**
  * AI 浮窗（独立窗口）
  *
- * 透明无边框、始终置顶、鼠标穿透、ContentProtection 隐身。
- * 面试官在共享屏幕中看不到此窗口。
+ * 透明无边框、始终置顶，支持滚动回答、拖动标题栏和关闭。
  */
-import { BrowserWindow, app } from 'electron';
+import {BrowserWindow, app} from 'electron';
 import path from 'path';
 
 const isDev = !app.isPackaged;
@@ -19,12 +18,14 @@ export function createOverlayWindow(): BrowserWindow {
   overlayWindow = new BrowserWindow({
     width: 360,
     height: 520,
-    transparent: true,
+    // Transparent frameless windows do not reliably resize on Windows (Electron
+    // custom-window-styles limitations). Keep the existing macOS appearance.
+    transparent: process.platform !== 'win32',
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: true,
-    backgroundColor: '#00000000',
+    backgroundColor: process.platform === 'win32' ? '#F7F8FA' : '#00000000',
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
@@ -34,18 +35,20 @@ export function createOverlayWindow(): BrowserWindow {
   });
 
   // ContentProtection 默认关闭，用户手动开关
-  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+  overlayWindow.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
+  // The answer scroll area and close button must receive normal pointer input.
+  overlayWindow.setIgnoreMouseEvents(false);
 
   // ContentProtection 状态由 IPC handler 管理
 
   if (isDev) {
-    overlayWindow.loadURL('http://localhost:5173/#/overlay');
-  } else {
-    overlayWindow.loadFile(
-      path.join(__dirname, '..', 'dist-renderer', 'index.html'),
-      { hash: '/overlay' },
+    overlayWindow.loadURL(
+      `${process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:5173'}/#/overlay`,
     );
+  } else {
+    overlayWindow.loadFile(path.join(__dirname, '..', '..', 'dist-renderer', 'index.html'), {
+      hash: '/overlay',
+    });
   }
 
   return overlayWindow;

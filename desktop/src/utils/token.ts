@@ -4,8 +4,8 @@
  * PC 端适配：storage API 替换 Android SharedPreferences。
  * 通过平台适配层自动选择 IPC（Electron）或 localStorage（Web）。
  */
-import { storage } from '../platform/storage';
-import { verify as verifyApi, getProfile as getProfileApi, type UserProfile } from '../api/auth';
+import {storage} from '../platform/storage';
+import {verify as verifyApi, getProfile as getProfileApi, type UserProfile} from '../api/auth';
 
 const TOKEN_KEY = 'auth_token';
 const PROFILE_KEY = 'auth_profile';
@@ -40,17 +40,21 @@ export async function clearProfile(): Promise<void> {
 }
 
 export async function verifyToken(): Promise<string | null> {
-  try {
-    const token = await getToken();
-    if (!token) { return null; }
-    const data = await verifyApi(token);
-    try { const p = await getProfileApi(); if (p.user) { await saveProfile(p.user); } } catch { /* ignore */ }
-    return data.email;
-  } catch {
-    return null;
-  }
+  const token = await getToken();
+  if (!token) return null;
+  const data = await verifyApi(token);
+  const result = await getProfileApi();
+  await saveProfile(result.user);
+  return data.email;
 }
 
 export async function refreshProfile(): Promise<void> {
-  try { const p = await getProfileApi(); if (p.user) { await saveProfile(p.user); } } catch { /* ignore */ }
+  try {
+    const p = await getProfileApi();
+    if (p.user) {
+      await saveProfile(p.user);
+    }
+  } catch {
+    /* ignore */
+  }
 }

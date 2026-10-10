@@ -9,18 +9,21 @@ GET  /api/auth/status          邮件服务状态
 """
 
 import logging
-import os
-import random
+import hashlib
+import secrets
+import re
 import smtplib
 import string
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
-from sqlalchemy import select
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
-from app.models.db_models import User
+from app.models.db_models import User, Token
 from app.redis import get_redis
 from app.services.email_service import send_code_email, get_smtp_config
 from app.services.auth_service import (
@@ -29,6 +32,7 @@ from app.services.auth_service import (
     get_user_by_email,
     hash_password,
     verify_password,
+    password_attempt,
     create_token,
     verify_token,
     user_to_profile,
@@ -44,32 +48,37 @@ RESEND_COOLDOWN = 30
 
 
 # ── Request models ──
-class SendCodeRequest(BaseModel):
-    email: str
+class EmailRequest(BaseModel):
+    email: str = Field(max_length=255)
 
-class LoginRequest(BaseModel):
-    email: str
-    code: str
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value) or len(value.split("@")[0]) > 64:
+            raise ValueError("请输入有效的邮箱地址")
+        return value
 
-class RegisterRequest(BaseModel):
-    email: str
-    code: str
-    password: str
 
-class PasswordLoginRequest(BaseModel):
-    email: str
-    password: str
+class SendCodeRequest(EmailRequest):
+    purpose: Literal["login", "register", "reset_password"] = "login"
+
+class LoginRequest(EmailRequest):
+    code: str = Field(pattern=r"^[0-9]{6}$")
+
+class RegisterRequest(EmailRequest):
+    code: str = Field(pattern=r"^[0-9]{6}$")
+    password: str = Field(min_length=6, max_length=128)
+
+class PasswordLoginRequest(EmailRequest):
+    password: str = Field(max_length=128)
 
 class VerifyRequest(BaseModel):
-    token: str
+    token: str = Field(min_length=1, max_length=256)
 
 
 def _generate_code() -> str:
-    return "".join(random.choices(string.digits, k=CODE_LENGTH))
-
-
-def _is_dev() -> bool:
-    return os.getenv("ENV", "").lower() not in ("prod", "production")
+    return "".join(secrets.choice(string.digits) for _ in range(CODE_LENGTH))
 
 
 # ══════════════════════════════════════════════════════════════
@@ -88,29 +97,30 @@ async def send_code(body: SendCodeRequest):
         raise HTTPException(500, "邮件服务未配置，请联系管理员")
 
     redis = await get_redis()
-    cooldown_key = f"code:{email}:cooldown"
+    cooldown_key = f"code:{body.purpose}:{email}:cooldown"
 
     is_first = await redis.set(cooldown_key, "1", nx=True, ex=RESEND_COOLDOWN)
     if not is_first:
         ttl = await redis.ttl(cooldown_key)
         raise HTTPException(429, f"发送过于频繁，请 {max(1, ttl)} 秒后再试")
 
-    code_key = f"code:{email}"
-    code = await redis.get(code_key) or _generate_code()
+    code_key = f"code:{body.purpose}:{email}"
+    code = _generate_code()
 
     try:
-        await send_code_email(email, code)
+        await send_code_email(email, code, body.purpose)
     except smtplib.SMTPAuthenticationError:
         await redis.delete(cooldown_key)
         logger.exception("SMTP 认证失败")
         raise HTTPException(500, "邮件服务认证失败，请检查邮箱配置")
-    except (smtplib.SMTPException, RuntimeError) as e:
+    except (smtplib.SMTPException, RuntimeError, OSError):
         await redis.delete(cooldown_key)
         logger.exception("邮件发送失败")
-        raise HTTPException(500, f"邮件发送失败：{e}")
+        raise HTTPException(503, "邮件暂时无法发送，请稍后重试")
 
     await redis.set(code_key, code, ex=CODE_TTL)
-    logger.info("验证码已发送至 %s（%s）", email, code if _is_dev() else "******")
+    await redis.delete(f"{code_key}:attempts")
+    logger.info("邮箱验证码已发送，用途=%s", body.purpose)
     return {"ok": True, "message": "验证码已发送", "cooldown": RESEND_COOLDOWN}
 
 
@@ -133,7 +143,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     if not email or not code:
         raise HTTPException(400, "邮箱和验证码不能为空")
 
-    await verify_code(email, code)
+    await verify_code(email, code, "login")
     user, is_new = await get_or_create_user(db, email)
     token_str, expires_at = await create_token(db, email)
 
@@ -153,13 +163,13 @@ async def login_password(body: PasswordLoginRequest, db: AsyncSession = Depends(
     if not email or not password:
         raise HTTPException(400, "邮箱和密码不能为空")
 
-    user = await get_user_by_email(db, email)
-    if not user or not user.password_hash:
-        raise HTTPException(401, "该邮箱未注册，请先注册")
-    if not verify_password(password, user.password_hash):
-        raise HTTPException(401, "密码错误")
-
-    token_str, expires_at = await create_token(db, email)
+    async with password_attempt(email):
+        user = await get_user_by_email(db, email, for_update=True)
+        if not user or not user.password_hash:
+            raise HTTPException(401, "该邮箱未注册，请先注册")
+        if not verify_password(password, user.password_hash):
+            raise HTTPException(401, "密码错误")
+        token_str, expires_at = await create_token(db, email)
     logger.info("用户密码登录成功: %s", email)
     return {
         "ok": True, "token": token_str, "email": email,
@@ -179,15 +189,17 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     if not password or len(password) < 6:
         raise HTTPException(400, "密码至少 6 位")
 
-    await verify_code(email, code)
-
     user = await get_user_by_email(db, email)
     if user:
-        user.password_hash = hash_password(password)
-    else:
-        user = User(email=email, password_hash=hash_password(password))
-        db.add(user)
-    await db.commit()
+        raise HTTPException(409, "该邮箱已注册，请登录或找回密码")
+    await verify_code(email, code, "register")
+    user = User(email=email, name=email.split("@")[0], password_hash=hash_password(password))
+    db.add(user)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "该邮箱已注册，请登录或找回密码")
     await db.refresh(user)
 
     token_str, expires_at = await create_token(db, email)
@@ -196,6 +208,22 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
         "ok": True, "token": token_str, "email": email,
         "expires_in": TOKEN_TTL, "expires_at": expires_at,
     }
+
+
+@router.post("/auth/reset-password")
+async def reset_password(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    email = body.email.strip().lower()
+    await verify_code(email, body.code.strip(), "reset_password")
+    user = await get_user_by_email(db, email, for_update=True)
+    if not user:
+        raise HTTPException(404, "账号不存在，请先注册")
+    user.password_hash = hash_password(body.password)
+    # Password recovery invalidates all previously issued sessions.
+    await db.execute(delete(Token).where(Token.email == email))
+    await db.commit()
+    redis = await get_redis()
+    await redis.delete(f"password:{email}:attempts")
+    return {"ok": True}
 
 
 @router.post("/auth/verify")
@@ -227,13 +255,29 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> str:
     """从 Authorization: Bearer <token> 头校验用户，返回 email。"""
-    token = authorization.removeprefix("Bearer ").strip() if authorization else ""
+    scheme, _, token = authorization.partition(" ")
+    token = token.strip() if scheme.lower() == "bearer" else ""
     if not token:
         raise HTTPException(401, "未提供认证信息")
     email = await verify_token(db, token)
     if not email:
         raise HTTPException(401, "token 无效或已过期，请重新登录")
     return email
+
+
+@router.post("/auth/logout")
+async def logout(
+    authorization: str = Header(default=""),
+    email: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    token = authorization.partition(" ")[2].strip()
+    await db.execute(delete(Token).where(
+        Token.email == email,
+        Token.token_hash == hashlib.sha256(token.encode()).hexdigest(),
+    ))
+    await db.commit()
+    return {"ok": True}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -273,8 +317,9 @@ async def get_profile(
 
 
 class UpdateProfileRequest(BaseModel):
-    programming_language: str | None = None
-    interview_language: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    programming_language: str | None = Field(default=None, min_length=1, max_length=50)
+    interview_language: Literal["zh", "en", "auto"] | None = None
 
 
 @router.put("/user/profile")
@@ -287,6 +332,10 @@ async def update_profile(
     user = await get_user_by_email(db, email)
     if not user:
         raise HTTPException(404, "用户不存在")
+    if body.name is not None:
+        if not body.name.strip():
+            raise HTTPException(422, "昵称不能为空")
+        user.name = body.name.strip()
     if body.programming_language is not None:
         user.programming_language = body.programming_language
     if body.interview_language is not None:

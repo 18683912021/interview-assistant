@@ -2,9 +2,17 @@
 
 interface ElectronAPI {
   audio: {
-    startCapture(opts: { source?: 'mic' | 'system' | 'both'; streamUrl?: string }): Promise<unknown>;
+    startCapture(opts: { source?: 'mic' | 'system' | 'both'; streamUrl?: string; token?: string; sessionId?: string; systemDeviceId?: string }): Promise<unknown>;
     stopCapture(): Promise<void>;
     getSnapshot(): Promise<unknown>;
+    listSystemOutputs(): Promise<{id: string; name: string; isDefault: boolean}[]>;
+    getPermissions(): Promise<{
+      platform: string; osRelease: string; electronVersion: string;
+      microphone: 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown' | 'unsupported';
+      screen: 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown' | 'unsupported';
+      systemAudioMode: string;
+    }>;
+    clearAnswer(): Promise<void>;
     sendControl(msg: unknown): Promise<unknown>;
     sendMicFrame(frame: Uint8Array): void;
     sendSystemFrame(frame: Uint8Array): void;
@@ -17,11 +25,7 @@ interface ElectronAPI {
     onLevels(cb: (data: unknown) => void): () => void;
     onError(cb: (data: unknown) => void): () => void;
   };
-  fileConvert: {
-    getLibreOfficeStatus(): Promise<{ available: boolean }>;
-    downloadLibreOffice(): Promise<{ success: boolean; path?: string; error?: string }>;
-    onDownloadProgress(cb: (data: { progress: number; stage: string; error?: string }) => void): () => void;
-    convert(inputPath: string, format: string): Promise<string>;
+  files: {
     pickFile(extensions?: string[]): Promise<string | null>;
     saveFile(data: Uint8Array, defaultName: string): Promise<string | null>;
   };
@@ -30,6 +34,9 @@ interface ElectronAPI {
     closeOverlay(): Promise<void>;
     toggleOverlay(): Promise<void>;
     setAlwaysOnTop(on: boolean): Promise<void>;
+    toggleContentProtection(): Promise<boolean>;
+    getContentProtection(): Promise<boolean>;
+    openExternal(url: string): Promise<{ ok: boolean; error?: string }>;
   };
   storage: {
     get(key: string): Promise<string | null>;

@@ -3,7 +3,7 @@
  *
  * 从 RN 项目零改动迁移。
  */
-import { api } from './client';
+import {api} from './client';
 
 export interface UserProfile {
   email: string;
@@ -18,35 +18,61 @@ export interface UserProfile {
   answer_style: string;
 }
 
-export interface SendCodeResult { ok: boolean; message: string; cooldown: number; }
-export interface CheckEmailResult { ok: boolean; exists: boolean; }
-export interface LoginResult { ok: boolean; token: string; email: string; is_new?: boolean; expires_in: number; expires_at: number; }
-export interface VerifyResult { ok: boolean; email: string; }
-export interface ProfileResult { ok: boolean; user: UserProfile; }
-export interface DeductResult { ok: boolean; user: UserProfile; }
+export interface SendCodeResult {
+  ok: boolean;
+  message: string;
+  cooldown: number;
+}
+export interface CheckEmailResult {
+  ok: boolean;
+  exists: boolean;
+}
+export interface LoginResult {
+  ok: boolean;
+  token: string;
+  email: string;
+  is_new?: boolean;
+  expires_in: number;
+  expires_at: number;
+}
+export interface VerifyResult {
+  ok: boolean;
+  email: string;
+}
+export interface ProfileResult {
+  ok: boolean;
+  user: UserProfile;
+}
+export interface DeductResult {
+  ok: boolean;
+  user: UserProfile;
+}
 
-export function sendCode(email: string): Promise<SendCodeResult> {
-  return api.post('/api/auth/send-code', { email });
+export function sendCode(
+  email: string,
+  purpose: 'login' | 'register' | 'reset_password' = 'login',
+): Promise<SendCodeResult> {
+  return api.post('/api/auth/send-code', {email, purpose});
 }
 
 export function checkEmail(email: string): Promise<CheckEmailResult> {
-  return api.post('/api/auth/check-email', { email });
+  return api.post('/api/auth/check-email', {email});
 }
 
 export function login(email: string, code: string): Promise<LoginResult> {
-  return api.post('/api/auth/login', { email, code });
+  return api.post('/api/auth/login', {email, code});
 }
 
 export function loginPassword(email: string, password: string): Promise<LoginResult> {
-  return api.post('/api/auth/login-password', { email, password });
+  return api.post('/api/auth/login-password', {email, password});
 }
 
 export function register(email: string, code: string, password: string): Promise<LoginResult> {
-  return api.post('/api/auth/register', { email, code, password });
+  return api.post('/api/auth/register', {email, code, password});
 }
 
 export function verify(token: string): Promise<VerifyResult> {
-  return api.post('/api/auth/verify', { token });
+  return api.post('/api/auth/verify', {token});
 }
 
 export function getProfile(): Promise<ProfileResult> {
@@ -54,9 +80,18 @@ export function getProfile(): Promise<ProfileResult> {
 }
 
 export function deductTime(seconds: number): Promise<DeductResult> {
-  return api.post<DeductResult>('/api/user/deduct-time', { seconds }, true);
+  return api.post<DeductResult>('/api/user/deduct-time', {seconds}, true);
 }
 
-export function updateProfile(data: { programming_language?: string; interview_language?: string }): Promise<ProfileResult> {
+export function updateProfile(data: {
+  name?: string;
+  programming_language?: string;
+  interview_language?: string;
+  answer_style?: string;
+}): Promise<ProfileResult> {
   return api.put<ProfileResult>('/api/user/profile', data, true);
 }
+
+export const resetPassword = (email: string, code: string, password: string) =>
+  api.post<{ok: boolean}>('/api/auth/reset-password', {email, code, password});
+export const logoutSession = () => api.post<{ok: boolean}>('/api/auth/logout', {}, true);

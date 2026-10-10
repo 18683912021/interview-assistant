@@ -1,8 +1,6 @@
 /**
- * 音频输入设备枚举 —— macOS「系统音频=虚拟声卡」方案的支撑工具
- *
- * macOS 没有系统输出监听 API（Chromium/Electron 不支持 getDisplayMedia 音频），
- * 行业标准做法是把系统输出路由到虚拟声卡（BlackHole 等），App 再采集该「输入设备」。
+ * 音频输入设备枚举。macOS 默认通过 Electron 的 ScreenCaptureKit 回环采集；
+ * 已配置 BlackHole 等虚拟声卡的用户也可以手动选择对应输入。
  * enumerateDevices 在未获麦克风权限时 label 为空——此时 deviceId 仍可用，只是不可读。
  */
 
@@ -20,7 +18,7 @@ export function isVirtualDeviceName(label: string): boolean {
   return VIRTUAL_NAME_RE.test(label);
 }
 
-/** 枚举全部音频输入设备，虚拟声卡标记 isVirtual（按用户可能使用场景降序） */
+/** 物理输入优先；虚拟输入保留标记，避免把系统回环误选为麦克风。 */
 export async function enumerateAudioInputs(): Promise<AudioInputDevice[]> {
   if (!navigator.mediaDevices?.enumerateDevices) return [];
   try {
@@ -28,7 +26,7 @@ export async function enumerateAudioInputs(): Promise<AudioInputDevice[]> {
     const inputs = devices.filter(d => d.kind === 'audioinput');
     return inputs
       .map(d => ({ deviceId: d.deviceId, label: d.label || '(未命名设备)', isVirtual: isVirtualDeviceName(d.label) }))
-      .sort((a, b) => Number(b.isVirtual) - Number(a.isVirtual) || a.label.localeCompare(b.label));
+      .sort((a, b) => Number(a.isVirtual) - Number(b.isVirtual) || a.label.localeCompare(b.label));
   } catch {
     return [];
   }

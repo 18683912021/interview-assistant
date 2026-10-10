@@ -1,46 +1,136 @@
-/**
- * OverlayScreen —— AI 浮窗
- *
- * 透明背景 + 半透明卡片，显示最新 AI 回答。
- * 鼠标穿透由 Electron 主进程 setIgnoreMouseEvents 控制。
- */
-import { useState, useEffect } from 'react';
-import { Bot } from 'lucide-react';
-
+import {useEffect, useRef, useState} from 'react';
+import {FileText, X} from 'lucide-react';
+import {AnswerBody} from '../components/AnswerBody';
+import './interview.css';
 export default function OverlayScreen() {
-  const [text, setText] = useState('等待 AI 回答…');
-  const [streaming, setStreaming] = useState(false);
-
+  const [text, setText] = useState(''),
+    [question, setQuestion] = useState(''),
+    [status, setStatus] = useState('等待选择问题');
+  const request = useRef<string | null>(null);
   useEffect(() => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI?.audio;
     if (!api) return;
-
-    const u1 = api.audio.onLLMChunk((data: any) => { if (data?.delta) { setText(t => t === '等待 AI 回答…' ? data.delta : t + data.delta); setStreaming(true); } });
-    const u2 = api.audio.onLLMDone((data: any) => { if (data?.full_answer) { setText(data.full_answer); setStreaming(false); } });
-
-    return () => { if (u1) u1(); if (u2) u2(); };
+    type AnswerEvent = {
+      request_id: string;
+      question_text?: string;
+      delta?: string;
+      chunk_index?: number;
+      full_answer?: string;
+      status?: string;
+      error?: string;
+    };
+    type Queued = {kind: 'start' | 'chunk' | 'done'; event: AnswerEvent};
+    let disposed = false,
+      hydrating = true,
+      lastChunk = -1,
+      terminal = false;
+    const queued: Queued[] = [];
+    const label = (value: string) =>
+      ({
+        loading: '正在生成',
+        streaming: '正在生成',
+        done: '已完成',
+        completed: '已完成',
+        error: '生成失败',
+        failed: '生成失败',
+        cancelled: '已停止',
+        truncated: '回答未完整',
+      })[value] || '等待选择问题';
+    const consume = ({kind, event}: Queued) => {
+      if (kind === 'start') {
+        request.current = event.request_id;
+        lastChunk = -1;
+        terminal = false;
+        setText('');
+        setQuestion(event.question_text || '');
+        setStatus('正在生成');
+        return;
+      }
+      if (event.request_id !== request.current || terminal) return;
+      if (kind === 'chunk') {
+        const index = event.chunk_index ?? lastChunk + 1;
+        if (index <= lastChunk) return;
+        lastChunk = index;
+        setText(value => value + (event.delta || ''));
+      } else {
+        if (event.full_answer) setText(event.full_answer);
+        terminal = true;
+        setStatus(label(event.error ? 'failed' : event.status || 'completed'));
+      }
+    };
+    const receive = (kind: Queued['kind'], raw: unknown) => {
+      const event = {kind, event: raw as AnswerEvent};
+      if (hydrating) queued.push(event);
+      else consume(event);
+    };
+    const offs = [
+      api.onLLMStart(event => receive('start', event)),
+      api.onLLMChunk(event => receive('chunk', event)),
+      api.onLLMDone(event => receive('done', event)),
+    ];
+    void api
+      .getSnapshot()
+      .then(raw => {
+        if (disposed) return;
+        const snapshot = raw as {
+          currentAnswer?: {
+            request_id: string;
+            question_text: string;
+            text: string;
+            status: string;
+            chunk_index?: number;
+          } | null;
+        };
+        const current = snapshot.currentAnswer;
+        if (current) {
+          request.current = current.request_id;
+          lastChunk = current.chunk_index ?? -1;
+          terminal = !['loading', 'streaming'].includes(current.status);
+          setText(current.text);
+          setQuestion(current.question_text);
+          setStatus(label(current.status));
+        }
+        hydrating = false;
+        const includedStart = current
+          ? queued
+              .map(value => (value.kind === 'start' ? value.event.request_id : ''))
+              .lastIndexOf(current.request_id)
+          : -1;
+        queued.slice(includedStart + 1).forEach(consume);
+      })
+      .catch(() => {
+        if (disposed) return;
+        hydrating = false;
+        queued.forEach(consume);
+        if (!queued.length) setStatus('暂时无法恢复回答，请在主窗口重新选择问题');
+      });
+    return () => {
+      disposed = true;
+      offs.forEach(off => off());
+    };
   }, []);
-
   return (
-    <div className="h-full bg-transparent text-white p-3 select-none">
-      <div className="h-full rounded-2xl bg-black/75 backdrop-blur-xl border border-white/10 flex flex-col overflow-hidden shadow-2xl">
-        {/* 拖动把手 */}
-        <div className="h-7 -mx-3 -mt-3 mb-0 flex items-center justify-center cursor-move bg-white/[0.03]">
-          <div className="w-8 h-1 rounded-full bg-white/25"/>
+    <div className="overlay-page">
+      <div className="overlay-card">
+        <header className="overlay-header">
+          <FileText size={14} />
+          回答参考
+          <button
+            className="icon-btn"
+            aria-label="关闭浮窗"
+            onClick={() => void window.electronAPI?.window.closeOverlay()}>
+            <X size={14} />
+          </button>
+        </header>
+        <div className="overlay-body">
+          {question && <div className="overlay-question">{question}</div>}
+          {text ? (
+            <AnswerBody text={text} />
+          ) : (
+            <span className="muted small">在主窗口点击一句对话，回答将在这里显示。</span>
+          )}
         </div>
-
-        {/* 头部 */}
-        <div className="px-4 py-2 flex items-center gap-2 border-b border-white/5">
-          <Bot className="w-3.5 h-3.5 text-indigo-400" strokeWidth={2}/>
-          <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wider">AI 回答</span>
-          {streaming && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-auto"/>}
-        </div>
-
-        {/* 内容 */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
-          <p className="text-[13px] leading-relaxed text-white/85 whitespace-pre-wrap">{text}</p>
-          {streaming && <span className="inline-block w-[2px] h-3.5 bg-indigo-400 animate-pulse ml-0.5 align-middle rounded-sm"/>}
-        </div>
+        <footer className="overlay-footer">{status}</footer>
       </div>
     </div>
   );

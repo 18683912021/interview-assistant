@@ -44,7 +44,11 @@ async def init_db():
     """启动时创建所有表。"""
     async with engine.begin() as conn:
         from app.models.db_models import Interview, Resume, Token, User  # noqa: F401
-        await conn.run_sync(Base.metadata.create_all)
+        from app.migrations import migrate
+        await conn.run_sync(lambda sync: Base.metadata.create_all(
+            sync, tables=[User.__table__, Resume.__table__, Token.__table__, Interview.__table__],
+        ))
+        await migrate(conn)
 
 
 async def close_db():

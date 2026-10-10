@@ -1,4 +1,9 @@
-"""火山引擎流式语音识别服务。
+"""Deprecated: legacy file-path transcription, no longer registered as an HTTP route.
+
+Do not use this legacy protocol implementation for new integrations.
+Use stt_streaming.py and its tested binary parser instead.
+
+火山引擎流式语音识别服务。
 
 使用 bigmodel_async WebSocket 协议。
 鉴权：X-Api-App-Key + X-Api-Access-Key（通过 HMAC-SHA256 签名生成 Token）。

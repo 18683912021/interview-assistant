@@ -2,11 +2,13 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.routers.auth import get_current_user
+from app.services.workspace_requests import request_completion
 from app.services.resume_service import (
     generate_intro,
     get_resume,
@@ -21,6 +23,7 @@ router = APIRouter()
 
 @router.post("/resume/upload")
 async def upload_resume(
+    request: Request,
     file: UploadFile = File(...),
     email: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -31,17 +34,18 @@ async def upload_resume(
     if not ("pdf" in content_type or filename.endswith(".pdf")):
         raise HTTPException(400, "仅支持 PDF 格式")
 
-    content = await file.read()
+    content = await file.read(10 * 1024 * 1024 + 1)
     if len(content) == 0:
         raise HTTPException(400, "文件为空")
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "文件过大（不超过 10MB）")
 
     try:
-        resume_text = parse_pdf(content)
-    except Exception as e:
+        await db.rollback()
+        resume_text = await run_in_threadpool(parse_pdf, content)
+    except Exception:
         logger.exception("PDF 解析失败")
-        raise HTTPException(422, f"PDF 解析失败：{e}")
+        raise HTTPException(422, "无法解析 PDF，请使用有效的文字版简历（最多 100 页、100000 字符）")
 
     if not resume_text.strip():
         raise HTTPException(422, "PDF 中未提取到文字，请确保不是扫描版图片")
@@ -49,10 +53,12 @@ async def upload_resume(
     logger.info("PDF 解析成功，文本长度: %d", len(resume_text))
 
     try:
-        intro = await generate_intro(resume_text)
-    except Exception as e:
+        intro = await request_completion(request, lambda _system, _user: generate_intro(resume_text), "", "")
+    except HTTPException:
+        raise
+    except Exception:
         logger.exception("自我介绍生成失败")
-        raise HTTPException(500, f"自我介绍生成失败：{e}")
+        raise HTTPException(502, "自我介绍暂时无法生成，请稍后重试")
 
     row = await save_resume(db, email, intro, file.filename or "")
 

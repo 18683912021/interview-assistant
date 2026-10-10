@@ -1,25 +1,19 @@
-/**
- * 应用配置
- *
- * 开发模式 (localhost:5173)：Vite 代理 /api → 后端，API_BASE 用空串
- * 生产模式 (Electron file://)：直连后端
- */
-export const API_HOST: string = import.meta.env.VITE_API_HOST || 'interview.iyouzi.cc';
-
-/** 主进程直连后端的 WS 地址（不走 Vite proxy，proxy 只对浏览器生效）
- *  dev：本地后端直连（常见联调场景）
- *  生产：wss 经 nginx 反代（后端仅监听 127.0.0.1，必须走站点反代） */
-export const MAIN_STREAM_URL: string = import.meta.env.DEV
-  ? `ws://${API_HOST}:8010/api/ws/audio/stream`
-  : `wss://${API_HOST}/api/ws/audio/stream`;
-
-export const API_BASE: string = import.meta.env.DEV
-  ? ''  // Vite proxy handles /api
-  : `https://${API_HOST}`;
-
-export const STREAM_URL: string = import.meta.env.DEV
-  ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/ws/audio/stream`  // Vite WS proxy
-  : `ws://${API_HOST}:8010/api/ws/audio/stream`;
+/** API/WS use local development by default; packaged deployments set explicit endpoints. */
+export const API_HOST: string = import.meta.env.VITE_API_HOST || '127.0.0.1';
+const localHost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(API_HOST);
+const defaultOrigin = localHost ? `http://${API_HOST}:8010` : `https://${API_HOST}`;
+export const API_BASE: string = (
+  import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? '' : defaultOrigin)
+).replace(/\/$/, '');
+const directOrigin = API_BASE || defaultOrigin;
+/** Main-process connection cannot use the renderer's Vite proxy. */
+export const MAIN_STREAM_URL: string =
+  import.meta.env.VITE_STREAM_URL || `${directOrigin.replace(/^http/, 'ws')}/api/ws/audio/stream`;
+export const STREAM_URL: string =
+  import.meta.env.VITE_STREAM_URL ||
+  (import.meta.env.DEV && !API_BASE
+    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/ws/audio/stream`
+    : MAIN_STREAM_URL);
 
 // ── 共享设置 ──
 export type AppLanguage = 'zh' | 'en';
@@ -32,7 +26,9 @@ export function getLanguage(): AppLanguage {
 }
 
 export function setLanguage(lang: AppLanguage): void {
-  if (_language === lang) { return; }
+  if (_language === lang) {
+    return;
+  }
   _language = lang;
   _langListeners.forEach(fn => fn(lang));
 }
@@ -41,7 +37,9 @@ export function onLanguageChange(fn: (lang: AppLanguage) => void): () => void {
   _langListeners.push(fn);
   return () => {
     const idx = _langListeners.indexOf(fn);
-    if (idx !== -1) { _langListeners.splice(idx, 1); }
+    if (idx !== -1) {
+      _langListeners.splice(idx, 1);
+    }
   };
 }
 

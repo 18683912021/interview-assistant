@@ -1,75 +1,221 @@
-/**
- * InterviewHistoryScreen —— 面试历史
- *
- * 主从布局：左列表 55% | 右详情 45%
- * 参考：Apple Mail / Gmail 三栏
- */
-import { useEffect, useState, useCallback } from 'react';
-import { Clock, MessageCircle, Trash2, FileText } from 'lucide-react';
-import { getInterviewList, getInterviewDetail, clearInterviewHistory, type InterviewListItem, type InterviewDetail } from '../api/interview';
-import ConversationBubble from '../components/ConversationBubble';
-
-const LL: Record<string,string> = { javascript:'JavaScript',python:'Python',java:'Java',csharp:'C#',cpp:'C++',go:'Go' };
-const LI: Record<string,string> = { javascript:'🟨',python:'🐍',java:'☕',csharp:'🟪',cpp:'🔷',go:'🔵' };
-
+import {useCallback, useContext, useEffect, useState} from 'react';
+import {useNavigate} from 'react-router-dom';
+import {FileClock, History, Plus, RefreshCw, Search, Trash2} from 'lucide-react';
+import {
+  deleteWorkspaceInterview,
+  getWorkspaceInterviews,
+  type SessionSummary,
+  type WorkspaceSession,
+} from '../api/workspace';
+import {messageOf} from '../api/client';
+import {dateLabel, durationLabel, EmptyState, ErrorState, Loading} from '../components/WorkspaceUI';
+import {AuthContext} from '../utils/AuthContext';
+import {loadDrafts, removeDraft} from '../services/drafts';
+import {useToast} from '../components/Toast';
+import './interview.css';
 export default function InterviewHistoryScreen() {
-  const [list, setList] = useState<InterviewListItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string|null>(null);
-  const [detail, setDetail] = useState<InterviewDetail|null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [showClear, setShowClear] = useState(false);
-
-  useEffect(() => { getInterviewList().then(setList).catch(()=>[]).finally(()=>setLoading(false)); }, []);
-
-  const select = useCallback(async (id: string) => { setSelectedId(id); setDetailLoading(true); setDetail(null); try { setDetail(await getInterviewDetail(id)); } catch {} finally { setDetailLoading(false); } }, []);
-
-  const handleClear = async () => { await clearInterviewHistory(); setList([]); setSelectedId(null); setDetail(null); setShowClear(false); };
-
+  const [records, setRecords] = useState<SessionSummary[]>([]),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(''),
+    [query, setQuery] = useState(''),
+    [status, setStatus] = useState('all');
+  const [drafts, setDrafts] = useState<WorkspaceSession[]>([]),
+    [localError, setLocalError] = useState(''),
+    [deleting, setDeleting] = useState<string[]>([]);
+  const navigate = useNavigate(),
+    {confirm, toast} = useToast(),
+    {profile} = useContext(AuthContext);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    setLocalError('');
+    try {
+      const [remote, local] = await Promise.allSettled([
+        getWorkspaceInterviews(),
+        profile?.email
+          ? loadDrafts(profile.email, count =>
+              setLocalError(`${count} 份本机副本无法读取，原文件已保留。`),
+            )
+          : Promise.resolve([]),
+      ]);
+      if (remote.status === 'fulfilled') setRecords(remote.value);
+      else {
+        setRecords([]);
+        setError(messageOf(remote.reason));
+      }
+      if (local.status === 'fulfilled') setDrafts(local.value);
+      else setLocalError(messageOf(local.reason));
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [profile?.email]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const filtered = records.filter(
+    record =>
+      (status === 'all' || record.status === status) &&
+      `${record.title} ${record.company} ${record.role}`
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()),
+  );
+  const recoverable = drafts.filter(draft => {
+    const remote = records.find(value => value.id === draft.id);
+    return !remote || draft.revision > remote.revision;
+  });
+  const labels = {active: '待继续', completed: '已结束', interrupted: '待继续'};
+  const remove = (record: SessionSummary) =>
+    confirm('删除这场面试？', `“${record.title}”的对话与回答将删除，此操作无法撤销。`, () => {
+      setDeleting(values => [...values, record.id]);
+      void deleteWorkspaceInterview(record.id)
+        .then(async () => {
+          setRecords(old => old.filter(item => item.id !== record.id));
+          try {
+            if (profile?.email) await removeDraft(profile.email, record.id);
+            setDrafts(values => values.filter(value => value.id !== record.id));
+            toast('面试记录已删除', 'success');
+          } catch {
+            toast('服务器记录已删除，本机恢复副本清理失败，请重试清理', 'warning');
+          }
+        })
+        .catch(e => toast(messageOf(e), 'error'))
+        .finally(() => setDeleting(values => values.filter(value => value !== record.id)));
+    });
   return (
-    <div className="flex-1 flex overflow-hidden">
-      {/* 左列表 */}
-      <div className="w-[55%] min-w-[360px] flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#0F0F11]">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 shrink-0">
-          <h2 className="text-base font-extrabold text-zinc-900 dark:text-white tracking-tight">面试历史</h2>
-          {list.length > 0 && <button onClick={()=>setShowClear(true)} className="flex items-center gap-1.5 text-[13px] text-zinc-400 hover:text-red-500 font-medium transition-colors"><Trash2 className="w-3.5 h-3.5" strokeWidth={1.5}/>清空</button>}
+    <section className="page">
+      <div className="page-heading">
+        <div>
+          <h1>面试记录</h1>
+          <p>每一场的对话、回答和准备资料。</p>
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {loading ? <div className="p-8 text-center text-sm text-zinc-400">加载中…</div>
-          : list.length === 0 ? <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8"><FileText className="w-10 h-10 text-zinc-300" strokeWidth={1}/><div className="text-sm font-semibold text-zinc-500">暂无面试记录</div><div className="text-xs text-zinc-400">完成面试后自动保存</div></div>
-          : <div className="p-4 space-y-2">{list.map(item => (
-            <button key={item.id} onClick={()=>select(item.id)} className={`w-full flex rounded-xl border transition-all hover:shadow-sm ${selectedId===item.id?'border-indigo-300 dark:border-indigo-600 bg-white dark:bg-[#141416] shadow-sm':'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#141416] hover:border-zinc-300'}`}>
-              <div className={`w-1 rounded-l-xl shrink-0 ${selectedId===item.id?'bg-indigo-500':'bg-transparent'}`}/>
-              <div className="flex-1 p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2"><span className="text-sm">{LI[item.programming_language]??'💬'}</span><span className="text-[13px] font-semibold text-zinc-900 dark:text-white">{LL[item.programming_language]??item.programming_language}</span></div>
-                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-400"><MessageCircle className="w-3 h-3" strokeWidth={1.5}/>{item.message_count}</div>
-                </div>
-                <div className="flex items-center justify-between"><span className="text-[12px] text-zinc-500">{fmt(item.started_at)}</span><span className="flex items-center gap-1 text-[11px] text-zinc-400"><Clock className="w-3 h-3" strokeWidth={1.5}/>{dur(item.duration_seconds)}</span></div>
-              </div>
-            </button>
-          ))}</div>}
+        <button className="btn btn-primary" onClick={() => navigate('/interview')}>
+          <Plus />
+          新建面试
+        </button>
+      </div>
+      {!loading && recoverable.length > 0 && (
+        <div className="history-recovery">
+          <div className="history-recovery-heading">
+            <FileClock size={17} />
+            <div>
+              <strong>本机还有 {recoverable.length} 份恢复副本</strong>
+              <p>有内容尚未确认同步，可以先恢复查看。</p>
+            </div>
+          </div>
+          {recoverable.map(value => (
+            <div className="history-recovery-row" key={value.id}>
+              <span>
+                <strong>{value.title}</strong>
+                <small>
+                  {value.conversation.length} 条对话 · {durationLabel(value.duration_seconds)}
+                </small>
+              </span>
+              <button className="btn" onClick={() => navigate(`/interview?draft=${value.id}`)}>
+                恢复查看
+              </button>
+            </div>
+          ))}
         </div>
+      )}
+      {localError && <p className="notice">{localError}</p>}
+      <div className="list-toolbar">
+        <label className="search-input">
+          <Search />
+          <input
+            aria-label="搜索面试记录"
+            placeholder="搜索面试名称、公司或岗位"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+        </label>
+        <span className="spacer" />
+        <span className="muted small record-count">{filtered.length} 场</span>
+        <select aria-label="按状态筛选" value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="all">全部状态</option>
+          <option value="active">未结束</option>
+          <option value="completed">已结束</option>
+          <option value="interrupted">已暂停</option>
+        </select>
+        <button
+          className="icon-btn"
+          title="刷新记录"
+          aria-label="刷新记录"
+          disabled={loading}
+          onClick={() => void load()}>
+          <RefreshCw size={15} />
+        </button>
       </div>
-
-      {/* 右详情 */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {!selectedId ? <div className="flex-1 flex items-center justify-center"><div className="text-center space-y-3"><FileText className="w-10 h-10 text-zinc-300 mx-auto" strokeWidth={1}/><span className="text-sm text-zinc-400">选择左侧记录查看详情</span></div></div>
-        : detailLoading ? <div className="flex-1 flex items-center justify-center text-sm text-zinc-400">加载中…</div>
-        : detail ? <>
-          <div className="shrink-0 px-5 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0A0A0B]"><div className="flex items-center gap-6 text-sm">
-            <M label="时间" v={fmt(detail.started_at)}/><M label="时长" v={dur(detail.duration_seconds)}/><M label="赛道" v={`${LI[detail.programming_language]??''} ${LL[detail.programming_language]??detail.programming_language}`}/><M label="对话" v={`${detail.conversation.length} 条`}/>
-          </div></div>
-          <div className="flex-1 overflow-y-auto px-5 py-4">{detail.conversation.map(msg => <ConversationBubble key={msg.id} message={{...msg,status:'done'}}/>)}</div>
-        </> : <div className="flex-1 flex items-center justify-center text-sm text-zinc-400">加载失败</div>}
-      </div>
-
-      {/* 清空确认 */}
-      {showClear && <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 backdrop-blur-sm" onClick={()=>setShowClear(false)}><div className="bg-white dark:bg-[#141416] rounded-2xl p-6 w-80 shadow-xl shadow-black/10 border border-zinc-200 dark:border-zinc-800" onClick={e=>e.stopPropagation()}><h3 className="text-base font-bold text-zinc-900 dark:text-white mb-2">清空历史</h3><p className="text-sm text-zinc-500 mb-5">确定清空所有面试历史？不可恢复。</p><div className="flex gap-3 justify-end"><button onClick={()=>setShowClear(false)} className="px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800">取消</button><button onClick={handleClear} className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold hover:bg-red-600 shadow-sm">清空</button></div></div></div>}
-    </div>
+      {loading ? (
+        <Loading />
+      ) : error ? (
+        <ErrorState message={error} retry={() => void load()} />
+      ) : filtered.length ? (
+        <table className="records">
+          <thead>
+            <tr>
+              <th>面试</th>
+              <th className="record-role">目标岗位</th>
+              <th className="record-date">日期</th>
+              <th className="record-duration">时长</th>
+              <th>状态</th>
+              <th aria-label="操作" />
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(record => (
+              <tr key={record.id}>
+                <td>
+                  <button className="record-name" onClick={() => navigate(`/history/${record.id}`)}>
+                    <span className="record-icon">
+                      {Array.from(record.company || record.title || '面试')[0]}
+                    </span>
+                    <span>
+                      <strong>{record.title}</strong>
+                      <small>
+                        {record.company || '未填写公司'} · {record.message_count} 条对话 ·{' '}
+                        {record.answer_count} 份回答
+                      </small>
+                    </span>
+                  </button>
+                </td>
+                <td className="record-role">{record.role || '未关联岗位'}</td>
+                <td className="record-date">{dateLabel(record.started_at)}</td>
+                <td className="record-duration">{durationLabel(record.duration_seconds)}</td>
+                <td>
+                  <span className={`status-tag ${record.status}`}>
+                    <i className="status-dot" />
+                    {labels[record.status]}
+                  </span>
+                </td>
+                <td className="row-actions">
+                  <button
+                    className="icon-btn"
+                    disabled={deleting.includes(record.id)}
+                    aria-label={`删除 ${record.title}`}
+                    onClick={() => remove(record)}>
+                    <Trash2 size={15} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <EmptyState
+          icon={<History size={24} />}
+          title={records.length ? '没有匹配的面试' : '你的第一场面试，从这里开始'}
+          text={records.length ? '试试其他关键词或状态。' : '选择岗位与简历，开始记录对话和回答。'}
+          action={
+            !records.length && (
+              <button className="btn" onClick={() => navigate('/interview')}>
+                准备一场面试
+              </button>
+            )
+          }
+        />
+      )}
+    </section>
   );
 }
-
-function fmt(ts: number) { const d = new Date(ts*1000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
-function dur(s: number) { const m = Math.floor(s/60); return m===0?`${s}秒`:`${m}分${s%60}秒`; }
-function M({label,v}:{label:string;v:string}){return <div className="flex items-center gap-1.5"><span className="text-xs text-zinc-400">{label}</span><span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{v}</span></div>}

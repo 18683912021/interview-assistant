@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 import time as _time
-from sqlalchemy import Integer, String, Float, Text, ForeignKey, Index
+from sqlalchemy import Integer, String, Float, Text, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
@@ -70,3 +70,53 @@ class Interview(Base):
     programming_language: Mapped[str] = mapped_column(String(50), default="javascript")
     conversation_json: Mapped[str] = mapped_column(Text, nullable=False)  # JSON serialized
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+
+# Workspace v2 is additive: legacy mobile tables and records remain readable.
+class WorkspaceInterview(Base):
+    __tablename__ = "workspace_interviews"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    owner_email: Mapped[str] = mapped_column(ForeignKey("users.email"), index=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
+    review_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)
+
+
+class WorkspaceInterviewDeletion(Base):
+    """Remember deleted UUIDs even when a client lost its first save acknowledgement."""
+    __tablename__ = "workspace_interview_deletions"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    owner_email: Mapped[str] = mapped_column(ForeignKey("users.email"), index=True)
+    deleted_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+
+class WorkspaceResume(Base):
+    __tablename__ = "workspace_resumes"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_email: Mapped[str] = mapped_column(ForeignKey("users.email"), index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    __table_args__ = (UniqueConstraint("owner_email", "version", name="uq_workspace_resume_version"),)
+
+
+class WorkspaceJob(Base):
+    __tablename__ = "workspace_jobs"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_email: Mapped[str] = mapped_column(ForeignKey("users.email"), index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    company: Mapped[str] = mapped_column(String(200), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    programming_language: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)
+
+
+class WorkspaceSettings(Base):
+    __tablename__ = "workspace_settings"
+    owner_email: Mapped[str] = mapped_column(ForeignKey("users.email"), primary_key=True)
+    settings_json: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)

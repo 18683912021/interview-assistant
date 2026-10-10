@@ -20,6 +20,8 @@ const CONNECT_TIMEOUT_MS = 10_000;
 export class StreamClient extends EventEmitter {
   private ws: WebSocket | null = null;
   private url = '';
+  private token = '';
+  private ready = false;
   private generation = 0;
   private retryCount = 0;
   private retryTimer: NodeJS.Timeout | null = null;
@@ -27,7 +29,16 @@ export class StreamClient extends EventEmitter {
   private pendingConnect: ((err: Error | null) => void) | null = null;
 
   /** 建立连接，握手（client_hello → ready）完成后 resolve */
-  connect(url: string): Promise<void> {
+  connect(url: string, token: string): Promise<void> {
+    const endpoint = new URL(url);
+    const local = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(endpoint.hostname);
+    if (endpoint.protocol !== 'wss:' && !(endpoint.protocol === 'ws:' && local)) {
+      return Promise.reject(new Error('远程音频服务必须使用 WSS 加密连接'));
+    }
+    if (!token || endpoint.username || endpoint.password || endpoint.search) {
+      return Promise.reject(new Error('音频连接需要登录凭证，且地址不能包含认证参数'));
+    }
+    this.token = token;
     this.url = url;
     this.retryCount = 0;
     this.emit('streamState', 'connecting' as StreamState);
@@ -40,18 +51,22 @@ export class StreamClient extends EventEmitter {
   }
 
   private _open(): void {
+    // Invalidate callbacks before terminating the prior socket: terminate may
+    // synchronously produce close and must not schedule another reconnect.
+    this.generation += 1;
+    const gen = this.generation;
+    if (this.connectTimeoutTimer) { clearTimeout(this.connectTimeoutTimer); this.connectTimeoutTimer = null; }
     if (this.ws) {
       try { this.ws.terminate(); } catch { /* ignore */ }
       this.ws = null;
     }
 
-    this.generation += 1;
-    const gen = this.generation;
+    this.ready = false;
 
     let ws: WebSocket;
     try {
-      console.log(`[ws] 连接 ${this.url}`);
-      ws = new WebSocket(this.url);
+      console.log('[ws] 正在连接音频服务');
+      ws = new WebSocket(this.url, { headers: { Authorization: `Bearer ${this.token}` } });
     } catch (e: any) {
       this._settle(new Error(`WebSocket 创建失败: ${e.message}`));
       this._scheduleReconnect();
@@ -80,13 +95,10 @@ export class StreamClient extends EventEmitter {
       }));
     });
 
-    ws.on('message', (data: WebSocket.RawData) => {
-      if (gen !== this.generation) return;
-      if (typeof data === 'string') {
-        this._handle(data);
-      } else {
-        // 服务端二进制消息当前不处理（只发 JSON 控制消息）
-      }
+    ws.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
+      if (gen !== this.generation || isBinary) return;
+      const bytes = Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data as ArrayBuffer);
+      this._handle(bytes.toString('utf8'));
     });
 
     ws.on('error', (e: Error) => {
@@ -100,6 +112,13 @@ export class StreamClient extends EventEmitter {
       console.log(`[ws] close: code=${code} reason=${reason?.toString() || ''}`);
       if (this.connectTimeoutTimer) { clearTimeout(this.connectTimeoutTimer); this.connectTimeoutTimer = null; }
       this.ws = null;
+      this.ready = false;
+      if (code === 4401 || code === 4404 || code === 1008) {
+        this.retryCount = MAX_RETRY;
+        this._settle(new Error(code === 4404 ? '本场面试不存在或无权访问，请重新创建面试' : '登录已失效，请重新登录'));
+        this.emit('streamState', 'dead' as StreamState);
+        return;
+      }
       if (code === 1000) {
         // 用户主动断开，不重连
         this.emit('streamState', 'closed' as StreamState);
@@ -113,6 +132,8 @@ export class StreamClient extends EventEmitter {
 
   /** 主动断开（停止会话时调用），阻止重连 */
   disconnect(): void {
+    this.ready = false;
+    this.token = '';
     this.retryCount = MAX_RETRY; // 防止重连
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     if (this.connectTimeoutTimer) { clearTimeout(this.connectTimeoutTimer); this.connectTimeoutTimer = null; }
@@ -126,7 +147,9 @@ export class StreamClient extends EventEmitter {
   }
 
   private _scheduleReconnect(): void {
+    if (this.retryTimer) return;
     if (this.retryCount >= MAX_RETRY) {
+      this._settle(new Error('音频连接重试失败，请检查网络后重新开始'));
       this.emit('streamState', 'dead' as StreamState);
       this.emit('error', {
         code: 'E_WS_MAX_RETRY',
@@ -153,18 +176,42 @@ export class StreamClient extends EventEmitter {
 
   /** 发送 JSON 控制消息（连接未就绪时静默丢弃） */
   sendControl(msg: object): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ready || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.ws.send(JSON.stringify(msg));
   }
 
   /** 发送二进制实时帧（连接未就绪时丢弃 —— 移动端同语义） */
   sendFrame(frame: Buffer): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ready || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.ws.send(frame);
   }
 
   isReady(): boolean {
-    return !!this.ws && this.ws.readyState === WebSocket.OPEN;
+    return this.ready && !!this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  waitForControl(type: string, timeoutMs = 10000): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.off('controlMessage', listener);
+        this.off('streamState', onState);
+      };
+      const onState = (state: StreamState) => {
+        if (['idle', 'closed', 'dead', 'degraded', 'reconnecting'].includes(state)) {
+          cleanup(); reject(new Error('音频连接已中断，服务确认未完成'));
+        }
+      };
+      const listener = (msg: any) => {
+        if (msg.type === type) { cleanup(); resolve(msg); }
+        else if (msg.type === 'error' && ['E_AUTH', 'E_SESSION_ACCESS', 'E_SESSION_STATE', 'E_CONTROL_MESSAGE'].includes(msg.code)) {
+          cleanup(); reject(new Error(msg.message));
+        }
+      };
+      const timer = setTimeout(() => { cleanup(); reject(new Error('等待音频服务确认超时')); }, timeoutMs);
+      this.on('controlMessage', listener);
+      this.on('streamState', onState);
+    });
   }
 
   private _settle(err: Error | null): void {
@@ -177,8 +224,11 @@ export class StreamClient extends EventEmitter {
     let msg: any;
     try { msg = JSON.parse(text); } catch { return; }
 
+    this.emit('controlMessage', msg);
     switch (msg.type) {
       case 'ready':
+        this.ready = true;
+        this.retryCount = 0;
         console.log('[ws] 收到 ready，握手完成');
         if (this.connectTimeoutTimer) { clearTimeout(this.connectTimeoutTimer); this.connectTimeoutTimer = null; }
         this._settle(null);
@@ -197,6 +247,7 @@ export class StreamClient extends EventEmitter {
         this.emit('llmDone', msg);
         break;
       case 'error':
+        if (msg.code === 'E_AUTH') this._settle(new Error(msg.message));
         this.emit('error', msg);
         break;
       // session_ready / track_ready / chunk_ack / config_ack：无需处理

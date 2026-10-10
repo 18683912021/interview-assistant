@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>面试助手</title>
+  <!-- Existing app brand; AudioLines geometry copyright Lucide Icons and Contributors, ISC. -->
+  <rect x="64" y="64" width="896" height="896" rx="247.172414" fill="#292d3b"/>
+  <g transform="translate(218.482759 218.482759) scale(24.459770)"
+     fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 10v3"/>
+    <path d="M6 6v11"/>
+    <path d="M10 3v18"/>
+    <path d="M14 8v7"/>
+    <path d="M18 5v13"/>
+    <path d="M22 10v3"/>
+  </g>
+</svg>

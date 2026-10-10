@@ -4,13 +4,16 @@
 """
 
 import hashlib
+import hmac
 import logging
 import os
 import random
 import time
+from contextlib import asynccontextmanager
 
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.models.db_models import User, Token
 from app.redis import get_redis
@@ -20,23 +23,64 @@ logger = logging.getLogger("auth_service")
 TOKEN_TTL = 15 * 24 * 3600  # 15 天
 
 
+@asynccontextmanager
+async def password_attempt(email: str):
+    """Bound password guesses per account, including concurrent requests."""
+    from fastapi import HTTPException
+    redis = await get_redis()
+    key = f"password:{email}:attempts"
+    lock = f"password:{email}:lock"
+    token = os.urandom(16).hex()
+    if not await redis.set(lock, token, nx=True, ex=15):
+        raise HTTPException(429, "登录验证中，请稍后重试")
+    try:
+        attempts = int(await redis.get(key) or 0)
+        if attempts >= 5:
+            raise HTTPException(429, "密码尝试过多，请 5 分钟后重试或通过邮箱重置密码")
+        try:
+            yield
+        except HTTPException as error:
+            if error.status_code == 401:
+                await redis.set(key, str(attempts + 1), ex=300)
+            raise
+        else:
+            await redis.delete(key)
+    finally:
+        if hasattr(redis, "eval"):
+            await redis.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", 1, lock, token)
+        elif await redis.get(lock) == token:
+            await redis.delete(lock)
+
+
 # ══════════════════════════════════════════════════════════════
 # 验证码
 # ══════════════════════════════════════════════════════════════
 
-async def verify_code(email: str, code: str) -> None:
+async def verify_code(email: str, code: str, purpose: str = "login") -> None:
     """校验验证码，不通过抛 HTTPException。通过后自动清除。"""
     from fastapi import HTTPException
 
     redis = await get_redis()
-    code_key = f"code:{email}"
-    stored = await redis.get(code_key)
-    if not stored:
-        raise HTTPException(401, "验证码无效或已过期，请重新获取")
-    if stored != code:
-        raise HTTPException(401, "验证码错误")
-
-    await redis.delete(code_key, f"code:{email}:cooldown")
+    code_key = f"code:{purpose}:{email}"
+    # A distributed lock makes one-time consumption and attempt accounting atomic
+    # across API workers without a different local-development Redis contract.
+    lock_key = f"{code_key}:verify-lock"
+    if not await redis.set(lock_key, "1", nx=True, ex=10):
+        raise HTTPException(429, "验证中，请稍后重试")
+    try:
+        attempts_key = f"{code_key}:attempts"
+        attempts = int(await redis.get(attempts_key) or 0)
+        if attempts >= 5:
+            raise HTTPException(429, "尝试次数过多，请重新获取验证码")
+        stored = await redis.get(code_key)
+        if not stored:
+            raise HTTPException(401, "验证码无效或已过期，请重新获取")
+        if not hmac.compare_digest(stored, code):
+            await redis.set(attempts_key, str(attempts + 1), ex=300)
+            raise HTTPException(401, "验证码错误")
+        await redis.delete(code_key, attempts_key)
+    finally:
+        await redis.delete(lock_key)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -56,7 +100,7 @@ async def get_or_create_user(db: AsyncSession, email: str) -> tuple[User, bool]:
         if not user.membership:
             user.membership = "高级会员"
             dirty = True
-        if not user.remaining_seconds:
+        if user.remaining_seconds is None:
             user.remaining_seconds = 86400
             dirty = True
         if not user.expires_at:
@@ -76,14 +120,24 @@ async def get_or_create_user(db: AsyncSession, email: str) -> tuple[User, bool]:
     name = email.split("@")[0] if "@" in email else email
     user = User(email=email, name=name)
     db.add(user)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing = await get_user_by_email(db, email)
+        if existing:
+            return existing, False
+        raise
     await db.refresh(user)
     logger.info("新用户自动注册: %s", email)
     return user, True
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    result = await db.execute(select(User).where(User.email == email))
+async def get_user_by_email(db: AsyncSession, email: str, *, for_update: bool = False) -> User | None:
+    query = select(User).where(User.email == email)
+    if for_update:
+        query = query.with_for_update()
+    result = await db.execute(query)
     return result.scalar_one_or_none()
 
 
@@ -102,7 +156,7 @@ def verify_password(password: str, stored: str) -> bool:
         salt_hex, dk_hex = stored.split(":")
         salt = bytes.fromhex(salt_hex)
         dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
-        return dk.hex() == dk_hex
+        return hmac.compare_digest(dk.hex(), dk_hex)
     except Exception:
         return False
 
@@ -134,7 +188,7 @@ async def verify_token(db: AsyncSession, raw_token: str) -> str | None:
     """验证 token，有效返回 email，无效返回 None。"""
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
     result = await db.execute(
-        select(Token).where(Token.token_hash == token_hash)
+        select(Token).join(User, User.email == Token.email).where(Token.token_hash == token_hash)
     )
     row = result.scalar_one_or_none()
     if not row or time.time() > row.expires_at:

@@ -1,319 +1,551 @@
 /**
- * WASAPI Loopback 音频采集 —— Node.js N-API addon
+ * Windows WASAPI render-endpoint loopback. Build with pnpm ensure:native on Windows.
  *
- * 捕获 Windows 系统混音输出，不受 VoIP App 限制。
- * 编译：仓库根目录执行 pnpm ensure:native（自动对当前 Electron 版本编译 + 冒烟验证）。
- * 手动编译必须带 Electron 目标，否则拿系统 Node 头文件编译、任何 Electron 都加载不了：
- *   cd electron/audio/native && npx node-gyp rebuild --target=<electron 版本> --dist-url=https://electronjs.org/headers
+ * No COM audio interfaces cross apartments: the constructor only probes the format;
+ * the capture worker opens, starts, reads, stops and releases its own interfaces.
+ * Source changes are fatal so the UI can pause and ask the user to select/continue.
  */
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <napi.h>
+#include <windows.h>
 #include <audioclient.h>
 #include <mmdeviceapi.h>
+#include <initguid.h>
+#include <ks.h>
 #include <ksmedia.h>
 #include <functiondiscoverykeys_devpkey.h>
-#include <windows.h>
-#include <vector>
-#include <thread>
+#include <wrl/client.h>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdio>
+#include <cstdint>
+#include <cstring>
+#include <exception>
+#include <memory>
 #include <mutex>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
 
 #pragma comment(lib, "ole32.lib")
 
-// ── REFERENCE_TIME 转换 ──
-#define REFTIMES_PER_SEC  10000000
-#define REFTIMES_PER_MILLISEC 10000
+using Microsoft::WRL::ComPtr;
+
+namespace {
+
+struct Failure {
+  std::string code;
+  std::string message;
+  explicit operator bool() const { return !message.empty(); }
+};
+
+Failure WindowsFailure(const char* operation, HRESULT hr) {
+  char hex[16];
+  std::snprintf(hex, sizeof(hex), "0x%08lX", static_cast<unsigned long>(hr));
+  const bool unavailable = hr == AUDCLNT_E_DEVICE_INVALIDATED ||
+    hr == AUDCLNT_E_SERVICE_NOT_RUNNING || hr == AUDCLNT_E_RESOURCES_INVALIDATED ||
+    hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+  return {
+    unavailable ? "WASAPI_DEVICE_UNAVAILABLE" : "WASAPI_CAPTURE_FAILED",
+    std::string(unavailable ? "系统音频设备已不可用，请检查输出设备后继续。" :
+      "系统音频采集失败，请检查输出设备后重试。") + " (" + operation + ": " + hex + ")"
+  };
+}
+
+void ThrowFailure(Napi::Env env, const Failure& failure) {
+  auto error = Napi::Error::New(env, failure.message);
+  error.Set("code", failure.code);
+  error.ThrowAsJavaScriptException();
+}
+
+class ComApartment {
+public:
+  ComApartment() : result(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
+  ~ComApartment() {
+    // S_FALSE also increments COM's initialization count. Chromium's existing STA
+    // returns RPC_E_CHANGED_MODE and must not be uninitialized by this addon.
+    if (SUCCEEDED(result)) CoUninitialize();
+  }
+  HRESULT result;
+};
+
+struct CoTaskDeleter {
+  void operator()(void* pointer) const { CoTaskMemFree(pointer); }
+};
+using MixFormat = std::unique_ptr<WAVEFORMATEX, CoTaskDeleter>;
+
+struct Format {
+  DWORD rate = 0;
+  WORD channels = 0;
+  WORD bits = 0;
+  WORD blockAlign = 0;
+  WORD validBits = 0;
+  bool isFloat = false;
+
+  bool operator==(const Format& other) const {
+    return rate == other.rate && channels == other.channels && bits == other.bits &&
+      blockAlign == other.blockAlign && validBits == other.validBits && isFloat == other.isFloat;
+  }
+};
+
+Failure ReadFormat(const WAVEFORMATEX* wave, Format& format) {
+  if (!wave) return {"WASAPI_UNSUPPORTED_FORMAT", "系统音频设备未提供可用的混音格式。"};
+  bool pcm = wave->wFormatTag == WAVE_FORMAT_PCM;
+  bool floating = wave->wFormatTag == WAVE_FORMAT_IEEE_FLOAT;
+  WORD validBits = wave->wBitsPerSample;
+  if (wave->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+    if (wave->cbSize < sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)) {
+      return {"WASAPI_UNSUPPORTED_FORMAT", "系统音频设备返回了不完整的扩展混音格式。"};
+    }
+    const auto* extended = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(wave);
+    pcm = IsEqualGUID(extended->SubFormat, KSDATAFORMAT_SUBTYPE_PCM);
+    floating = IsEqualGUID(extended->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+    validBits = extended->Samples.wValidBitsPerSample;
+  }
+  const bool supportedBits = floating ? wave->wBitsPerSample == 32 :
+    pcm && (wave->wBitsPerSample == 16 || wave->wBitsPerSample == 24 || wave->wBitsPerSample == 32);
+  if (!supportedBits || !validBits || validBits > wave->wBitsPerSample ||
+      (floating && validBits != 32) || wave->nSamplesPerSec < 8000 ||
+      wave->nSamplesPerSec > 384000 || !wave->nChannels || wave->nChannels > 32 ||
+      wave->nBlockAlign != wave->nChannels * (wave->wBitsPerSample / 8)) {
+    return {"WASAPI_UNSUPPORTED_FORMAT",
+      "系统音频格式不受支持，请在 Windows 声音设置中选择 16/24/32 位 PCM 或 32 位浮点格式。"};
+  }
+  format = {wave->nSamplesPerSec, wave->nChannels, wave->wBitsPerSample,
+    wave->nBlockAlign, validBits, floating};
+  return {};
+}
+
+HRESULT DeviceId(IMMDevice* device, std::wstring& result) {
+  LPWSTR raw = nullptr;
+  const HRESULT hr = device->GetId(&raw);
+  std::unique_ptr<wchar_t, CoTaskDeleter> id(raw);
+  if (SUCCEEDED(hr) && raw) result.assign(raw);
+  return SUCCEEDED(hr) && !raw ? E_POINTER : hr;
+}
+
+Napi::String JsWideString(Napi::Env env, const std::wstring& value) {
+  return Napi::String::New(env, reinterpret_cast<const char16_t*>(value.data()), value.size());
+}
+
+struct Stream {
+  ComPtr<IMMDeviceEnumerator> enumerator;
+  ComPtr<IMMDevice> device;
+  ComPtr<IAudioClient> client;
+  ComPtr<IAudioCaptureClient> capture;
+  MixFormat wave;
+  bool started = false;
+  ~Stream() {
+    if (started) client->Stop();
+    // Explicitly release capture before client, all on the GetService thread.
+    capture.Reset();
+    client.Reset();
+  }
+};
+
+Failure OpenStream(const std::wstring& requestedId, Stream& stream,
+                   std::wstring& resolvedId, Format& format) {
+  HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+    IID_PPV_ARGS(stream.enumerator.GetAddressOf()));
+  if (FAILED(hr)) return WindowsFailure("MMDeviceEnumerator", hr);
+  hr = requestedId.empty() ?
+    stream.enumerator->GetDefaultAudioEndpoint(eRender, eConsole, stream.device.GetAddressOf()) :
+    stream.enumerator->GetDevice(requestedId.c_str(), stream.device.GetAddressOf());
+  if (FAILED(hr)) return WindowsFailure("GetAudioEndpoint", hr);
+
+  ComPtr<IMMEndpoint> endpoint;
+  hr = stream.device.As(&endpoint);
+  if (FAILED(hr)) return WindowsFailure("IMMEndpoint", hr);
+  EDataFlow flow;
+  hr = endpoint->GetDataFlow(&flow);
+  if (FAILED(hr)) return WindowsFailure("GetDataFlow", hr);
+  DWORD state = 0;
+  hr = stream.device->GetState(&state);
+  if (FAILED(hr)) return WindowsFailure("GetState", hr);
+  if (flow != eRender || !(state & DEVICE_STATE_ACTIVE)) {
+    return {"WASAPI_DEVICE_UNAVAILABLE", "所选系统音频输出设备不可用，请重新选择扬声器或耳机。"};
+  }
+  hr = DeviceId(stream.device.Get(), resolvedId);
+  if (FAILED(hr)) return WindowsFailure("GetId", hr);
+  hr = stream.device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+    reinterpret_cast<void**>(stream.client.GetAddressOf()));
+  if (FAILED(hr)) return WindowsFailure("Activate IAudioClient", hr);
+  WAVEFORMATEX* wave = nullptr;
+  hr = stream.client->GetMixFormat(&wave);
+  stream.wave.reset(wave);
+  if (FAILED(hr)) return WindowsFailure("GetMixFormat", hr);
+  return ReadFormat(stream.wave.get(), format);
+}
+
+Napi::Value EnumerateDevices(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  ComApartment com;
+  if (FAILED(com.result) && com.result != RPC_E_CHANGED_MODE) {
+    ThrowFailure(env, WindowsFailure("CoInitializeEx", com.result));
+    return env.Undefined();
+  }
+  ComPtr<IMMDeviceEnumerator> enumerator;
+  HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+    IID_PPV_ARGS(enumerator.GetAddressOf()));
+  if (FAILED(hr)) {
+    ThrowFailure(env, WindowsFailure("MMDeviceEnumerator", hr));
+    return env.Undefined();
+  }
+  std::wstring defaultId;
+  ComPtr<IMMDevice> defaultDevice;
+  if (SUCCEEDED(enumerator->GetDefaultAudioEndpoint(eRender, eConsole, defaultDevice.GetAddressOf()))) {
+    DeviceId(defaultDevice.Get(), defaultId);
+  }
+  ComPtr<IMMDeviceCollection> collection;
+  hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, collection.GetAddressOf());
+  if (FAILED(hr)) {
+    ThrowFailure(env, WindowsFailure("EnumAudioEndpoints", hr));
+    return env.Undefined();
+  }
+  UINT count = 0;
+  hr = collection->GetCount(&count);
+  if (FAILED(hr)) {
+    ThrowFailure(env, WindowsFailure("GetCount", hr));
+    return env.Undefined();
+  }
+  auto result = Napi::Array::New(env);
+  uint32_t index = 0;
+  for (UINT i = 0; i < count; ++i) {
+    ComPtr<IMMDevice> device;
+    std::wstring id;
+    if (FAILED(collection->Item(i, device.GetAddressOf())) || FAILED(DeviceId(device.Get(), id))) continue;
+    std::wstring name = id;
+    ComPtr<IPropertyStore> properties;
+    if (SUCCEEDED(device->OpenPropertyStore(STGM_READ, properties.GetAddressOf()))) {
+      PROPVARIANT value;
+      PropVariantInit(&value);
+      if (SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName, &value)) &&
+          value.vt == VT_LPWSTR && value.pwszVal) name = value.pwszVal;
+      PropVariantClear(&value);
+    }
+    auto item = Napi::Object::New(env);
+    item.Set("id", JsWideString(env, id));
+    item.Set("name", JsWideString(env, name));
+    item.Set("isDefault", id == defaultId);
+    result.Set(index++, item);
+  }
+  return result;
+}
+
+// Bound memory ourselves, leaving one guaranteed TSFN slot for a fatal error.
+// A full JS queue stops capture rather than silently losing speech/timestamps.
+struct Delivery {
+  std::atomic<bool> active{true};
+  std::atomic<size_t> pending{0};
+};
+
+} // namespace
 
 class WasapiLoopback : public Napi::ObjectWrap<WasapiLoopback> {
 public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports);
-  WasapiLoopback(const Napi::CallbackInfo& info);
+  explicit WasapiLoopback(const Napi::CallbackInfo& info);
+  ~WasapiLoopback() override;
 
 private:
   Napi::Value Start(const Napi::CallbackInfo& info);
   Napi::Value Stop(const Napi::CallbackInfo& info);
-  Napi::Value GetSampleRate(const Napi::CallbackInfo& info);
-  Napi::Value GetChannels(const Napi::CallbackInfo& info);
-  Napi::Value GetBitsPerSample(const Napi::CallbackInfo& info);
-  Napi::Value GetIsFloat(const Napi::CallbackInfo& info);
+  Napi::Value GetSampleRate(const Napi::CallbackInfo& info) {
+    return Napi::Number::New(info.Env(), _format.rate);
+  }
+  Napi::Value GetChannels(const Napi::CallbackInfo& info) {
+    return Napi::Number::New(info.Env(), _format.channels);
+  }
+  Napi::Value GetBitsPerSample(const Napi::CallbackInfo& info) {
+    return Napi::Number::New(info.Env(), _format.bits);
+  }
+  Napi::Value GetIsFloat(const Napi::CallbackInfo& info) {
+    return Napi::Boolean::New(info.Env(), _format.isFloat);
+  }
+  void Shutdown();
+  void CaptureWorker();
+  void SignalStart(Failure failure);
+  Failure CheckDevice(Stream& stream);
+  bool Deliver(std::vector<uint8_t>&& pcm);
+  void DeliverFailure(const Failure& failure);
+  static void CleanupEnvironment(void* data);
 
-  void CaptureLoop();
-
-  IMMDeviceEnumerator* _enumerator = nullptr;
-  IMMDevice* _device = nullptr;
-  IAudioClient* _client = nullptr;
-  IAudioCaptureClient* _captureClient = nullptr;
-  WAVEFORMATEX* _waveFormat = nullptr;
-
-  std::thread _captureThread;
+  std::wstring _requestedId;
+  std::wstring _resolvedId;
+  Format _format;
+  std::thread _worker;
+  std::atomic<bool> _stopRequested{false};
   std::atomic<bool> _running{false};
-  std::atomic<bool> _threadDone{false};
-  std::atomic<bool> _tsfnCreated{false}; // TSFN 生命周期归主线程 Stop 管理，防止重复 Release
+  std::mutex _startMutex;
+  std::condition_variable _startCondition;
+  bool _startDone = false;
+  Failure _startFailure;
   Napi::ThreadSafeFunction _tsfn;
-  UINT32 _bufferFrames = 0;
-  bool _comInitialized = false; // 主线程 COM 是否由本对象初始化（配对 Uninitialize 用）
+  bool _tsfnCreated = false;
+  std::shared_ptr<Delivery> _delivery;
+  napi_env _env;
+  bool _cleanupRegistered = false;
 };
 
-// ── 模块注册 ──
 Napi::Object WasapiLoopback::Init(Napi::Env env, Napi::Object exports) {
-  Napi::Function func = DefineClass(env, "WasapiLoopback", {
+  exports.Set("WasapiLoopback", DefineClass(env, "WasapiLoopback", {
     InstanceMethod("start", &WasapiLoopback::Start),
     InstanceMethod("stop", &WasapiLoopback::Stop),
     InstanceAccessor("sampleRate", &WasapiLoopback::GetSampleRate, nullptr),
     InstanceAccessor("channels", &WasapiLoopback::GetChannels, nullptr),
     InstanceAccessor("bitsPerSample", &WasapiLoopback::GetBitsPerSample, nullptr),
     InstanceAccessor("isFloat", &WasapiLoopback::GetIsFloat, nullptr),
-  });
-  exports.Set("WasapiLoopback", func);
+  }));
+  exports.Set("enumerateDevices", Napi::Function::New(env, EnumerateDevices));
   return exports;
 }
 
-// ── 格式属性（JS 侧据此做 PCM 归一化） ──
-Napi::Value WasapiLoopback::GetSampleRate(const Napi::CallbackInfo& info) {
-  return Napi::Number::New(info.Env(), _waveFormat ? _waveFormat->nSamplesPerSec : 48000);
-}
-
-Napi::Value WasapiLoopback::GetChannels(const Napi::CallbackInfo& info) {
-  return Napi::Number::New(info.Env(), _waveFormat ? _waveFormat->nChannels : 2);
-}
-
-Napi::Value WasapiLoopback::GetBitsPerSample(const Napi::CallbackInfo& info) {
-  return Napi::Number::New(info.Env(), _waveFormat ? _waveFormat->wBitsPerSample : 16);
-}
-
-Napi::Value WasapiLoopback::GetIsFloat(const Napi::CallbackInfo& info) {
-  bool isFloat = false;
-  if (_waveFormat) {
-    if (_waveFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) {
-      isFloat = true;
-    } else if (_waveFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
-      // WAVEFORMATEXTENSIBLE 的 SubFormat 指向真实类型
-      const WAVEFORMATEXTENSIBLE* ext = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(_waveFormat);
-      isFloat = (ext->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+WasapiLoopback::WasapiLoopback(const Napi::CallbackInfo& info)
+  : Napi::ObjectWrap<WasapiLoopback>(info), _env(info.Env()) {
+  if (info.Length() > 0 && !info[0].IsUndefined() && !info[0].IsString()) {
+    Napi::TypeError::New(info.Env(), "deviceId must be a string").ThrowAsJavaScriptException();
+    return;
+  }
+  if (info.Length() && info[0].IsString()) {
+    const auto id = info[0].As<Napi::String>().Utf16Value();
+    _requestedId.assign(id.begin(), id.end());
+    if (_requestedId.find(L'\0') != std::wstring::npos) {
+      Napi::TypeError::New(info.Env(), "deviceId must not contain null characters").ThrowAsJavaScriptException();
+      return;
     }
   }
-  return Napi::Boolean::New(info.Env(), isFloat);
+  ComApartment com;
+  if (FAILED(com.result) && com.result != RPC_E_CHANGED_MODE) {
+    ThrowFailure(info.Env(), WindowsFailure("CoInitializeEx", com.result));
+    return;
+  }
+  Stream probe;
+  if (const auto failure = OpenStream(_requestedId, probe, _resolvedId, _format)) {
+    ThrowFailure(info.Env(), failure);
+    return;
+  }
+  if (napi_add_env_cleanup_hook(_env, CleanupEnvironment, this) != napi_ok) {
+    ThrowFailure(info.Env(), {"WASAPI_CAPTURE_FAILED", "无法注册系统音频退出清理。"});
+    return;
+  }
+  _cleanupRegistered = true;
 }
 
-// ── 构造函数 ──
-WasapiLoopback::WasapiLoopback(const Napi::CallbackInfo& info) : Napi::ObjectWrap<WasapiLoopback>(info) {
-  Napi::Env env = info.Env();
-
-  // 初始化 COM。注意：Electron 主进程（Chromium UI 线程）已是 STA，MTA 初始化
-  // 会返回 RPC_E_CHANGED_MODE —— 此时复用现有线程模型继续，属正常路径；
-  // WASAPI 的 MMDeviceEnumerator/IAudioClient 均为 free-threaded，跨公寓调用安全。
-  HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
-    Napi::Error::New(env, "CoInitializeEx failed").ThrowAsJavaScriptException();
-    return;
-  }
-  _comInitialized = (hr == S_OK); // RPC_E_CHANGED_MODE 时 COM 归 Chromium 管，不得 Uninitialize
-
-  // 创建设备枚举器
-  hr = CoCreateInstance(
-    __uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
-    __uuidof(IMMDeviceEnumerator), (void**)&_enumerator
-  );
-  if (FAILED(hr) || !_enumerator) {
-    Napi::Error::New(env, "Failed to create MMDeviceEnumerator").ThrowAsJavaScriptException();
-    return;
-  }
-
-  // 获取默认渲染设备（扬声器）
-  hr = _enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &_device);
-  if (FAILED(hr) || !_device) {
-    Napi::Error::New(env, "Failed to get default audio render device").ThrowAsJavaScriptException();
-    return;
-  }
-
-  // 激活 IAudioClient（Loopback 模式）
-  hr = _device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, (void**)&_client);
-  if (FAILED(hr) || !_client) {
-    Napi::Error::New(env, "Failed to activate IAudioClient").ThrowAsJavaScriptException();
-    return;
-  }
-
-  // 获取混音格式
-  hr = _client->GetMixFormat(&_waveFormat);
-  if (FAILED(hr)) {
-    Napi::Error::New(env, "GetMixFormat failed").ThrowAsJavaScriptException();
-    return;
-  }
+WasapiLoopback::~WasapiLoopback() {
+  Shutdown();
+  if (_cleanupRegistered) napi_remove_env_cleanup_hook(_env, CleanupEnvironment, this);
 }
 
-// ── Start ──
+void WasapiLoopback::CleanupEnvironment(void* data) {
+  auto* self = static_cast<WasapiLoopback*>(data);
+  self->_cleanupRegistered = false;
+  self->Shutdown();
+}
+
+void WasapiLoopback::Shutdown() {
+  _stopRequested = true;
+  if (_delivery) _delivery->active = false;
+  // GetNextPacketSize/GetBuffer are non-blocking; no JS call is awaited by the worker.
+  // Only the worker calls IAudioClient::Stop, then releases its COM resources.
+  if (_worker.joinable()) _worker.join();
+  if (_tsfnCreated) {
+    _tsfnCreated = false;
+    _tsfn.Abort();
+  }
+  _running = false;
+  _delivery.reset();
+}
+
 Napi::Value WasapiLoopback::Start(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-
-  if (_running) {
-    return Napi::Boolean::New(env, false);
-  }
-
-  // 需要回调函数：(err, buffer) => void
+  auto env = info.Env();
+  if (_running) return Napi::Boolean::New(env, false);
   if (info.Length() < 1 || !info[0].IsFunction()) {
-    Napi::Error::New(env, "Expected callback function").ThrowAsJavaScriptException();
-    return Napi::Boolean::New(env, false);
+    Napi::TypeError::New(env, "Expected callback function").ThrowAsJavaScriptException();
+    return env.Undefined();
   }
-
-  HRESULT hr;
-
-  // 初始化音频客户端（Loopback 模式，共享）
-  hr = _client->Initialize(
-    AUDCLNT_SHAREMODE_SHARED,
-    AUDCLNT_STREAMFLAGS_LOOPBACK,
-    REFTIMES_PER_SEC, // 1 秒缓冲区
-    0,
-    _waveFormat,
-    nullptr
-  );
-  if (FAILED(hr)) {
-    Napi::Error::New(env, "IAudioClient::Initialize failed").ThrowAsJavaScriptException();
-    return Napi::Boolean::New(env, false);
-  }
-
-  // 获取缓冲区大小
-  hr = _client->GetBufferSize(&_bufferFrames);
-  if (FAILED(hr)) {
-    Napi::Error::New(env, "GetBufferSize failed").ThrowAsJavaScriptException();
-    return Napi::Boolean::New(env, false);
-  }
-
-  // 获取 IAudioCaptureClient
-  hr = _client->GetService(__uuidof(IAudioCaptureClient), (void**)&_captureClient);
-  if (FAILED(hr)) {
-    Napi::Error::New(env, "GetService IAudioCaptureClient failed").ThrowAsJavaScriptException();
-    return Napi::Boolean::New(env, false);
-  }
-
-  // 创建 ThreadSafeFunction 用于回调（NonBlockingCall 模式，队列满 64 帧时丢弃最新帧）
-  _tsfn = Napi::ThreadSafeFunction::New(
-    env,
-    info[0].As<Napi::Function>(),
-    "WASAPI Callback",
-    64, // max queue size（40ms/帧 ≈ 2.5s 积压兜底）
-    1   // single thread（保证帧序）
-  );
+  Shutdown();
+  _delivery = std::make_shared<Delivery>();
+  _tsfn = Napi::ThreadSafeFunction::New(env, info[0].As<Napi::Function>(), "WASAPI Callback", 0, 1);
+  if (env.IsExceptionPending() || !_tsfn) return env.Undefined();
   _tsfnCreated = true;
-
-  // 启动音频客户端
-  hr = _client->Start();
-  if (FAILED(hr)) {
-    Napi::Error::New(env, "IAudioClient::Start failed").ThrowAsJavaScriptException();
-    return Napi::Boolean::New(env, false);
+  // Re-register after TSFN creation so our hook joins the producer before Node
+  // tears down newer asynchronous resources (cleanup hooks run in reverse order).
+  if (_cleanupRegistered) napi_remove_env_cleanup_hook(_env, CleanupEnvironment, this);
+  _cleanupRegistered = napi_add_env_cleanup_hook(_env, CleanupEnvironment, this) == napi_ok;
+  if (!_cleanupRegistered) {
+    Shutdown();
+    ThrowFailure(env, {"WASAPI_CAPTURE_FAILED", "无法注册系统音频退出清理。"});
+    return env.Undefined();
   }
-
-  // 启动采集线程
-  _running = true;
-  _captureThread = std::thread(&WasapiLoopback::CaptureLoop, this);
-
+  _stopRequested = false;
+  _startDone = false;
+  _startFailure = {};
+  try {
+    _worker = std::thread(&WasapiLoopback::CaptureWorker, this);
+  } catch (const std::exception& exception) {
+    Shutdown();
+    ThrowFailure(env, {"WASAPI_CAPTURE_FAILED", std::string("无法启动系统音频线程：") + exception.what()});
+    return env.Undefined();
+  }
+  {
+    std::unique_lock<std::mutex> lock(_startMutex);
+    _startCondition.wait(lock, [this] { return _startDone; });
+  }
+  if (_startFailure) {
+    Shutdown();
+    ThrowFailure(env, _startFailure);
+    return env.Undefined();
+  }
   return Napi::Boolean::New(env, true);
 }
 
-// ── Capture Loop ──
-void WasapiLoopback::CaptureLoop() {
-  UINT32 packetLength = 0;
-  BYTE* data = nullptr;
-  UINT32 framesAvailable = 0;
-  DWORD flags = 0;
-  HRESULT hr;
-
-  // 采集线程独立初始化 COM（MTA，新线程不会 RPC_E_CHANGED_MODE）；
-  // 跨公寓（主线程 STA → 本线程 MTA）调用依赖对象 free-threaded 特性
-  hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  if (FAILED(hr)) {
-    _threadDone = true;
-    // exchange 守卫与 Stop 里的 Release 互斥，全程序只会 Release 一次
-    if (_tsfnCreated.exchange(false)) {
-      _tsfn.Release();
-    }
-    return;
-  }
-
-  while (_running) {
-    // 等待下一批数据（10ms 超时）
-    Sleep(10);
-
-    hr = _captureClient->GetNextPacketSize(&packetLength);
-    if (FAILED(hr)) continue;
-
-    while (packetLength > 0) {
-      hr = _captureClient->GetBuffer(&data, &framesAvailable, &flags, nullptr, nullptr);
-      if (FAILED(hr)) break;
-
-      if (framesAvailable > 0 && !(flags & AUDCLNT_BUFFERFLAGS_SILENT)) {
-        UINT32 bytesToCopy = framesAvailable * _waveFormat->nBlockAlign;
-
-        // 先在本线程拷贝数据：NonBlockingCall 异步执行，data 指向的 WASAPI
-        // 缓冲在 ReleaseBuffer 后即失效，不能直接传指针
-        std::vector<uint8_t> pcm(data, data + bytesToCopy);
-
-        auto callback = [pcm = std::move(pcm)](Napi::Env env, Napi::Function jsCallback) {
-          Napi::Buffer<uint8_t> buf = Napi::Buffer<uint8_t>::Copy(env, pcm.data(), pcm.size());
-          jsCallback.Call({ env.Null(), buf });
-        };
-
-        // NonBlockingCall：不阻塞采集线程等待 JS，Stop() 才能安全 join；
-        // 队列满时丢弃本帧（返回 napi_queue_full，40ms 音频可接受）
-        _tsfn.NonBlockingCall(callback);
-      }
-
-      hr = _captureClient->ReleaseBuffer(framesAvailable);
-      if (FAILED(hr)) break;
-
-      hr = _captureClient->GetNextPacketSize(&packetLength);
-      if (FAILED(hr)) break;
-    }
-  }
-
-  CoUninitialize(); // 线程 COM 与主线程公寓独立，互不影响
-
-  _threadDone = true;
-  // 不在这里 Release：TSFN 归主线程 Stop 管理。采集线程 Release 会与
-  // 主线程 Stop 的 join/退出时序竞态，环境销毁时可能仍有回调在途 → napi_fatal_error
-}
-
-// ── Stop ──
 Napi::Value WasapiLoopback::Stop(const Napi::CallbackInfo& info) {
-  _running = false;
-
-  // 先停 IAudioClient：系统无声时采集线程会阻塞在 GetBuffer 等数据
-  // （loopback 无渲染流就不产生包），必须先 Stop 唤醒它，join 才可能返回
-  if (_client) {
-    _client->Stop();
-  }
-
-  // join 采集线程：帧回调已是 NonBlockingCall（不等待 JS），线程在 10ms
-  // 轮询内即可退出，无死锁风险，也无需 detach 兜底
-  if (_captureThread.joinable()) {
-    _captureThread.join();
-  }
-
-  // 线程退出后不会再入队，此时 Release：node 丢弃未执行的队列项（call_js
-  // 收到空环境只做数据清理），杜绝环境销毁时仍回调 JS 的 napi_fatal_error
-  if (_tsfnCreated.exchange(false)) {
-    _tsfn.Release();
-  }
-
-  // 清理
-  if (_captureClient) { _captureClient->Release(); _captureClient = nullptr; }
-  if (_client) { _client->Release(); _client = nullptr; }
-  if (_device) { _device->Release(); _device = nullptr; }
-  if (_enumerator) { _enumerator->Release(); _enumerator = nullptr; }
-
-  if (_waveFormat) {
-    CoTaskMemFree(_waveFormat);
-    _waveFormat = nullptr;
-  }
-
-  // 仅撤销本对象成功发起的初始化；RPC_E_CHANGED_MODE 路径不动 Chromium 的 COM 状态
-  if (_comInitialized) {
-    CoUninitialize();
-    _comInitialized = false; // 防重复 stop 时二次 CoUninitialize
-  }
-
+  Shutdown();
   return Napi::Boolean::New(info.Env(), true);
 }
 
-// ── 模块初始化 ──
+void WasapiLoopback::SignalStart(Failure failure) {
+  {
+    std::lock_guard<std::mutex> lock(_startMutex);
+    _startFailure = std::move(failure);
+    _startDone = true;
+  }
+  _startCondition.notify_one();
+}
+
+Failure WasapiLoopback::CheckDevice(Stream& stream) {
+  DWORD state = 0;
+  HRESULT hr = stream.device->GetState(&state);
+  if (FAILED(hr)) return WindowsFailure("GetState", hr);
+  if (!(state & DEVICE_STATE_ACTIVE)) {
+    return {"WASAPI_DEVICE_UNAVAILABLE", "系统音频输出设备已断开或被禁用，请重新选择后继续。"};
+  }
+  if (_requestedId.empty()) {
+    ComPtr<IMMDevice> current;
+    hr = stream.enumerator->GetDefaultAudioEndpoint(eRender, eConsole, current.GetAddressOf());
+    if (FAILED(hr)) return WindowsFailure("GetDefaultAudioEndpoint", hr);
+    std::wstring id;
+    hr = DeviceId(current.Get(), id);
+    if (FAILED(hr)) return WindowsFailure("GetId", hr);
+    if (id != _resolvedId) {
+      return {"WASAPI_DEFAULT_DEVICE_CHANGED", "Windows 默认输出设备已切换，采集已暂停。确认输出设备后继续。"};
+    }
+  }
+  return {};
+}
+
+void WasapiLoopback::DeliverFailure(const Failure& failure) {
+  const auto delivery = _delivery;
+  _tsfn.NonBlockingCall([delivery, failure](Napi::Env env, Napi::Function callback) {
+    if (!env || callback.IsEmpty() || !delivery->active) return;
+    auto error = Napi::Error::New(env, failure.message);
+    error.Set("code", failure.code);
+    callback.Call({error.Value(), env.Null()});
+  });
+}
+
+bool WasapiLoopback::Deliver(std::vector<uint8_t>&& pcm) {
+  const auto delivery = _delivery;
+  if (delivery->pending.fetch_add(1) >= 128) {
+    delivery->pending.fetch_sub(1);
+    DeliverFailure({"WASAPI_QUEUE_OVERFLOW", "系统音频处理积压，采集已暂停，请稍后继续。"});
+    return false;
+  }
+  const auto status = _tsfn.NonBlockingCall(
+    [delivery, pcm = std::move(pcm)](Napi::Env env, Napi::Function callback) {
+      delivery->pending.fetch_sub(1);
+      if (!env || callback.IsEmpty() || !delivery->active) return;
+      auto buffer = Napi::Buffer<uint8_t>::Copy(env, pcm.data(), pcm.size());
+      if (!env.IsExceptionPending()) callback.Call({env.Null(), buffer});
+    });
+  if (status != napi_ok) delivery->pending.fetch_sub(1);
+  return status == napi_ok;
+}
+
+void WasapiLoopback::CaptureWorker() {
+  bool signalled = false;
+  try {
+    ComApartment com;
+    Stream stream;
+    Failure failure;
+    if (FAILED(com.result)) failure = WindowsFailure("CoInitializeEx worker", com.result);
+    Format currentFormat;
+    std::wstring currentId;
+    if (!failure) failure = OpenStream(_resolvedId, stream, currentId, currentFormat);
+    if (!failure && !(currentFormat == _format)) {
+      failure = {"WASAPI_FORMAT_CHANGED", "系统音频格式已变化，请重新开始采集。"};
+    }
+    if (!failure) failure = CheckDevice(stream);
+    if (!failure) {
+      HRESULT hr = stream.client->Initialize(AUDCLNT_SHAREMODE_SHARED,
+        AUDCLNT_STREAMFLAGS_LOOPBACK, 1000000, 0, stream.wave.get(), nullptr); // 100 ms
+      if (FAILED(hr)) failure = WindowsFailure("IAudioClient::Initialize", hr);
+    }
+    if (!failure) {
+      HRESULT hr = stream.client->GetService(__uuidof(IAudioCaptureClient),
+        reinterpret_cast<void**>(stream.capture.GetAddressOf()));
+      if (FAILED(hr)) failure = WindowsFailure("GetService IAudioCaptureClient", hr);
+    }
+    if (!failure) {
+      HRESULT hr = stream.client->Start();
+      if (FAILED(hr)) failure = WindowsFailure("IAudioClient::Start", hr);
+      else stream.started = true;
+    }
+    _running = !failure;
+    SignalStart(failure);
+    signalled = true;
+    if (failure) return;
+
+    auto nextDeviceCheck = std::chrono::steady_clock::now();
+    while (!_stopRequested && !failure) {
+      if (std::chrono::steady_clock::now() >= nextDeviceCheck) {
+        failure = CheckDevice(stream);
+        nextDeviceCheck = std::chrono::steady_clock::now() + std::chrono::milliseconds(200);
+        if (failure) break;
+      }
+      UINT32 packetFrames = 0;
+      HRESULT hr = stream.capture->GetNextPacketSize(&packetFrames);
+      if (FAILED(hr)) { failure = WindowsFailure("GetNextPacketSize", hr); break; }
+      if (!packetFrames) { Sleep(10); continue; }
+      BYTE* data = nullptr;
+      UINT32 frames = 0;
+      DWORD flags = 0;
+      hr = stream.capture->GetBuffer(&data, &frames, &flags, nullptr, nullptr);
+      if (FAILED(hr)) { failure = WindowsFailure("GetBuffer", hr); break; }
+      if (hr == AUDCLNT_S_BUFFER_EMPTY) { Sleep(1); continue; }
+      if (!frames) {
+        // The documented empty-packet status owns no buffer. A successful
+        // zero-length packet is also legal to release; avoid holding it/spinning.
+        hr = stream.capture->ReleaseBuffer(0);
+        if (FAILED(hr)) failure = WindowsFailure("ReleaseBuffer empty", hr);
+        Sleep(1);
+        continue;
+      }
+      // SILENT packets may have a null data pointer. Forward zeros of equal length
+      // so ASR sees the actual pause and can finalize the previous utterance.
+      const size_t bytes = static_cast<size_t>(frames) * _format.blockAlign;
+      std::vector<uint8_t> pcm(bytes, 0);
+      if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT)) {
+        if (data) std::memcpy(pcm.data(), data, bytes);
+        else failure = {"WASAPI_CAPTURE_FAILED", "系统音频设备返回了无效的音频包。"};
+      }
+      hr = stream.capture->ReleaseBuffer(frames);
+      if (FAILED(hr)) failure = WindowsFailure("ReleaseBuffer", hr);
+      if (!failure && !_stopRequested && !Deliver(std::move(pcm))) break;
+    }
+    if (failure && !_stopRequested) DeliverFailure(failure);
+  } catch (const std::exception& exception) {
+    const Failure failure{"WASAPI_CAPTURE_FAILED", std::string("系统音频采集异常：") + exception.what()};
+    if (!signalled) SignalStart(failure);
+    else if (!_stopRequested) DeliverFailure(failure);
+  }
+  _running = false;
+}
+
 Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
   return WasapiLoopback::Init(env, exports);
 }

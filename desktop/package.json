@@ -1,6 +1,7 @@
 {
   "name": "audio-capture",
-  "version": "0.1.0",
+  "version": "0.5.0",
+  "description": "Interview workspace for preparation, live assistance, and review",
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "engines": {
@@ -9,7 +10,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "predev": "node scripts/ensure-native.cjs",
-    "dev": "concurrently \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"node scripts/launch-electron.cjs\"",
+    "dev": "concurrently --kill-others-on-fail \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"node scripts/launch-electron.cjs\"",
     "build": "vite build && tsc -p electron/tsconfig.json && node scripts/ensure-native.cjs && electron-builder",
     "ensure:native": "node scripts/ensure-native.cjs",
     "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit",

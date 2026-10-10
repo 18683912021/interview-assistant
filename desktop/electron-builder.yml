@@ -1,18 +1,22 @@
 # electron-builder.yml
 appId: com.coagent.audio-capture
 productName: AI面试助手
+artifactName: Interview-Assistant-${version}-${os}-${arch}.${ext}
+beforePack: scripts/before-pack.cjs
 directories:
   output: release
 files:
   - dist-electron/**/*
   - dist-renderer/**/*
   - package.json
+  - assets/LICENSE-icons.txt
 asar:
   smartUnpack: true
 asarUnpack:
   # WASAPI native addon：asar 内的 .node 无法加载，必须解包
   - dist-electron/audio/native/**/*
 win:
+  artifactName: Interview-Assistant-${version}-windows-${arch}-setup.${ext}
   target:
     - target: nsis
       arch:
@@ -23,19 +27,19 @@ mac:
   target:
     - target: dmg
       arch:
-        - x64
         - arm64
   icon: assets/icon.icns
+  entitlements: assets/entitlements.mac.plist
+  entitlementsInherit: assets/entitlements.mac.plist
   category: public.app-category.productivity
-  # 打包后 macOS 强制要求麦克风 usage description，否则 getUserMedia 直接崩溃
-  # （屏幕录制 TCC 无对应 Info.plist key，系统选择器自带授权文案）
+  # macOS 14.2+ system audio also requires a CoreAudio usage description.
   extendInfo:
     NSMicrophoneUsageDescription: 需要访问麦克风以采集您的声音用于实时转写
+    NSAudioCaptureUsageDescription: 需要采集您选择的系统音频用于实时转写
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
-  include: installer/install.nsh
 publish:
   provider: generic
   url: https://update.coagent.example.com

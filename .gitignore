@@ -7,3 +7,8 @@ Thumbs.db
 # 密钥文件（严禁提交）
 .env
 .env.*
+# Local deployment and integration records are not part of the published source.
+backend/deploy/production-20*.md
+backend/deploy/production-smoke-20*.json
+backend/deploy/migration-preflight-20*.json
+desktop/docs/*results-20*.json

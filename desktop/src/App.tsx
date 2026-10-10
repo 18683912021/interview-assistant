@@ -1,226 +1,257 @@
-/**
- * App 根组件 —— 全局布局：Toolbar | 页面内容 | 状态栏
- *
- * 设计参考：Linear（侧边栏 / 快捷键）、VS Code（状态栏）
- * 图标库：Lucide（ISC 协议，商用免费）
- */
-import { useState, useEffect, useCallback } from 'react';
-import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { MessageSquare, Mic, Wrench, User, Shield, ShieldOff, Moon, Sun } from 'lucide-react';
-import { AuthContext } from './utils/AuthContext';
-import { useDarkMode } from './theme/tokens';
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { verifyToken, clearToken, clearProfile } from './utils/token';
-import { isInterviewActive } from './utils/interviewState';
-import { useToast } from './components/Toast';
-import InterviewScreen from './screens/InterviewScreen';
-import ToolsScreen from './screens/ToolsScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import InterviewHistoryScreen from './screens/InterviewHistoryScreen';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {HashRouter, Navigate, Route, Routes, useLocation, useNavigate} from 'react-router-dom';
+import {AudioLines, ChevronsUpDown, Files, Grid2X2, History, Settings} from 'lucide-react';
+import {WorkspaceDraftProvider} from './utils/WorkspaceDraftContext';
+import {AuthContext} from './utils/AuthContext';
+import {useDarkMode} from './theme/tokens';
+import {useKeyboardShortcuts} from './hooks/useKeyboardShortcuts';
+import {clearProfile, clearToken, getProfile as cachedProfile, verifyToken} from './utils/token';
+import {getProfile, logoutSession, type UserProfile} from './api/auth';
+import {ApiError, AUTH_EXPIRED_EVENT, messageOf} from './api/client';
+import {isInterviewActive, onInterviewActiveChange} from './utils/interviewState';
+import {ToastProvider, useToast} from './components/Toast';
+import {ErrorState, Loading, ProfileAvatar} from './components/WorkspaceUI';
 import AuthScreen from './screens/AuthScreen';
+import InterviewScreen from './screens/InterviewScreen';
 import OverlayScreen from './screens/OverlayScreen';
-import { ToastProvider } from './components/Toast';
+import InterviewHistoryScreen from './screens/InterviewHistoryScreen';
+import InterviewDetailScreen from './screens/InterviewDetailScreen';
+import MaterialsScreen from './screens/MaterialsScreen';
+import ToolsScreen from './screens/ToolsScreen';
+import SettingsScreen from './screens/SettingsScreen';
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const { dark, toggle: toggleDark } = useDarkMode();
-
-  useEffect(() => {
-    verifyToken().then(email => { setIsLoggedIn(!!email); setChecking(false); });
+  useDarkMode();
+  return (
+    <ToastProvider>
+      <HashRouter>
+        <SessionApp />
+      </HashRouter>
+    </ToastProvider>
+  );
+}
+function SessionApp() {
+  const [status, setStatus] = useState<'checking' | 'ready' | 'guest' | 'error'>('checking');
+  const [profile, setProfile] = useState<UserProfile | null>(null),
+    [error, setError] = useState('');
+  const {toast} = useToast();
+  const logoutPending = useRef(false);
+  const navigate = useNavigate();
+  const boot = useCallback(async () => {
+    setStatus('checking');
+    setError('');
+    try {
+      const email = await verifyToken();
+      if (email) {
+        setProfile(await cachedProfile());
+        setStatus('ready');
+      } else {
+        setProfile(null);
+        setStatus('guest');
+      }
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        await clearToken();
+        await clearProfile();
+        setProfile(null);
+        setStatus('guest');
+      } else {
+        setError(messageOf(e));
+        setStatus('error');
+      }
+    }
   }, []);
-
-  const logout = useCallback(() => { clearToken(); clearProfile(); setIsLoggedIn(false); }, []);
-
-  if (checking) {
+  useEffect(() => {
+    void boot();
+  }, [boot]);
+  useEffect(() => {
+    const expired = () => {
+      const desktop = window.electronAPI;
+      if (desktop) {
+        void Promise.allSettled([desktop.audio.clearAnswer(), desktop.window.closeOverlay()]);
+        // Stop can deliver a final in-flight answer; clear it after the connection closes too.
+        void desktop.audio
+          .stopCapture()
+          .finally(() => desktop.audio.clearAnswer())
+          .catch(() => {});
+      }
+      void clearToken();
+      void clearProfile();
+      setProfile(null);
+      setStatus('guest');
+      toast('登录已失效，请重新登录', 'warning');
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, expired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, expired);
+  }, [toast]);
+  const logout = async () => {
+    if (logoutPending.current) return;
+    if (isInterviewActive()) {
+      toast('请先结束当前面试并完成保存，再退出登录', 'warning');
+      return;
+    }
+    logoutPending.current = true;
+    try {
+      await logoutSession();
+      // A failed optional window IPC must not retain a server-revoked login.
+      await Promise.allSettled([
+        window.electronAPI?.audio.clearAnswer(),
+        window.electronAPI?.window.closeOverlay(),
+        clearToken(),
+        clearProfile(),
+      ]);
+      setProfile(null);
+      setStatus('guest');
+      navigate('/history', {replace: true});
+    } catch (e) {
+      toast(messageOf(e), 'error');
+    } finally {
+      logoutPending.current = false;
+    }
+  };
+  const refreshProfile = async () => {
+    const result = await getProfile();
+    setProfile(result.user);
+  };
+  if (status === 'checking') return <Loading text="正在连接你的工作空间…" />;
+  if (status === 'error')
     return (
-      <div className="h-full flex items-center justify-center bg-white dark:bg-[#0A0A0B]">
-        <div className="flex items-center gap-3">
-          <svg className="animate-spin w-4 h-4 text-zinc-400" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-          <span className="text-sm text-zinc-400">加载中...</span>
-        </div>
+      <div className="empty-state">
+        <h2>暂时无法连接工作空间</h2>
+        <p>登录信息已保留，连接恢复后可以继续。</p>
+        <ErrorState message={error} retry={() => void boot()} />
       </div>
     );
-  }
-
+  if (status === 'guest')
+    return (
+      <AuthScreen
+        onLogin={async () => {
+          await boot();
+          navigate('/history', {replace: true});
+        }}
+      />
+    );
   return (
-    <AuthContext.Provider value={{ logout }}>
-      <ToastProvider>
-        <HashRouter>
-      <KeyboardShortcutHandler />
-      {isLoggedIn ? <AuthenticatedApp dark={dark} onToggleDark={toggleDark} /> : <AuthScreen onLogin={() => setIsLoggedIn(true)} />}
-        </HashRouter>
-      </ToastProvider>
+    <AuthContext.Provider value={{profile, logout, refreshProfile}}>
+      <WorkspaceDraftProvider>
+        <AuthenticatedApp profile={profile} />
+      </WorkspaceDraftProvider>
     </AuthContext.Provider>
   );
 }
-
-/* ═══════════════════════════════════════════
-   登录后的完整 App 壳
-   ═══════════════════════════════════════════ */
-function AuthenticatedApp({ dark, onToggleDark }: { dark: boolean; onToggleDark: () => void }) {
-  const location = useLocation();
-  const activeKey = location.pathname.replace('/', '') || 'interview';
-
-  const tabs = [
-    { key: 'interview', label: '面试', icon: Mic },
-    { key: 'tools',     label: '工具箱', icon: Wrench },
-    { key: 'profile',   label: '我的',   icon: User },
-  ];
-
-  return (
-    <div className="h-full flex flex-col bg-white dark:bg-[#0A0A0B] select-none">
-      {/* ── Toolbar ── */}
-      <Toolbar tabs={tabs} activeKey={activeKey} dark={dark} onToggleDark={onToggleDark} />
-
-      {/* ── 页面内容 ── */}
-      <div className="flex-1 flex overflow-hidden">
-        <Routes>
-          <Route path="/"        element={<Navigate to="/interview" />} />
-          <Route path="/interview" element={<InterviewScreen />} />
-          <Route path="/tools"     element={<ToolsScreen />} />
-          <Route path="/profile"   element={<ProfileScreen />} />
-          <Route path="/history"   element={<InterviewHistoryScreen />} />
-          <Route path="/overlay"   element={<OverlayScreen />} />
-        </Routes>
-      </div>
-
-      {/* ── 状态栏 ── */}
-      <StatusBar />
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════
-   Toolbar
-   ═══════════════════════════════════════════ */
-function Toolbar({ tabs, activeKey, dark, onToggleDark }: {
-  tabs: { key: string; label: string; icon: any }[];
-  activeKey: string;
-  dark: boolean;
-  onToggleDark: () => void;
-}) {
-  const navigate = useNavigate();
-  const [stealth, setStealth] = useState(false);
-  const { toast } = useToast();
-
+function AuthenticatedApp({profile}: {profile: UserProfile | null}) {
+  const location = useLocation(),
+    navigate = useNavigate(),
+    {toast} = useToast();
+  const [active, setActive] = useState(isInterviewActive);
+  useEffect(() => onInterviewActiveChange(setActive), []);
+  const guarded = active && location.pathname !== '/interview' && location.pathname !== '/overlay';
   useEffect(() => {
-    (window as any).electronAPI?.window?.getContentProtection().then((on: boolean) => setStealth(on));
-  }, []);
-
-  const toggle = () => {
-    (window as any).electronAPI?.window?.toggleContentProtection().then((on: boolean) => setStealth(on));
-  };
-
-  const goTab = (key: string) => {
-    if (key !== 'interview' && isInterviewActive()) {
-      toast('面试进行中，请先结束当前面试', 'warning');
+    if (guarded) {
+      toast('面试进行中，请先结束并保存，再切换页面', 'warning');
+      navigate('/interview', {replace: true});
+    }
+  }, [guarded, navigate, toast]);
+  const go = (path: string) => {
+    if (isInterviewActive() && path !== '/interview') {
+      toast('面试进行中，请先结束并保存，再切换页面', 'warning');
       return;
     }
-    navigate(`/${key}`);
+    navigate(path);
   };
-
-  return (
-    <header className="h-11 shrink-0 bg-white dark:bg-[#0A0A0B] border-b border-zinc-200 dark:border-zinc-800 flex items-center px-4">
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 mr-6">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm shadow-indigo-500/20">
-          <MessageSquare className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
-        </div>
-        <span className="text-sm font-bold text-zinc-900 dark:text-white tracking-tight">AI 面试助手</span>
-      </div>
-
-      {/* Nav Tabs */}
-      <nav className="flex items-center h-full">
-        {tabs.map(t => {
-          const Icon = t.icon;
-          const active = t.key === activeKey;
-          return (
-            <button
-              key={t.key}
-              onClick={() => goTab(t.key)}
-              className={`h-full px-4 flex items-center gap-2 text-[13px] font-medium border-b-[2px] transition-colors ${
-                active
-                  ? 'border-zinc-900 dark:border-white text-zinc-900 dark:text-white'
-                  : 'border-transparent text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'
-              }`}
-            >
-              <Icon className="w-4 h-4" strokeWidth={active ? 2 : 1.5} />
-              <span>{t.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* 右侧：暗色切换 + 隐身开关 */}
-      <div className="ml-auto flex items-center gap-1.5">
-        <button
-          onClick={onToggleDark}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          title={dark ? '切换到浅色模式' : '切换到深色模式'}>
-          {dark ? <Sun className="w-4 h-4" strokeWidth={1.75}/> : <Moon className="w-4 h-4" strokeWidth={1.75}/>}
-        </button>
-        <button
-          onClick={toggle}
-          className={`flex items-center gap-2 h-8 px-3 rounded-full text-[12px] font-semibold transition-all duration-200 active:scale-95 ${
-            stealth
-              ? 'bg-indigo-500 text-white shadow-sm shadow-indigo-500/25 hover:bg-indigo-600'
-              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-          }`}
-          title={stealth ? '隐身模式已开启：屏幕共享中不可见' : '点击开启隐身模式：屏幕共享中隐藏窗口'}
-        >
-          {/* 圆点指示器 */}
-          <span className={`relative flex h-4 w-4 items-center justify-center`}>
-            <span className={`absolute w-2.5 h-2.5 rounded-full transition-all duration-200 ${
-              stealth ? 'bg-white scale-100' : 'bg-zinc-400 dark:bg-zinc-500 scale-75'
-            }`} />
-            <span className={`absolute w-4 h-4 rounded-full border-2 transition-all duration-200 ${
-              stealth ? 'border-white/30 scale-100' : 'border-transparent scale-0'
-            }`} />
-          </span>
-          {stealth ? (
-            <span className="flex items-center gap-1">
-              隐身中
-              <Shield className="w-3 h-3" strokeWidth={2.5} />
-            </span>
-          ) : (
-            <span className="flex items-center gap-1">
-              隐身
-              <ShieldOff className="w-3 h-3" strokeWidth={1.5} />
-            </span>
-          )}
-        </button>
-      </div>
-    </header>
-  );
-}
-
-/* ═══════════════════════════════════════════
-   状态栏
-   ═══════════════════════════════════════════ */
-function StatusBar() {
-  return (
-    <footer className="h-7 shrink-0 bg-zinc-50 dark:bg-[#0F0F11] border-t border-zinc-200 dark:border-zinc-800 flex items-center px-4 gap-4 text-[11px] text-zinc-400 select-none">
-      <span><kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-[#141416] border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-500">Ctrl+1/2/3</kbd> 切换页面</span>
-      <span><kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-[#141416] border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-500">Ctrl+B</kbd> 浮窗</span>
-      <span><kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-[#141416] border border-zinc-200 dark:border-zinc-700 font-mono text-[10px] text-zinc-500">Ctrl+Shift+P</kbd> 隐身</span>
-    </footer>
-  );
-}
-
-/* ═══════════════════════════════════════════
-   快捷键
-   ═══════════════════════════════════════════ */
-function KeyboardShortcutHandler(): null {
-  const navigate = useNavigate();
   useKeyboardShortcuts({
-    'Ctrl+1': () => navigate('/interview'),
-    'Ctrl+2': () => navigate('/tools'),
-    'Ctrl+3': () => navigate('/profile'),
-    'Ctrl+,': () => navigate('/profile'),
-    'Ctrl+B': () => { (window as any).electronAPI?.window?.toggleOverlay(); },
-    'Ctrl+Shift+P': () => { (window as any).electronAPI?.window?.toggleContentProtection?.(); },
-    'Ctrl+Shift+A': () => { (window as any).electronAPI?.window?.setAlwaysOnTop?.(true); },
+    'Ctrl+1': () => go('/history'),
+    'Ctrl+2': () => go('/materials'),
+    'Ctrl+3': () => go('/tools'),
+    'Ctrl+,': () => go('/settings'),
+    'Ctrl+B': () => {
+      void window.electronAPI?.window?.toggleOverlay();
+    },
   });
-  return null;
+  const path = guarded ? '/interview' : location.pathname;
+  if (path === '/overlay') return <OverlayScreen />;
+  const session = path === '/interview' || path.startsWith('/history/');
+  const navigation = [
+    {path: '/history', label: '面试记录', icon: History},
+    {path: '/materials', label: '我的资料', icon: Files},
+    {path: '/tools', label: '小工具', icon: Grid2X2},
+  ];
+  const title =
+    path === '/settings'
+      ? '设置'
+      : navigation.find(item => item.path === path)?.label || '个人空间';
+  const name = profile?.name || profile?.email?.split('@')[0] || '我的账号';
+  return (
+    <div className="app-shell">
+      {!session && (
+        <aside className="app-sidebar">
+          <div className="app-brand">
+            <span className="brand-mark">
+              <AudioLines />
+            </span>
+            <strong>面试助手</strong>
+          </div>
+          <span className="nav-label">工作空间</span>
+          <nav className="side-nav" aria-label="主要导航">
+            {navigation.map(item => (
+              <button
+                key={item.path}
+                className={`side-link ${path === item.path ? 'active' : ''}`}
+                aria-current={path === item.path ? 'page' : undefined}
+                aria-label={item.label}
+                title={item.label}
+                onClick={() => go(item.path)}>
+                <item.icon />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar-bottom">
+            <button
+              className={`side-link ${path === '/settings' ? 'active' : ''}`}
+              aria-label="设置"
+              title="设置"
+              onClick={() => go('/settings')}>
+              <Settings />
+              <span>设置</span>
+            </button>
+            <button
+              aria-label={`账号设置 · ${name}`}
+              title={name}
+              className="account-button"
+              onClick={() => go('/settings?tab=account')}>
+              <ProfileAvatar name={name} avatar={profile?.avatar} />
+              <span>
+                <strong>{name}</strong>
+                <small>个人空间</small>
+              </span>
+              <ChevronsUpDown size={13} />
+            </button>
+          </div>
+        </aside>
+      )}
+      <main className="app-main">
+        {!session && (
+          <header className="app-topbar">
+            <span>个人空间</span>
+            <span className="slash">/</span>
+            <span>{title}</span>
+          </header>
+        )}
+        <div className="route-content">
+          <Routes location={guarded ? '/interview' : location}>
+            <Route path="/" element={<Navigate to="/history" replace />} />
+            <Route path="/history" element={<InterviewHistoryScreen />} />
+            <Route path="/history/:id" element={<InterviewDetailScreen />} />
+            <Route path="/interview" element={<InterviewScreen />} />
+            <Route path="/materials" element={<MaterialsScreen />} />
+            <Route path="/tools" element={<ToolsScreen />} />
+            <Route path="/settings" element={<SettingsScreen />} />
+            <Route path="/profile" element={<Navigate to="/settings?tab=account" replace />} />
+            <Route path="*" element={<Navigate to="/history" replace />} />
+          </Routes>
+        </div>
+      </main>
+    </div>
+  );
 }

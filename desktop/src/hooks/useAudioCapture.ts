@@ -1,319 +1,494 @@
-/**
- * useAudioCapture —— PC 端音频采集 Hook
- *
- * 业务逻辑和移动端 useAudioCaptureController 对齐，但架构为：
- *   采集（WASAPI system + WS 推流）都在主进程；渲染进程只做——
- *   1. 麦克风采集（getUserMedia → AudioContext 16kHz mono → IPC 送主进程）
- *   2. 控制消息（start/stop/llm_query/config）
- *   3. 事件消费（transcription/llm 三态/levels/streamState → reducer）
- */
-import { useReducer, useCallback, useEffect, useRef } from 'react';
-import { interviewReducer, INITIAL_STATE, genId } from '../store/interview-reducer';
-import { MAIN_STREAM_URL, getProgLang, getLanguage } from '../config';
-import { enumerateAudioInputs, loadSavedSystemDevice } from '../utils/audioDevices';
-import type { ConversationMessage } from '../store/types';
+import {useReducer, useCallback, useEffect, useRef, useState} from 'react';
+import {interviewReducer, INITIAL_STATE, genId} from '../store/interview-reducer';
+import {MAIN_STREAM_URL} from '../config';
+import {
+  prepareAudioStreams,
+  releaseStreams,
+  type PreparedStreams,
+} from '../services/capture-preparation';
+import {getToken} from '../utils/token';
+import {resumeExcerpt} from '../services/answer-context';
+import type {Settings} from '../api/workspace';
+import type {ConversationAnswer} from '../store/types';
+import {microphoneEchoMode, type MicrophoneEchoMode} from '../services/microphone-capture';
+import {
+  assertSystemOutput,
+  desktopPlatform,
+  listSystemOutputs,
+} from '../services/audio-device-settings';
 
-interface MicHandle {
+type AudioHandle = {
   ctx: AudioContext;
   stream: MediaStream;
   node: AudioWorkletNode;
+  flushAck?: () => void;
+};
+async function flushAudio(handle: AudioHandle | null): Promise<boolean> {
+  if (!handle) return true;
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      handle.flushAck = undefined;
+      resolve(false);
+    }, 300);
+    handle.flushAck = () => {
+      clearTimeout(timer);
+      handle.flushAck = undefined;
+      resolve(true);
+    };
+    handle.node.port.postMessage({type: 'flush', id: crypto.randomUUID()});
+  });
+}
+export interface AnswerContext {
+  role: string;
+  job_description: string;
+  resume_text: string;
+  language: string;
+  answer_length: string;
+  answer_style: string;
+  context_version: number;
+  resume_version?: number;
+}
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+function closeAudio(handle: AudioHandle | null) {
+  if (!handle) return;
+  handle.stream.getTracks().forEach(track => track.stop());
+  handle.node.port.onmessage = null;
+  handle.node.disconnect();
+  void handle.ctx.close().catch(() => {});
 }
 
 export function useAudioCapture() {
   const [state, dispatch] = useReducer(interviewReducer, INITIAL_STATE);
   const api = window.electronAPI?.audio;
-  const micRef = useRef<MicHandle | null>(null);
-  const sysRef = useRef<MicHandle | null>(null);
-  // 对话引用：sendLLMQuery/retryLLM 依赖它读取点击的气泡，ref 形式保证回调引用稳定
-  // （React.memo 列表组件在流式渲染时不会因回调变化失效）
-  const conversationRef = useRef(state.conversation);
-  conversationRef.current = state.conversation;
-  // LLM chunk 合并缓冲：50ms 窗口内多个 chunk 一次 dispatch，降低高频 re-render
-  const chunkBufRef = useRef<{ deltas: string[]; requestId: string | null; timer: ReturnType<typeof setTimeout> | null }>({ deltas: [], requestId: null, timer: null });
-
-  const flushChunk = useCallback(() => {
-    const buf = chunkBufRef.current;
-    if (buf.timer) { clearTimeout(buf.timer); buf.timer = null; }
-    if (buf.deltas.length === 0) return;
-    const delta = buf.deltas.join('');
-    buf.deltas = [];
-    dispatch({ type: 'llm_chunk', chunk_index: 0, delta, requestId: buf.requestId, timestamp: Date.now() });
-    buf.requestId = null;
-  }, []);
-
-  // ── 事件订阅（主进程 → IPC → reducer，对齐移动端事件流） ──
-  useEffect(() => {
-    if (!api) return;
-    const offs = [
-      api.onState((evt: any) => {
-        if (evt?.state) dispatch({ type: 'captureState', value: evt.state });
-      }),
-      api.onTranscription((evt: any) => {
-        dispatch({ type: 'transcription', text: evt.text, isFinal: evt.is_final, source: evt.source, timestamp: Date.now() });
-      }),
-      api.onLLMStart((evt: any) => {
-        flushChunk();
-        dispatch({ type: 'llm_start', question_text: evt.question_text, language: evt.language, requestId: evt.request_id ?? null, timestamp: Date.now() });
-      }),
-      api.onLLMChunk((evt: any) => {
-        const buf = chunkBufRef.current;
-        if (buf.deltas.length === 0) buf.requestId = evt.request_id ?? null;  // 记录本批所属请求
-        buf.deltas.push(evt.delta ?? '');
-        if (!buf.timer) {
-          buf.timer = setTimeout(() => {
-            buf.timer = null;
-            if (buf.deltas.length === 0) return;
-            const delta = buf.deltas.join('');
-            buf.deltas = [];
-            dispatch({ type: 'llm_chunk', chunk_index: evt.chunk_index ?? 0, delta, requestId: buf.requestId, timestamp: Date.now() });
-            buf.requestId = null;
-          }, 50);
-        }
-      }),
-      api.onLLMDone((evt: any) => {
-        flushChunk();
-        dispatch({ type: 'llm_done', full_answer: evt.full_answer, requestId: evt.request_id ?? null, timestamp: Date.now(), error: evt.error });
-      }),
-      api.onStreamState((evt: any) => {
-        if (evt?.state) dispatch({ type: 'streamState', value: evt.state });
-      }),
-      api.onLevels((evt: any) => {
-        if (evt) dispatch({ type: 'levels', value: { mic: evt.mic ?? 0, system: evt.system ?? 0 } });
-      }),
-      // 主进程采集/推流错误必须上屏（addon 缺失、声卡异常等），对齐移动端 onError
-      api.onError((evt: any) => {
-        if (evt?.message) dispatch({ type: 'error', value: evt });
-      }),
-    ];
-    return () => { offs.forEach(off => off()); };
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const micRef = useRef<AudioHandle | null>(null);
+  const sysRef = useRef<AudioHandle | null>(null);
+  const stoppingRef = useRef(false);
+  const startEpoch = useRef(0);
+  const preparedKey = useRef<string | null>(null);
+  const forwarding = useRef(false);
+  const [settling, setSettling] = useState(false);
+  const [echoMode, setEchoMode] = useState<MicrophoneEchoMode | null>(null);
+  const nativeStopTask = useRef<Promise<void> | null>(null);
+  const stopNative = useCallback(() => {
+    if (nativeStopTask.current) return nativeStopTask.current;
+    if (!api) return Promise.resolve();
+    setSettling(true);
+    const task = api.stopCapture().finally(() => {
+      if (nativeStopTask.current === task) {
+        nativeStopTask.current = null;
+        setSettling(false);
+      }
+    });
+    nativeStopTask.current = task;
+    return task;
   }, [api]);
-
-  // ── 挂载时恢复主进程状态（dev reload 场景：UI 与主进程失同步时对齐） ──
-  useEffect(() => {
-    if (!api) return;
-    api.getSnapshot().then((snap: any) => {
-      if (!snap) return;
-      if (snap.captureState === 'capturing') {
-        dispatch({ type: 'captureState', value: 'capturing' });
-      }
-      if (snap.streamState && snap.streamState !== 'idle') {
-        dispatch({ type: 'streamState', value: snap.streamState });
-      }
-    }).catch(() => {});
-  }, [api]);
-
-  // ── worklet float32 帧 → clamp int16 → 指定 IPC 通道（mic/system 共用） ──
-  const makeFrameSender = useCallback(
-    (send: (frame: Uint8Array) => void) => (e: MessageEvent) => {
-      const samples = new Float32Array(e.data as ArrayBuffer);
-      const out = new Int16Array(samples.length);
-      for (let i = 0; i < samples.length; i++) {
-        const v = Math.max(-1, Math.min(1, samples[i] ?? 0));
-        out[i] = Math.round(v * 32767);
-      }
-      send(new Uint8Array(out.buffer));
-    },
-    [],
-  );
-
-  // ── 麦克风采集：AudioWorklet 16kHz mono float32 → int16 → IPC 帧 ──
-  const startMic = useCallback(async (): Promise<void> => {
-    if (!api || micRef.current) return;
-    try {
-      // AudioContext 直接输出 16kHz（浏览器高质量重采样），与主进程归一化目标一致；
-      // worklet 在 context 采样率下运行，无需在 worklet 内重采样
-      const ctx = new AudioContext({ sampleRate: 16000 });
-      // worklet 独立文件（public/ 原样复制）：dev 下 Vite 伺服，打包后 file:// 相对路径
-      await ctx.audioWorklet.addModule('./mic-processor.js');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 },
-      });
-      const source = ctx.createMediaStreamSource(stream);
-      const node = new AudioWorkletNode(ctx, 'mic-capture-processor', {
-        numberOfInputs: 1,
-        numberOfOutputs: 0,
-      });
-      // worklet 每 40ms 转移一个 640 样本的 ArrayBuffer；主线程仅做 int16 转换（微秒级）
-      node.port.onmessage = makeFrameSender((frame) => api.sendMicFrame(frame));
-      source.connect(node);
-      micRef.current = { ctx, stream, node };
-    } catch (e: any) {
-      dispatch({ type: 'error', value: { code: 'E_MIC', stage: 'capture', message: e?.message || '麦克风不可用，请检查权限', recoverable: true } });
-    }
-  }, [api, makeFrameSender]);
-
-  const stopMic = useCallback((): void => {
-    const mic = micRef.current;
-    if (!mic) return;
-    mic.stream.getTracks().forEach(t => t.stop());
-    mic.node.port.onmessage = null;
-    mic.node.disconnect();
-    mic.ctx.close().catch(() => {});
+  const stopLocal = useCallback(() => {
+    forwarding.current = false;
+    setEchoMode(null);
+    preparedKey.current = null;
+    closeAudio(micRef.current);
+    closeAudio(sysRef.current);
     micRef.current = null;
-  }, []);
-
-  // ── macOS 系统音频采集 ──
-  // 系统输出监听在 macOS 上无公开 API（Chromium 的 getDisplayMedia 不提供系统音频），
-  // Electron 官方推荐用虚拟声卡（BlackHole 等）路由后按普通输入设备采集：
-  //   首选  BlackHole 类虚拟声卡（getUserMedia 采集，稳定可靠）；
-  //   兜底  getDisplayMedia 窗口/应用音频（仅新版 Chromium 的窗口源可能带音频）；
-  //   失败  明确引导安装 BlackHole，不再出现"已连接却无声"的静默失败。
-  const startSystemCapture = useCallback(async (): Promise<void> => {
-    if (!api || sysRef.current) return;
-    if (!/Mac/i.test(navigator.userAgent)) return;
-
-    const attachPipeline = async (stream: MediaStream): Promise<void> => {
-      const ctx = new AudioContext({ sampleRate: 16000 });
-      await ctx.audioWorklet.addModule('./mic-processor.js');
-      const source = ctx.createMediaStreamSource(stream);
-      const node = new AudioWorkletNode(ctx, 'mic-capture-processor', {
-        numberOfInputs: 1,
-        numberOfOutputs: 0,
-      });
-      node.port.onmessage = makeFrameSender((frame) => api.sendSystemFrame(frame));
-      source.connect(node);
-      sysRef.current = { ctx, stream, node };
-    };
-
-    // 1) 虚拟声卡优先：系统输出已路由到 BlackHole 等虚拟卡时，它就是普通音频输入设备
-    try {
-      const devices = await enumerateAudioInputs();
-      const savedId = await loadSavedSystemDevice();
-      const virtuals = devices.filter(d => d.isVirtual);
-      const target = (savedId && virtuals.find(d => d.deviceId === savedId)) || virtuals[0];
-      if (target) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: { exact: target.deviceId },
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            channelCount: 1,
-          },
-        });
-        await attachPipeline(stream);
-        return;
-      }
-    } catch (e: any) {
-      if (e?.name === 'NotAllowedError') {
-        dispatch({ type: 'error', value: { code: 'E_SYSTEM', stage: 'capture', message: '麦克风权限被拒绝，请到 系统设置 → 隐私与安全性 → 麦克风 授权后重试', recoverable: true } });
-      } else {
-        dispatch({ type: 'error', value: { code: 'E_SYSTEM', stage: 'capture', message: `系统音频（虚拟声卡）打开失败：${e?.message || e}`, recoverable: true } });
-      }
-      return;
-    }
-
-    // 2) 无虚拟声卡 → getDisplayMedia 窗口音频兜底（仅"窗口"源可能带音频）
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      if (stream.getAudioTracks().length === 0) {
-        stream.getTracks().forEach(t => t.stop());
-        throw new Error('所选来源无音频（请选择面试通话窗口，而不是整个屏幕）');
-      }
-      await attachPipeline(stream);
-      return;
-    } catch (e: any) {
-      // 3) 无既无虚拟卡、窗口音频又不可用 → 明确引导用户安装 BlackHole
-      const message = e?.message === '所选来源无音频（请选择面试通话窗口，而不是整个屏幕）'
-        ? '所选来源无音频。macOS 仅支持从"面试通话窗口"采集音频；如需采集整个系统输出，请安装 BlackHole 虚拟声卡（见「系统音频」面板的安装指引）'
-        : e?.name === 'NotAllowedError'
-          ? '系统音频权限被拒绝，请到 系统设置 → 隐私与安全性 → 屏幕录制 授权后重试；或在「系统音频」面板安装 BlackHole，无需屏幕录制权限'
-          : e?.name === 'AbortError'
-            ? '已取消系统音频选择，本次仅采集麦克风'
-            : `系统音频采集失败：${e?.message || e}。建议安装 BlackHole 虚拟声卡（见「系统音频」面板安装指引）`;
-      dispatch({ type: 'error', value: { code: 'E_SYSTEM_GUIDE', stage: 'capture', message, recoverable: true } });
-    }
-  }, [api, makeFrameSender]);
-
-  const stopSystemCapture = useCallback((): void => {
-    const sys = sysRef.current;
-    if (!sys) return;
-    sys.stream.getTracks().forEach(t => t.stop());
-    sys.node.port.onmessage = null;
-    sys.node.disconnect();
-    sys.ctx.close().catch(() => {});
     sysRef.current = null;
   }, []);
 
-  // ── Start（对齐移动端：连接 → 会话 → 采集；主进程统一执行） ──
-  const start = useCallback(async () => {
-    if (!api) return;
-    try {
-      // 清掉上一次的残留错误（对齐移动端 start 入口行为）
-      dispatch({ type: 'error', value: null });
-      dispatch({ type: 'captureState', value: 'preparing' });
-      await api.startCapture({ source: 'both', streamUrl: MAIN_STREAM_URL });
-      // 主进程 connect(等 ready) + session_start + track_start 已完成
-      dispatch({ type: 'captureState', value: 'capturing' });
-      dispatch({ type: 'streamState', value: 'ready' });
-      // 初始赛道配置（对齐移动端 start 流程）
-      await api.sendControl({ type: 'config', llm: {}, track: getProgLang().toLowerCase() });
-      await startMic();
-      // macOS 系统音频：等待用户完成系统选择器（失败不阻断，内部已 dispatch 错误）
-      await startSystemCapture();
-    } catch (e: any) {
-      // 用户主动停止导致的中断：不是错误，不污染界面
-      if (e?.message === '主动断开') return;
-      dispatch({ type: 'captureState', value: 'idle' });
-      dispatch({ type: 'error', value: { code: 'E_START', stage: 'connect', message: e?.message || '连接失败', recoverable: true } });
-    }
-  }, [api, startMic, startSystemCapture]);
+  const pauseForLoss = useCallback(
+    (message: string) => {
+      if (stoppingRef.current) return;
+      stoppingRef.current = true;
+      startEpoch.current++;
+      stopLocal();
+      dispatch({type: 'settle'});
+      dispatch({type: 'captureState', value: 'paused'});
+      dispatch({
+        type: 'error',
+        value: {code: 'E_CAPTURE_LOST', stage: 'capture', message, recoverable: true},
+      });
+      dispatch({type: 'asr_error', message});
+      void stopNative().catch(() => {});
+    },
+    [stopNative, stopLocal],
+  );
 
-  // ── Stop（收尾顺序在主进程：flush isFinal → track_end → session_stopped → 断连） ──
-  const stop = useCallback(async () => {
-    stopMic();
-    stopSystemCapture();
-    if (api) {
-      try { await api.stopCapture(); } catch { /* ignore */ }
-    }
-    dispatch({ type: 'captureState', value: 'idle' });
-    dispatch({ type: 'streamState', value: 'idle' });
-    dispatch({ type: 'reset' });
-  }, [api, stopMic, stopSystemCapture]);
-
-  // 卸载兜底：只停本地采集，不主动结束会话（结束由用户操作触发）
   useEffect(() => {
-    return () => { stopMic(); stopSystemCapture(); };
-  }, [stopMic, stopSystemCapture]);
+    if (!api) return;
+    const offs = [
+      api.onState(raw => {
+        const evt = raw as {state?: typeof state.captureState};
+        if (evt.state && evt.state !== 'capturing' && !stoppingRef.current)
+          dispatch({type: 'captureState', value: evt.state});
+      }),
+      api.onTranscription(raw => {
+        const evt = raw as {
+          text: string;
+          is_final: boolean;
+          source: 'mic' | 'system';
+          utterance_id?: string;
+          revision?: number;
+          start_time?: number;
+          end_time?: number;
+        };
+        if (typeof evt.text !== 'string') return;
+        dispatch({
+          type: 'transcription',
+          text: evt.text,
+          isFinal: evt.is_final,
+          source: evt.source,
+          timestamp: Date.now(),
+          utteranceId: evt.utterance_id,
+          revision: evt.revision,
+          startTime: evt.start_time,
+          endTime: evt.end_time,
+        });
+      }),
+      api.onLLMStart(raw => {
+        const evt = raw as {request_id: string};
+        dispatch({type: 'llm_start', requestId: evt.request_id, timestamp: Date.now()});
+      }),
+      api.onLLMChunk(raw => {
+        const evt = raw as {request_id: string; delta: string; chunk_index?: number};
+        if (evt.delta)
+          dispatch({
+            type: 'llm_chunk',
+            requestId: evt.request_id,
+            delta: evt.delta,
+            chunkIndex: evt.chunk_index,
+            timestamp: Date.now(),
+          });
+      }),
+      api.onLLMDone(raw => {
+        const evt = raw as {
+          request_id: string;
+          full_answer: string;
+          status?: string;
+          error?: string;
+          source_refs?: unknown[];
+        };
+        dispatch({
+          type: 'llm_done',
+          requestId: evt.request_id,
+          full_answer: evt.full_answer ?? '',
+          status: evt.status,
+          error: evt.error,
+          sourceRefs: evt.source_refs,
+          timestamp: Date.now(),
+        });
+      }),
+      api.onStreamState(raw => {
+        const evt = raw as {state?: typeof state.streamState; message?: string};
+        if (evt.state) dispatch({type: 'streamState', value: evt.state, message: evt.message});
+        if ((evt.state === 'dead' || evt.state === 'closed') && !stoppingRef.current) {
+          pauseForLoss('音频连接已断开，本次采集已暂停；未确认的片段已保留，请重连后继续。');
+        }
+      }),
+      api.onLevels(raw => {
+        const evt = raw as {mic?: number; system?: number};
+        dispatch({type: 'levels', value: {mic: evt.mic ?? 0, system: evt.system ?? 0}});
+      }),
+      api.onError(raw => {
+        const evt = raw as NonNullable<typeof state.error>;
+        if (evt.message) {
+          dispatch({type: 'error', value: evt});
+          if (evt.stage === 'transcription' || evt.code?.startsWith('E_ASR')) {
+            dispatch({type: 'asr_error', message: evt.message});
+            if (evt.recoverable === false) pauseForLoss(evt.message);
+          }
+          if (evt.stage === 'capture' && evt.recoverable === false) pauseForLoss(evt.message);
+        }
+      }),
+    ];
+    return () => {
+      offs.forEach(off => off());
+    };
+  }, [api, pauseForLoss]);
 
-  // ── 发送 LLM 查询（点击气泡触发） ──
-  const sendLLMQuery = useCallback((bubbleId: string) => {
-    const conv = conversationRef.current;
-    const clickedMsg = conv.find((m: ConversationMessage) => m.id === bubbleId);
-    if (!clickedMsg || clickedMsg.role === 'ai') return;
-    const idx = conv.findIndex((m: ConversationMessage) => m.id === bubbleId);
-    const nextMsg = idx >= 0 ? conv[idx + 1] : undefined;
-    if (nextMsg && nextMsg.role === 'ai' && nextMsg.status === 'done') return;
+  const attachPipeline = useCallback(
+    async (stream: MediaStream, send: (frame: Uint8Array) => void) => {
+      const ctx = new AudioContext({sampleRate: 16000});
+      try {
+        await ctx.audioWorklet.addModule('./mic-processor.js');
+        const source = ctx.createMediaStreamSource(stream);
+        const node = new AudioWorkletNode(ctx, 'mic-capture-processor', {
+          numberOfInputs: 1,
+          numberOfOutputs: 0,
+        });
+        const handle: AudioHandle = {ctx, stream, node};
+        node.port.onmessage = (event: MessageEvent<ArrayBuffer | {type?: string}>) => {
+          if (!(event.data instanceof ArrayBuffer)) {
+            if (event.data?.type === 'flushed') handle.flushAck?.();
+            return;
+          }
+          const samples = new Float32Array(event.data);
+          const pcm = new Int16Array(samples.length);
+          for (let i = 0; i < samples.length; i++)
+            pcm[i] = Math.round(Math.max(-1, Math.min(1, samples[i] ?? 0)) * 32767);
+          if (forwarding.current) send(new Uint8Array(pcm.buffer));
+        };
+        source.connect(node);
+        await ctx.resume();
+        stream
+          .getAudioTracks()
+          .forEach(track =>
+            track.addEventListener(
+              'ended',
+              () => pauseForLoss('音频设备已断开或共享已结束，采集已暂停。请检查设备后继续。'),
+              {once: true},
+            ),
+          );
+        if (!stream.getAudioTracks().some(track => track.readyState === 'live'))
+          throw new Error('音频输入已停止，请检查麦克风与系统音频权限后重试。');
+        return handle;
+      } catch (error) {
+        stream.getTracks().forEach(track => track.stop());
+        await ctx.close();
+        throw error;
+      }
+    },
+    [pauseForLoss],
+  );
 
-    const aiBubbleId = genId('llm');
-    const requestId = genId('llmreq');
-    dispatch({ type: 'llm_query_sent', aiBubbleId, insertedAfterId: clickedMsg.id, requestId, timestamp: Date.now() });
-    api?.sendControl({
-      type: 'llm_query', text: clickedMsg.text, language: getLanguage(),
-      track: getProgLang().toLowerCase(), bubble_source: clickedMsg.role === 'interviewer' ? 'system' : 'mic',
-      request_id: requestId,
-    });
-  }, [api]);
+  const prepare = useCallback(
+    async (settings: Settings, source: 'both' | 'mic' = 'both') => {
+      if (!api) throw new Error('实时采集需要在桌面客户端中打开。');
+      // Do not await an old stop here: media permission must retain this click's
+      // activation. The UI disables resume until the old native stream is closed.
+      if (nativeStopTask.current) throw new Error('正在停止上次采集，请稍后继续。');
+      if (!navigator.mediaDevices?.getUserMedia)
+        throw new Error('当前窗口无法访问音频设备，请重启桌面客户端。');
+      const key = JSON.stringify([source, settings.microphone_id, settings.system_device_id]);
+      if (
+        preparedKey.current === key &&
+        micRef.current?.stream.getAudioTracks().some(track => track.readyState === 'live') &&
+        (source !== 'both' ||
+          !/Mac/i.test(navigator.userAgent) ||
+          sysRef.current?.stream.getAudioTracks().some(track => track.readyState === 'live'))
+      )
+        return;
+      stopLocal();
+      const epoch = ++startEpoch.current;
+      stoppingRef.current = false;
+      dispatch({type: 'error', value: null});
+      dispatch({type: 'asr_error', message: null});
+      dispatch({type: 'captureState', value: 'preparing'});
+      let streams: PreparedStreams | null = null;
+      try {
+        // Windows enumeration opens no audio stream; fail before saving a new
+        // session or opening provider connections if its selected output vanished.
+        if (source === 'both' && desktopPlatform() === 'windows') {
+          assertSystemOutput(await listSystemOutputs(), settings.system_device_id);
+          if (epoch !== startEpoch.current) throw new Error('启动已取消');
+        }
+        streams = await prepareAudioStreams(
+          settings,
+          source,
+          navigator.mediaDevices,
+          /Mac/i.test(navigator.userAgent),
+          () => epoch !== startEpoch.current,
+        );
+        setEchoMode(microphoneEchoMode(streams.mic));
+        micRef.current = await attachPipeline(streams.mic, frame => api.sendMicFrame(frame));
+        if (streams.system)
+          sysRef.current = await attachPipeline(streams.system, frame =>
+            api.sendSystemFrame(frame),
+          );
+        if (epoch !== startEpoch.current) throw new Error('启动已取消');
+        preparedKey.current = key;
+      } catch (error) {
+        stoppingRef.current = true;
+        if (streams) releaseStreams(streams);
+        stopLocal();
+        dispatch({type: 'captureState', value: 'paused'});
+        dispatch({
+          type: 'error',
+          value: {
+            code: 'E_DEVICES',
+            stage: 'devices',
+            message: messageOf(error),
+            recoverable: true,
+          },
+        });
+        throw error;
+      }
+    },
+    [api, attachPipeline, stopLocal],
+  );
 
-  // ── Retry LLM ──
-  const retryLLM = useCallback((aiBubbleId: string) => {
-    const conv = conversationRef.current;
-    const aiMsg = conv.find((m: ConversationMessage) => m.id === aiBubbleId);
-    if (!aiMsg || aiMsg.role !== 'ai' || aiMsg.status !== 'error') return;
-    const aiIdx = conv.findIndex((m: ConversationMessage) => m.id === aiBubbleId);
-    if (aiIdx <= 0) return;
-    const clickedMsg = conv[aiIdx - 1]!;
-    if (clickedMsg.role === 'ai') return;
+  const discardPreparation = useCallback(() => {
+    startEpoch.current++;
+    stoppingRef.current = true;
+    stopLocal();
+    dispatch({type: 'captureState', value: 'paused'});
+  }, [stopLocal]);
 
-    const newAiId = genId('llm');
-    const requestId = genId('llmreq');
-    dispatch({ type: 'llm_query_sent', aiBubbleId: newAiId, insertedAfterId: clickedMsg.id, requestId, timestamp: Date.now() });
-    api?.sendControl({
-      type: 'llm_query', text: clickedMsg.text, language: getLanguage(),
-      track: getProgLang().toLowerCase(), bubble_source: clickedMsg.role === 'interviewer' ? 'system' : 'mic',
-      request_id: requestId,
-    });
-  }, [api]);
+  const assertPrepared = useCallback((settings: Settings, source: 'both' | 'mic') => {
+    const key = JSON.stringify([source, settings.microphone_id, settings.system_device_id]);
+    const live = (handle: AudioHandle | null) =>
+      handle?.stream.getAudioTracks().some(track => track.readyState === 'live');
+    if (
+      preparedKey.current !== key ||
+      !live(micRef.current) ||
+      (source === 'both' && /Mac/i.test(navigator.userAgent) && !live(sysRef.current))
+    ) {
+      throw new Error('音频准备已取消或设备已断开，请检查设备后重新开始。');
+    }
+  }, []);
 
-  return { state, dispatch, start, stop, sendLLMQuery, retryLLM };
+  const start = useCallback(
+    async (sessionId: string, settings: Settings, source: 'both' | 'mic' = 'both') => {
+      if (!api) throw new Error('实时采集需要在桌面客户端中打开。');
+      assertPrepared(settings, source);
+      const epoch = startEpoch.current;
+      try {
+        const token = await getToken();
+        if (!token) throw new Error('登录已失效，请重新登录。');
+        if (epoch !== startEpoch.current) throw new Error('启动已取消');
+        await api.startCapture({
+          source,
+          streamUrl: MAIN_STREAM_URL,
+          sessionId,
+          token,
+          ...(desktopPlatform() === 'windows' ? {systemDeviceId: settings.system_device_id} : {}),
+        });
+        if (epoch !== startEpoch.current) throw new Error('启动已取消');
+        await api.sendControl({type: 'config', language: settings.language});
+        if (epoch !== startEpoch.current) throw new Error('启动已取消');
+        forwarding.current = true;
+        dispatch({type: 'source', value: source});
+        dispatch({type: 'captureState', value: 'capturing'});
+      } catch (error) {
+        discardPreparation();
+        await stopNative().catch(() => {});
+        dispatch({
+          type: 'error',
+          value: {code: 'E_START', stage: 'capture', message: messageOf(error), recoverable: true},
+        });
+        throw error;
+      }
+    },
+    [api, assertPrepared, discardPreparation, stopNative],
+  );
+
+  const cancelAnswer = useCallback(
+    (requestId: string) => {
+      dispatch({type: 'cancel_answer', requestId});
+      void api?.sendControl({type: 'llm_cancel', request_id: requestId}).catch(() => {});
+    },
+    [api],
+  );
+  const stop = useCallback(
+    async (pause = false) => {
+      startEpoch.current++;
+      stoppingRef.current = true;
+      stateRef.current.answers
+        .filter(answer => answer.status === 'loading' || answer.status === 'streaming')
+        .forEach(answer => cancelAnswer(answer.request_id));
+      const flushed = await Promise.all([flushAudio(micRef.current), flushAudio(sysRef.current)]);
+      if (flushed.some(value => !value))
+        dispatch({type: 'asr_error', message: '尾部音频未确认，请核对最后一句转写。'});
+      stopLocal();
+      try {
+        await stopNative();
+      } finally {
+        dispatch({type: 'settle'});
+        dispatch({type: 'captureState', value: pause ? 'paused' : 'completed'});
+        dispatch({type: 'streamState', value: 'idle'});
+      }
+    },
+    [cancelAnswer, stopLocal, stopNative],
+  );
+  useEffect(
+    () => () => {
+      startEpoch.current++;
+      stopLocal();
+      void stopNative().catch(() => {});
+    },
+    [stopNative, stopLocal],
+  );
+
+  const sendLLMQuery = useCallback(
+    (messageIds: string[], context: AnswerContext): string | null => {
+      if (!api || stateRef.current.streamState !== 'ready') return null;
+      const selected = stateRef.current.conversation.filter(message =>
+        messageIds.includes(message.id),
+      );
+      if (!selected.length) return null;
+      const question = selected.map(message => message.text).join('\n');
+      if (selected.length > 30 || question.length > 16000) {
+        dispatch({
+          type: 'error',
+          value: {
+            code: 'E_QUESTION_LENGTH',
+            stage: 'answer',
+            message: '一次最多合并 30 句、16000 字，请减少所选内容。',
+            recoverable: true,
+          },
+        });
+        return null;
+      }
+      stateRef.current.answers
+        .filter(answer => answer.status === 'loading' || answer.status === 'streaming')
+        .forEach(answer => cancelAnswer(answer.request_id));
+      const requestId = genId('request');
+      const snapshot = {
+        ...context,
+        role: context.role.slice(0, 300),
+        job_description: context.job_description.slice(0, 5000),
+        resume_text: resumeExcerpt(context.resume_text, question),
+        recent_messages: stateRef.current.conversation
+          .slice(-8)
+          .map(({role, text}) => ({role, text: text.slice(0, 1500)})),
+      };
+      const answer: ConversationAnswer = {
+        id: genId('answer'),
+        request_id: requestId,
+        source_message_ids: selected.map(message => message.id),
+        source_revisions: selected.map(message => message.revision ?? 0),
+        question_text: question,
+        text: '',
+        status: 'loading',
+        timestamp: Date.now(),
+        context_version: context.context_version,
+        context_snapshot: snapshot,
+      };
+      dispatch({type: 'answer_requested', answer});
+      void api
+        .sendControl({
+          type: 'llm_query',
+          request_id: requestId,
+          question_text: answer.question_text,
+          source_message_ids: answer.source_message_ids,
+          source_revisions: answer.source_revisions,
+          context: snapshot,
+          context_version: context.context_version,
+          language: context.language,
+        })
+        .catch(error => {
+          dispatch({
+            type: 'llm_done',
+            requestId,
+            full_answer: '',
+            error: messageOf(error),
+            status: 'failed',
+            timestamp: Date.now(),
+          });
+        });
+      return answer.id;
+    },
+    [api, cancelAnswer],
+  );
+  return {
+    state,
+    settling,
+    echoMode,
+    dispatch,
+    prepare,
+    assertPrepared,
+    discardPreparation,
+    start,
+    stop,
+    sendLLMQuery,
+    cancelAnswer,
+  };
 }

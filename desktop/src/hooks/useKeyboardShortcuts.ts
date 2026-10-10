@@ -1,15 +1,10 @@
-/**
- * 全局键盘快捷键
- */
-import { useEffect } from 'react';
-
-interface ShortcutMap {
-  [key: string]: () => void;
-}
-
-export function useKeyboardShortcuts(shortcuts: ShortcutMap): void {
+import {useEffect} from 'react';
+export function useKeyboardShortcuts(shortcuts: Record<string, () => void>) {
   useEffect(() => {
-    function handler(e: KeyboardEvent): void {
+    const listener = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.repeat || e.isComposing || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('input,textarea,select,[contenteditable="true"],[role="dialog"]')) return;
       const key = [
         e.ctrlKey || e.metaKey ? 'Ctrl' : '',
         e.shiftKey ? 'Shift' : '',
@@ -17,15 +12,12 @@ export function useKeyboardShortcuts(shortcuts: ShortcutMap): void {
       ]
         .filter(Boolean)
         .join('+');
-
-      const fn = shortcuts[key];
-      if (fn) {
+      if (shortcuts[key]) {
         e.preventDefault();
-        fn();
+        shortcuts[key]?.();
       }
-    }
-
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    };
+    document.addEventListener('keydown', listener);
+    return () => document.removeEventListener('keydown', listener);
   }, [shortcuts]);
 }

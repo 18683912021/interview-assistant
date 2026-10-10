@@ -1,0 +1,158 @@
+name: Build Windows desktop installer
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - desktop/**
+      - .github/workflows/desktop-windows.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-x64:
+    name: Windows x64 NSIS
+    runs-on: windows-2022
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: desktop
+    env:
+      CI: 'true'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Use upstream downloads on GitHub runners, overriding the local China mirror.
+      ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+      NPM_CONFIG_ELECTRON_MIRROR: https://github.com/electron/electron/releases/download/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+      NPM_CONFIG_ELECTRON_BUILDER_BINARIES_MIRROR: https://github.com/electron-userland/electron-builder-binaries/releases/download/
+    steps:
+      - name: Check out the selected revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, verified 2026-10-10
+        with:
+          persist-credentials: false
+          # Only desktop code and this workflow are needed; never copy backend .env/data.
+          sparse-checkout: |
+            .github
+            desktop
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.23.1'
+          architecture: x64
+          # No cross-platform node_modules or native build output is cached.
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: '9.15.0'
+          run_install: false
+          package_json_file: desktop/package.json
+
+      - name: Set up Python for node-gyp
+        id: python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Check target runtime
+        run: node -e "if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Windows x64 runtime required'); console.log(process.version, process.platform, process.arch)"
+
+      - name: Install desktop dependencies from lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Install native headers dependency from lockfile
+        run: pnpm --dir electron/audio/native install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Lint
+        run: pnpm lint --quiet
+
+      - name: Build production renderer
+        env:
+          VITE_API_HOST: interview.iyouzi.cc
+          VITE_API_BASE: https://interview.iyouzi.cc
+          VITE_STREAM_URL: wss://interview.iyouzi.cc/api/ws/audio/stream
+        run: pnpm exec vite build
+
+      - name: Compile Electron main process
+        run: pnpm exec tsc -p electron/tsconfig.json --noEmitOnError
+
+      - name: Compile WASAPI and validate loading without recording
+        env:
+          PYTHON: ${{ steps.python.outputs.python-path }}
+        run: node scripts/ensure-native.cjs --platform=win32 --arch=x64
+
+      - name: Build Windows installer
+        env:
+          PYTHON: ${{ steps.python.outputs.python-path }}
+        run: pnpm exec electron-builder --win nsis --x64 --publish never
+
+      - name: Verify packaged native binary and create delivery metadata
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json
+          $native = Get-Content -LiteralPath electron/audio/native/build/Release/.electron-target -Raw | ConvertFrom-Json
+          if ($native.platform -ne 'win32' -or $native.arch -ne 'x64' -or $native.electronVersion -ne $package.devDependencies.electron) {
+            throw 'Native build metadata does not match the requested Windows package'
+          }
+          $packagedAddon = 'release/win-unpacked/resources/app.asar.unpacked/dist-electron/audio/native/build/Release/wasapi_loopback.node'
+          $packagedHash = (Get-FileHash -LiteralPath $packagedAddon -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($packagedHash -ne $native.addonHash) {
+            throw 'The packaged WASAPI binary differs from the load-validated binary'
+          }
+          $installers = @(Get-ChildItem -LiteralPath release -File -Filter '*.exe')
+          if ($installers.Count -ne 1) { throw "Expected one NSIS installer; found $($installers.Count)" }
+          $delivery = New-Item -ItemType Directory -Path release/windows-artifacts -Force
+          $installerName = "Interview-Assistant-$($package.version)-windows-x64-setup.exe"
+          Copy-Item -LiteralPath $installers[0].FullName -Destination (Join-Path $delivery.FullName $installerName)
+          $metadata = [ordered]@{
+            appVersion = $package.version
+            platform = 'win32'
+            architecture = 'x64'
+            electronVersion = $package.devDependencies.electron
+            nodeVersion = (node --version)
+            pnpmVersion = '9.15.0'
+            sourceCommit = $env:GITHUB_SHA
+            sourceRef = $env:GITHUB_REF
+            builtAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+            workflowRun = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            runnerImage = $env:ImageOS
+            runnerImageVersion = $env:ImageVersion
+            apiBase = 'https://interview.iyouzi.cc'
+            streamUrl = 'wss://interview.iyouzi.cc/api/ws/audio/stream'
+            native = $native
+            checks = @('typecheck', 'tests', 'lint', 'electron-native-load', 'packaged-native-sha256')
+            signing = 'unsigned'
+            hardwareAudioValidated = $false
+          }
+          $metadata | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $delivery.FullName 'build-metadata.json') -Encoding utf8NoBOM
+          $checksums = Get-ChildItem -LiteralPath $delivery.FullName -File | Sort-Object Name | ForEach-Object {
+            $digest = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$digest  $($_.Name)"
+          }
+          $checksums | Set-Content -LiteralPath (Join-Path $delivery.FullName 'SHA256SUMS.txt') -Encoding utf8NoBOM
+          "Created $installerName. Native load and package integrity passed; hardware audio remains unverified." | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload installer, checksums and build metadata
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: interview-assistant-windows-x64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: desktop/release/windows-artifacts/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3

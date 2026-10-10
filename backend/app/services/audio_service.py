@@ -247,6 +247,7 @@ class V1AudioSession:
     session_id: UUID
     source_mode: Literal["mic", "system", "both"]
     storage_root: Path
+    capture_id: UUID | None = None
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     ended_at: datetime | None = None
     stop_reason: str = ""
@@ -259,7 +260,8 @@ class V1AudioSession:
 
     @property
     def directory(self) -> Path:
-        return safe_session_directory(self.storage_root, self.session_id)
+        base = safe_session_directory(self.storage_root, self.session_id)
+        return base / "captures" / str(self.capture_id) if self.capture_id else base
 
     def start_track(
         self,

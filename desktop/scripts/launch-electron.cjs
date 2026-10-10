@@ -1,68 +1,126 @@
 /**
- * launch-electron.cjs —— 等 Vite 就绪 + tsc 编译出主进程入口后启动 Electron
- *
- * 三个坑：
- * 1. macOS 的 VSCode 集成终端会继承 ELECTRON_RUN_AS_NODE=1，该变量让 Electron
- *    以纯 Node 模式运行：require('electron') 返回空、窗口永远无法创建，且无报错。
- *    因此在 Node 层删除该变量再 spawn（Windows 无此问题，但脚本必须跨平台）。
- * 2. 原方案用 wait-on 探测 http://localhost:5173，但它会走 shell 的
- *    HTTP_PROXY/HTTPS_PROXY 代理（如 Clash），代理返回 502 时永远等不到就绪。
- *    改用 TCP 连接探测端口，完全不受代理影响。
- * 3. 必须同时等 tsc 产出 dist-electron/main.js：全新环境首次 dev 时 dist-electron
- *    为空，只等 Vite 端口会让 Electron 抢先启动，报 "Cannot find module main.js"
- *    弹错误对话框（Electron 加载 package.json main 入口失败，窗口永远起不来）。
+ * Start Electron only after a fresh main/preload compilation and this project's
+ * Vite server are ready. Raw TCP checks accept unrelated or stale preview servers.
  */
-const { spawn } = require('child_process');
+const {spawn} = require('child_process');
 const fs = require('fs');
-const net = require('net');
+const http = require('http');
 const path = require('path');
-const electronPath = require('electron'); // npm 包导出 Electron 二进制路径
 
-const PORT = 5173;
-const HOSTS = ['::1', '127.0.0.1']; // 依次探测 IPv6/IPv4 回环
-const APP_ENTRY = path.join(__dirname, '..', 'dist-electron', 'main.js'); // tsc watch 的产物
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const RENDERER_URL = 'http://127.0.0.1:5173';
+const READY_PATH = '/__desktop_dev_ready__';
 const POLL_INTERVAL_MS = 500;
 const TIMEOUT_MS = 60000;
+// concurrently starts Vite and this process together, in either order.
+const LAUNCH_STARTED_AT = Date.now();
 
-function isPortOpen(host) {
-  return new Promise((resolve) => {
-    const socket = net.connect({ host, port: PORT, timeout: 1000 });
-    socket.once('connect', () => { socket.destroy(); resolve(true); });
-    socket.once('error', () => { socket.destroy(); resolve(false); });
-    socket.once('timeout', () => { socket.destroy(); resolve(false); });
+function matchesReadyServer(value, projectRoot, launchedAt) {
+  return (
+    !!value &&
+    value.app === 'interview-desktop' &&
+    value.root === projectRoot &&
+    typeof value.startedAt === 'number' &&
+    value.startedAt >= launchedAt - 5000
+  );
+}
+
+function checkVite(launchedAt = LAUNCH_STARTED_AT) {
+  return new Promise(resolve => {
+    // node:http bypasses shell proxy variables for this loopback request.
+    const request = http.get(
+      `${RENDERER_URL}${READY_PATH}`,
+      {agent: false, timeout: 1000},
+      response => {
+        let body = '';
+        response.setEncoding('utf8');
+        response.on('data', chunk => {
+          body += chunk;
+          if (body.length > 8192) {
+            request.destroy();
+            resolve(false);
+          }
+        });
+        response.on('error', () => resolve(false));
+        response.on('end', () => {
+          try {
+            resolve(
+              response.statusCode === 200 &&
+                matchesReadyServer(JSON.parse(body), PROJECT_ROOT, launchedAt),
+            );
+          } catch {
+            resolve(false);
+          }
+        });
+      },
+    );
+    request.once('error', () => resolve(false));
+    request.once('timeout', () => {
+      request.destroy();
+      resolve(false);
+    });
   });
 }
 
-async function waitForReady() {
+function compileMain() {
+  return new Promise((resolve, reject) => {
+    const compiler = require.resolve('typescript/bin/tsc');
+    const child = spawn(
+      process.execPath,
+      [compiler, '-p', 'electron/tsconfig.json', '--noEmitOnError'],
+      {
+        cwd: PROJECT_ROOT,
+        stdio: 'inherit',
+      },
+    );
+    child.once('error', reject);
+    child.once('exit', code => {
+      if (code !== 0) {
+        reject(new Error('主进程编译失败，请修复上方 TypeScript 错误后重试'));
+        return;
+      }
+      const entries = [
+        'main.js',
+        'preload.js',
+        'windows/main-window.js',
+        'windows/overlay-window.js',
+      ];
+      if (!entries.every(file => fs.existsSync(path.join(PROJECT_ROOT, 'dist-electron', file)))) {
+        reject(new Error('主进程或 preload 编译产物缺失，请检查 electron/tsconfig.json'));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+async function waitForVite(launchedAt = LAUNCH_STARTED_AT) {
   const start = Date.now();
   while (Date.now() - start < TIMEOUT_MS) {
-    let portOpen = false;
-    for (const host of HOSTS) {
-      if (await isPortOpen(host)) { portOpen = true; break; }
-    }
-    if (portOpen && fs.existsSync(APP_ENTRY)) return;
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    if (await checkVite(launchedAt)) return;
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
   }
-  console.error(
-    `[launch-electron] 等待就绪超时（${TIMEOUT_MS / 1000}s）：` +
-    `Vite 端口 ${PORT} 或 ${APP_ENTRY} 未就绪。若 main.js 缺失，请检查 tsc 是否报类型错误`,
+  throw new Error(
+    '未等到本次启动的桌面前端（127.0.0.1:5173）。请检查 Vite 是否启动失败或端口被旧预览占用；测试预览请使用其他端口。',
   );
-  process.exit(1);
 }
 
 async function main() {
-  await waitForReady();
-
-  const env = { ...process.env };
+  // An old main.js is not evidence that the current source or preload compiled.
+  await Promise.all([compileMain(), waitForVite()]);
+  const env = {...process.env, ELECTRON_RENDERER_URL: RENDERER_URL};
   delete env.ELECTRON_RUN_AS_NODE;
-
-  const child = spawn(electronPath, ['.'], { stdio: 'inherit', env });
-
-  child.on('exit', (code) => process.exit(code ?? 1));
-  child.on('error', (err) => {
-    console.error('[launch-electron] 启动失败:', err.message);
+  const child = spawn(require('electron'), ['.'], {cwd: PROJECT_ROOT, stdio: 'inherit', env});
+  child.once('exit', code => process.exit(code ?? 1));
+  child.once('error', error => {
+    console.error('[launch-electron] 启动失败:', error.message);
     process.exit(1);
   });
 }
 
-main();
+module.exports = {matchesReadyServer};
+if (require.main === module)
+  main().catch(error => {
+    console.error('[launch-electron]', error.message);
+    process.exit(1);
+  });

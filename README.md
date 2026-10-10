@@ -33,7 +33,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8010
 ```
 
 - 端口 `8010`：REST API + `/api/ws/audio/stream` WebSocket（40ms PCM16 16kHz mono 帧，协议见 `mobile/docs/AUDIO_PROTOCOL_V1.md`）
-- 本地开发默认 `LOCAL_DEV=true`（SQLite + 内存存储，免 Docker）；生产用 `docker-compose.yml`（Postgres + Redis）
+- 本地开发需在 `.env` 中显式设置 `LOCAL_DEV=true`（SQLite + 内存存储，免 Docker）；未设置时走 Postgres + Redis，可通过 `docker-compose.yml` 启动依赖
 
 ### desktop
 
@@ -81,6 +81,7 @@ docker compose up -d --build     # 仅兜底/回滚参考；正式迁移见下
 
 ## 文档索引
 
+- [backend/README.md](backend/README.md) — 后端技术实现、设计取舍与简历项目素材
 - `mobile/RN_ANDROID_STUDIO_SETUP.md` — Android 开发环境搭建
 - `mobile/docs/AUDIO_PROTOCOL_V1.md` — 音频流协议 v1（两端 WebSocket 帧约定）
 - `mobile/docs/MIGRATION_MATRIX.md` — 移动端/桌面端功能迁移对照
