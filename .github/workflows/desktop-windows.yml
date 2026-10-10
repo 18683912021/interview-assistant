@@ -87,6 +87,7 @@ jobs:
           VITE_API_HOST: interview.iyouzi.cc
           VITE_API_BASE: https://interview.iyouzi.cc
           VITE_STREAM_URL: wss://interview.iyouzi.cc/api/ws/audio/stream
+          VITE_STREAM_DIRECT_IP: 47.108.205.102
         run: pnpm exec vite build
 
       - name: Compile Electron main process

@@ -2,8 +2,8 @@ import {useEffect, useRef, useState, type ReactNode} from 'react';
 import {AlertCircle, LoaderCircle, X} from 'lucide-react';
 export function Loading({text = '正在加载…'}: {text?: string}) {
   return (
-    <div className="empty-state" role="status">
-      <LoaderCircle className="spin" size={22} />
+    <div className="loading-state" role="status" aria-live="polite">
+      <LoaderCircle className="spin" size={22} aria-hidden="true" />
       <p>{text}</p>
     </div>
   );

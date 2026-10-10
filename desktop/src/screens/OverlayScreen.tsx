@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState} from 'react';
 import {FileText, X} from 'lucide-react';
 import {AnswerBody} from '../components/AnswerBody';
+import {Loading} from '../components/WorkspaceUI';
 import './interview.css';
 export default function OverlayScreen() {
   const [text, setText] = useState(''),
@@ -126,8 +127,12 @@ export default function OverlayScreen() {
           {question && <div className="overlay-question">{question}</div>}
           {text ? (
             <AnswerBody text={text} />
+          ) : status === '正在生成' ? (
+            <Loading text="正在整理回答…" />
           ) : (
-            <span className="muted small">在主窗口点击一句对话，回答将在这里显示。</span>
+            <span className="overlay-placeholder muted small">
+              在主窗口点击一句对话，回答将在这里显示。
+            </span>
           )}
         </div>
         <footer className="overlay-footer">{status}</footer>

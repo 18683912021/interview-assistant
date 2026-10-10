@@ -152,7 +152,7 @@ export function registerIpcHandlers(): void {
   // ── 音频采集（主进程统一推流：采集 + WS 都在主进程） ──
   let audioSessionId: string | null = null;
 
-  ipcMain.handle('audio:start-capture', async (_e, opts: { source?: string; streamUrl?: string; token?: string; sessionId?: string; systemDeviceId?: string }) => {
+  ipcMain.handle('audio:start-capture', async (_e, opts: { source?: string; streamUrl?: string; token?: string; sessionId?: string; systemDeviceId?: string; directAddress?: string }) => {
     if (!opts?.token || !opts?.sessionId) throw new Error('请先登录并保存本场面试');
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(opts.sessionId)) throw new Error('无效的面试会话');
     const source = opts.source ?? 'both';
@@ -162,7 +162,7 @@ export function registerIpcHandlers(): void {
     // 主进程直连后端（renderer 的 Vite proxy 只对浏览器生效）
     const streamUrl = opts?.streamUrl || 'ws://127.0.0.1:8010/api/ws/audio/stream';
     console.log(`[audio] start-capture: source=${source}`);
-    return audioCapture.start(source, audioSessionId, streamUrl, opts.token, opts.systemDeviceId);
+    return audioCapture.start(source, audioSessionId, streamUrl, opts.token, opts.systemDeviceId, opts.directAddress);
   });
 
   ipcMain.handle('audio:stop-capture', async () => {

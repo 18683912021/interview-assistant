@@ -192,7 +192,7 @@ export default function MaterialsScreen() {
     else setModal(null);
   };
   return (
-    <section className="page">
+    <section className={`page${loading ? ' page-loading' : ''}`}>
       <div className="page-heading">
         <div>
           <h1>我的资料</h1>

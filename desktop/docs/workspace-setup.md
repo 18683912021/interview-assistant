@@ -4,6 +4,7 @@
 
 - `VITE_API_BASE`：HTTP API 的完整源地址，例如 `https://interview.example.com`，不含 `/api`。开发未设置时使用 Vite 同源代理。
 - `VITE_STREAM_URL`：完整实时地址，例如 `wss://interview.example.com/api/ws/audio/stream`。Electron 主进程直连该地址。
+- `VITE_STREAM_DIRECT_IP`：可选，填写同一实时服务的部署 IP。只改变实时连接的 DNS lookup，保留域名、Host、TLS SNI 和证书校验；250 ms 后并行尝试正常 DNS，选中一个连接后才发送会话和音频。开发环境不设置，服务器迁移后更新此项或留空。它不修改系统代理/DNS，也不控制 HTTP API 路由。
 - `VITE_API_HOST`：兼容旧配置，仅填写主机名，默认 `127.0.0.1`。
 
 打包前应在构建环境设置生产 API 和 WebSocket 地址。非本机部署必须使用 HTTPS / WSS；Electron 会拒绝明文公网 WebSocket。省略地址会连接本机服务，不会自动连接任何在线生产账户。

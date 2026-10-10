@@ -1,6 +1,6 @@
 import {useReducer, useCallback, useEffect, useRef, useState} from 'react';
 import {interviewReducer, INITIAL_STATE, genId} from '../store/interview-reducer';
-import {MAIN_STREAM_URL} from '../config';
+import {MAIN_STREAM_URL, STREAM_DIRECT_ADDRESS} from '../config';
 import {
   prepareAudioStreams,
   releaseStreams,
@@ -347,6 +347,7 @@ export function useAudioCapture() {
         await api.startCapture({
           source,
           streamUrl: MAIN_STREAM_URL,
+          directAddress: STREAM_DIRECT_ADDRESS,
           sessionId,
           token,
           ...(desktopPlatform() === 'windows' ? {systemDeviceId: settings.system_device_id} : {}),

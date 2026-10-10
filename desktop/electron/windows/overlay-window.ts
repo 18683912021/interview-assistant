@@ -31,6 +31,8 @@ export function createOverlayWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // Live transcript/answer updates must continue while another meeting window is focused.
+      backgroundThrottling: false,
     },
   });
 

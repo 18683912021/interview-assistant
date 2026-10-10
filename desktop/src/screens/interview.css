@@ -351,34 +351,17 @@ button.bubble-answer-count:hover {
   white-space: nowrap;
   color: var(--accent);
 }
-.answer-loading {
+.answer-document-waiting {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--muted);
+  flex-direction: column;
+  min-height: 100%;
 }
-.thinking-dots {
-  display: flex;
-  gap: 4px;
+.answer-document-waiting > :not(.loading-state) {
+  flex-shrink: 0;
 }
-.thinking-dots i {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--muted);
-  animation: answer-pulse 1s ease-in-out infinite;
-}
-.thinking-dots i:nth-child(2) {
-  animation-delay: 0.15s;
-}
-.thinking-dots i:nth-child(3) {
-  animation-delay: 0.3s;
-}
-@keyframes answer-pulse {
-  50% {
-    opacity: 0.25;
-  }
+.chat-scroll > .empty-state:only-child,
+.answer-scroll > .empty-state:only-child {
+  min-height: 100%;
 }
 .audio-status,
 .save-status {
@@ -431,12 +414,26 @@ button.bubble-answer-count:hover {
   margin-left: auto;
 }
 .overlay-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   padding: 18px;
   overflow: auto;
   flex: 1;
   white-space: pre-wrap;
   line-height: 1.85;
   font-size: var(--answer-size);
+}
+.overlay-body > :not(.loading-state):not(.overlay-placeholder) {
+  flex-shrink: 0;
+}
+.overlay-placeholder {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
 }
 .overlay-question {
   font-size: 12px;

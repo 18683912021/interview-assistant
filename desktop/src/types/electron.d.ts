@@ -2,7 +2,7 @@
 
 interface ElectronAPI {
   audio: {
-    startCapture(opts: { source?: 'mic' | 'system' | 'both'; streamUrl?: string; token?: string; sessionId?: string; systemDeviceId?: string }): Promise<unknown>;
+    startCapture(opts: { source?: 'mic' | 'system' | 'both'; streamUrl?: string; token?: string; sessionId?: string; systemDeviceId?: string; directAddress?: string }): Promise<unknown>;
     stopCapture(): Promise<void>;
     getSnapshot(): Promise<unknown>;
     listSystemOutputs(): Promise<{id: string; name: string; isDefault: boolean}[]>;

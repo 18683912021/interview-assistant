@@ -313,7 +313,7 @@ export default function SettingsScreen() {
         ))}
       </nav>
       <div className="settings-content">
-        <div className="settings-inner">
+        <div className={`settings-inner${loading ? ' settings-loading' : ''}`}>
           <header className="settings-heading">
             <h1>{title}</h1>
             <p>

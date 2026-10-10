@@ -376,14 +376,15 @@ export default function InterviewDetailScreen() {
               <p className="notice">
                 根据本场已记录的对话整理。缺少本人发言时，仅整理问题与准备方向。
               </p>
-              {!review && (
+              {!review && !reviewing && (
                 <button
                   className="btn"
                   disabled={reviewing || session.conversation.length === 0}
                   onClick={() => void makeReview()}>
-                  {reviewing ? '正在生成复盘…' : '生成本场复盘'}
+                  生成本场复盘
                 </button>
               )}
+              {!review && reviewing && <Loading text="正在生成本场复盘…" />}
               {review && <AnswerBody text={review} />}
             </div>
           )}

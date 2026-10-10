@@ -17,6 +17,7 @@
 ```text
 VITE_API_BASE=https://interview.iyouzi.cc
 VITE_STREAM_URL=wss://interview.iyouzi.cc/api/ws/audio/stream
+VITE_STREAM_DIRECT_IP=47.108.205.102
 ```
 
 `ensure-native.cjs --platform=win32 --arch=x64` 校验 Electron 版本、PE 架构、源码与二进制哈希，并在当前 Electron 下执行默认的**仅加载验证**，不打开设备、不播放或上传声音。打包后的 `.node` 再与验证过的二进制比对 SHA-256；任何失败均不上传安装包。元数据记录代码提交、版本、地址、检查与原生哈希，并明确 `hardwareAudioValidated: false`。
@@ -31,6 +32,7 @@ pnpm test
 pnpm lint --quiet
 $env:VITE_API_BASE = 'https://interview.iyouzi.cc'
 $env:VITE_STREAM_URL = 'wss://interview.iyouzi.cc/api/ws/audio/stream'
+$env:VITE_STREAM_DIRECT_IP = '47.108.205.102'
 pnpm exec vite build
 pnpm exec tsc -p electron/tsconfig.json --noEmitOnError
 node scripts/ensure-native.cjs --platform=win32 --arch=x64

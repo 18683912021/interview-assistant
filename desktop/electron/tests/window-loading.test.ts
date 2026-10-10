@@ -3,7 +3,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 const electron = vi.hoisted(() => ({
   app: {isPackaged: true},
-  options: [] as Array<{transparent?: boolean; resizable?: boolean}>,
+  options: [] as Array<{transparent?: boolean; resizable?: boolean; webPreferences?: {backgroundThrottling?: boolean}}>,
   windows: [] as Array<{
     loadURL: ReturnType<typeof vi.fn>;
     loadFile: ReturnType<typeof vi.fn>;
@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
     loadURL = vi.fn();
     loadFile = vi.fn();
     webContents = {openDevTools: vi.fn()};
-    constructor(options: {transparent?: boolean; resizable?: boolean}) {
+    constructor(options: {transparent?: boolean; resizable?: boolean; webPreferences?: {backgroundThrottling?: boolean}}) {
       electron.windows.push(this);
       electron.options.push(options);
     }
@@ -48,6 +48,7 @@ describe('desktop page loading', () => {
     expect(window.loadURL).not.toHaveBeenCalled();
     expect(path.basename(window.loadFile.mock.calls[0]![0])).toBe('index.html');
     expect(window.webContents.openDevTools).not.toHaveBeenCalled();
+    expect(electron.options[0]!.webPreferences?.backgroundThrottling).toBe(false);
   });
 
   it('keeps the overlay route separate from the packaged file path', async () => {
@@ -58,6 +59,7 @@ describe('desktop page loading', () => {
     expect(window.loadFile).toHaveBeenCalledWith(expect.stringContaining('dist-renderer'), {
       hash: '/overlay',
     });
+    expect(electron.options[0]!.webPreferences?.backgroundThrottling).toBe(false);
   });
 
   it('preserves the existing macOS/dev server workflow', async () => {

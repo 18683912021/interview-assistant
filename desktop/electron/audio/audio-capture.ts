@@ -111,7 +111,7 @@ export class AudioCaptureManager extends EventEmitter {
    * 开始采集 + 推流
    * 顺序（对齐移动端）：connectStream(等 ready) → session_start → 每轨 track_start → 启动采集
    */
-  async start(source: CaptureSource, sessionId: string, streamUrl: string, token: string, systemDeviceId?: string): Promise<{ startedAtUtc: string }> {
+  async start(source: CaptureSource, sessionId: string, streamUrl: string, token: string, systemDeviceId?: string, directAddress?: string): Promise<{ startedAtUtc: string }> {
     // 状态守卫：stop 未完成/重入 start 时拒绝，避免重复建连接与重复启动 WASAPI
     if (this.stopTask || this.state === 'capturing' || this.state === 'preparing') {
       throw new Error('采集已在进行中（E_STATE）');
@@ -141,7 +141,7 @@ export class AudioCaptureManager extends EventEmitter {
 
     // ── 1. 连接 WS（client_hello → ready 握手完成后才继续） ──
     try {
-      await this.stream.connect(streamUrl, token);
+      await this.stream.connect(streamUrl, token, directAddress);
       if (generation !== this.captureGeneration) throw new Error('启动已取消');
     } catch (e: any) {
       // 用户主动停止（stop() → disconnect() 结掉 pending 连接）：不是错误，

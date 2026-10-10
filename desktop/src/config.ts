@@ -9,6 +9,8 @@ const directOrigin = API_BASE || defaultOrigin;
 /** Main-process connection cannot use the renderer's Vite proxy. */
 export const MAIN_STREAM_URL: string =
   import.meta.env.VITE_STREAM_URL || `${directOrigin.replace(/^http/, 'ws')}/api/ws/audio/stream`;
+/** Optional deployment IP for the realtime connection; DNS remains a fallback. */
+export const STREAM_DIRECT_ADDRESS: string | undefined = import.meta.env.VITE_STREAM_DIRECT_IP || undefined;
 export const STREAM_URL: string =
   import.meta.env.VITE_STREAM_URL ||
   (import.meta.env.DEV && !API_BASE

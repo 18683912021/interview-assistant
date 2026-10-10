@@ -24,7 +24,7 @@ import {
   type ToolKind,
 } from '../api/workspace';
 import {messageOf} from '../api/client';
-import {ErrorState} from '../components/WorkspaceUI';
+import {ErrorState, Loading} from '../components/WorkspaceUI';
 import {useToast} from '../components/Toast';
 import {useWorkspaceDraft} from '../utils/WorkspaceDraftContext';
 
@@ -436,12 +436,11 @@ export default function ToolsScreen() {
                   </button>
                 </footer>
               </>
+            ) : busy ? (
+              <Loading text="正在根据所选资料生成内容…" />
             ) : (
               <div className="empty-state">
-                {busy && <LoaderCircle className="spin" size={20} />}
-                <p>
-                  {busy ? '正在根据所选资料生成内容…' : '生成后可以编辑、复制，或保存到我的资料。'}
-                </p>
+                <p>生成后可以编辑、复制，或保存到我的资料。</p>
               </div>
             )}
           </div>

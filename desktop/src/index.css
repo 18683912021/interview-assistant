@@ -303,6 +303,14 @@ textarea::placeholder {
   width: 100%;
   max-width: 1400px;
 }
+.page-loading {
+  display: flex;
+  flex-direction: column;
+  max-width: none;
+}
+.page-loading > :not(.loading-state) {
+  flex-shrink: 0;
+}
 .page-heading {
   display: flex;
   justify-content: space-between;
@@ -441,6 +449,34 @@ textarea::placeholder {
   max-width: 360px;
   line-height: 1.75;
   font-size: 12px;
+}
+.loading-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 160px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.75;
+}
+.loading-state > svg {
+  color: var(--accent);
+}
+.loading-state > p {
+  max-width: 360px;
+}
+/* Workspace boot has no app shell yet; routed loaders fill the remaining shell. */
+#root > .loading-state {
+  min-height: 100%;
+}
+.route-content > .loading-state {
+  min-height: 0;
 }
 .empty-icon {
   display: grid;
@@ -694,12 +730,29 @@ textarea::placeholder {
 }
 .tool-layout {
   display: grid;
+  flex: 1 0 auto;
   grid-template-columns: minmax(260px, 0.85fr) minmax(320px, 1.15fr);
   gap: 30px;
 }
+.tools-page {
+  display: flex;
+  flex-direction: column;
+}
+.tools-page > :not(.tool-layout) {
+  flex-shrink: 0;
+}
 .tool-output {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   border-left: 1px solid var(--line);
   padding-left: 30px;
+}
+.tool-output > .empty-state {
+  flex: 1;
+}
+.tool-output > :not(.loading-state):not(.empty-state) {
+  flex-shrink: 0;
 }
 .tool-output h2 {
   font-size: 13px;
@@ -1007,11 +1060,24 @@ textarea::placeholder {
   background: var(--hover);
 }
 .settings-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   padding: 31px 32px;
   overflow: auto;
 }
 .settings-inner {
+  width: 100%;
   max-width: 620px;
+}
+.settings-loading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  max-width: none;
+}
+.settings-loading > .settings-heading {
+  flex-shrink: 0;
 }
 .settings-heading {
   margin-bottom: 30px;
@@ -1383,13 +1449,21 @@ button.chat-bubble:hover {
   display: none;
 }
 .review-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   padding: 28px;
   white-space: pre-wrap;
   line-height: 1.9;
   font-size: 14px;
   overflow: auto;
 }
+.review-content > :not(.loading-state) {
+  flex-shrink: 0;
+}
 .review-content .btn {
+  align-self: flex-start;
   margin-bottom: 20px;
 }
 .resume-upload {

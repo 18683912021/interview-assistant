@@ -84,7 +84,7 @@ export default function InterviewHistoryScreen() {
         .finally(() => setDeleting(values => values.filter(value => value !== record.id)));
     });
   return (
-    <section className="page">
+    <section className={`page${loading ? ' page-loading' : ''}`}>
       <div className="page-heading">
         <div>
           <h1>面试记录</h1>

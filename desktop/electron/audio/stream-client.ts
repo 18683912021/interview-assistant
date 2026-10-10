@@ -9,6 +9,7 @@
  */
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
+import {createStreamSocket, type StreamSocket} from './routed-socket.js';
 
 export type StreamState = 'idle' | 'connecting' | 'ready' | 'degraded' | 'reconnecting' | 'dead' | 'closed';
 
@@ -18,7 +19,8 @@ const MAX_DELAY_MS = 30_000;
 const CONNECT_TIMEOUT_MS = 10_000;
 
 export class StreamClient extends EventEmitter {
-  private ws: WebSocket | null = null;
+  private ws: StreamSocket | null = null;
+  private directAddress?: string;
   private url = '';
   private token = '';
   private ready = false;
@@ -29,7 +31,7 @@ export class StreamClient extends EventEmitter {
   private pendingConnect: ((err: Error | null) => void) | null = null;
 
   /** 建立连接，握手（client_hello → ready）完成后 resolve */
-  connect(url: string, token: string): Promise<void> {
+  connect(url: string, token: string, directAddress?: string): Promise<void> {
     const endpoint = new URL(url);
     const local = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(endpoint.hostname);
     if (endpoint.protocol !== 'wss:' && !(endpoint.protocol === 'ws:' && local)) {
@@ -38,6 +40,7 @@ export class StreamClient extends EventEmitter {
     if (!token || endpoint.username || endpoint.password || endpoint.search) {
       return Promise.reject(new Error('音频连接需要登录凭证，且地址不能包含认证参数'));
     }
+    this.directAddress = directAddress;
     this.token = token;
     this.url = url;
     this.retryCount = 0;
@@ -63,10 +66,10 @@ export class StreamClient extends EventEmitter {
 
     this.ready = false;
 
-    let ws: WebSocket;
+    let ws: StreamSocket;
     try {
       console.log('[ws] 正在连接音频服务');
-      ws = new WebSocket(this.url, { headers: { Authorization: `Bearer ${this.token}` } });
+      ws = createStreamSocket(this.url, this.token, this.directAddress);
     } catch (e: any) {
       this._settle(new Error(`WebSocket 创建失败: ${e.message}`));
       this._scheduleReconnect();

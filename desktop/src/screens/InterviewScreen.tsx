@@ -1029,24 +1029,19 @@ export default function InterviewScreen() {
                 text="回答在这一侧独立显示。左侧继续记录，你可以安心查看当前回答。"
               />
             ) : (
-              <div className="answer-document">
+              <div
+                className={`answer-document${generating && !answer.text ? ' answer-document-waiting' : ''}`}>
                 <div className="answer-question">{answer.question_text}</div>
                 {hasRevisedSources(answer, state.conversation) && (
                   <p className="notice">
                     原句已有修正，这里保留的是当时选中的问题与回答。需要时可重新回答。
                   </p>
                 )}
-                {answer.status === 'loading' && !answer.text && (
-                  <div className="answer-loading">
-                    <span className="thinking-dots">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                    <span>正在整理回答，内容生成后立即显示</span>
-                  </div>
+                {generating && !answer.text ? (
+                  <Loading text="正在整理回答，内容生成后立即显示" />
+                ) : (
+                  <AnswerBody text={answer.text} />
                 )}
-                <AnswerBody text={answer.text} />
                 {answer.status === 'error' && (
                   <ErrorState message={answer.error || '生成失败，请重试。'} />
                 )}
