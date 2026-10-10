@@ -50,7 +50,8 @@ export function AudioPermissions({onlyBlocked = false, systemRequired = true}: {
         </div>
       ))}
       {rows.some(row => row.status !== 'granted') && (
-        <div>
+        <details className="permission-help">
+          <summary>已授权，但仍显示不可用？</summary>
           <p className="notice">系统开关已开启，但这里仍显示未允许？macOS 可能需要重启应用后才能生效。关闭窗口不等于退出，请使用下面的按钮。</p>
           <button className="btn" type="button" disabled={restarting || requesting !== null} onClick={async () => {
             setError(''); setRestarting(true);
@@ -69,7 +70,7 @@ export function AudioPermissions({onlyBlocked = false, systemRequired = true}: {
               }}>重新申请录屏权限</button>
             </div>
           )}
-        </div>
+        </details>
       )}
       {error && <p className="notice" role="status">{error}</p>}
     </div>

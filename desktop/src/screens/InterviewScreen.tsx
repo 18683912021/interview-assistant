@@ -1,3 +1,6 @@
+import {IconButton} from '../components/IconButton';
+import {AnswerStylePicker} from '../components/AnswerStylePicker';
+import {Select, SelectOption} from '../components/Select';
 import {useCallback, useContext, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {useNavigate, useSearchParams} from 'react-router-dom';
 import {
@@ -23,7 +26,6 @@ import {
 } from 'lucide-react';
 import {
   DEFAULT_SETTINGS,
-  ANSWER_STYLES,
   answerStyleLabel,
   getJobs,
   getResumes,
@@ -590,25 +592,25 @@ export default function InterviewScreen() {
             </div>
             <label className="field">
               已保存的岗位
-              <select
+              <Select
                 value={jobId}
-                onChange={e => {
-                  setJobId(e.target.value);
-                  const job = jobs.find(value => value.id === e.target.value);
+                onValueChange={selectedValue => {
+                  setJobId(selectedValue);
+                  const job = jobs.find(value => value.id === selectedValue);
                   if (job) {
                     setRole(job.title);
                     setCompany(job.company);
                     setJd(job.description);
                   }
                 }}>
-                <option value="">手动填写岗位</option>
+                <SelectOption value="">手动填写岗位</SelectOption>
                 {jobs.map(job => (
-                  <option key={job.id} value={job.id}>
+                  <SelectOption key={job.id} value={job.id}>
                     {job.company ? `${job.company} · ` : ''}
                     {job.title}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
             </label>
             <div className="form-grid">
               <label className="field">
@@ -646,38 +648,33 @@ export default function InterviewScreen() {
             </label>
             <label className="field">
               关联简历
-              <select value={resumeId} onChange={e => setResumeId(e.target.value)}>
-                <option value="">暂不关联，仅提供通用思路</option>
+              <Select value={resumeId} onValueChange={selectedValue => setResumeId(selectedValue)}>
+                <SelectOption value="">暂不关联，仅提供通用思路</SelectOption>
                 {resumes.map(resume => (
-                  <option key={resume.id} value={resume.id}>
+                  <SelectOption key={resume.id} value={resume.id}>
                     {resume.filename} · v{resume.version}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
               <small>本场面试保存该版本快照；以后修改简历不会改变这场记录。</small>
             </label>
             <button className="link-button small" onClick={() => navigate('/materials')}>
               管理岗位和简历 <ArrowUpRight size={12} style={{display: 'inline'}} />
             </button>
+            <div className="setup-answer-style">
+              <div className="section-label">回答方式</div>
+              <AnswerStylePicker value={settings.answer_style}
+                onChange={answer_style => setSettings(value => ({...value, answer_style}))} />
+            </div>
             <div className="field-row">
               <label className="field">
-                回答方式
-                <select value={settings.answer_style} onChange={e => setSettings(value => ({...value,
-                  answer_style: e.target.value as Settings['answer_style']}))}>
-                  {ANSWER_STYLES.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <small>{ANSWER_STYLES.find(option => option.value === settings.answer_style)?.description}</small>
-              </label>
-              <label className="field">
                 回答长度
-                <select value={settings.answer_length} onChange={e => setSettings(value => ({...value,
-                  answer_length: e.target.value as Settings['answer_length']}))}>
-                  <option value="brief">简短</option>
-                  <option value="standard">适中</option>
-                  <option value="detailed">详细</option>
-                </select>
+                <Select value={settings.answer_length} onValueChange={selectedValue => setSettings(value => ({...value,
+                  answer_length: selectedValue as Settings['answer_length']}))}>
+                  <SelectOption value="brief">简短</SelectOption>
+                  <SelectOption value="standard">适中</SelectOption>
+                  <SelectOption value="detailed">详细</SelectOption>
+                </Select>
                 <small>本场使用，默认偏好可在设置中保存。</small>
               </label>
             </div>
@@ -759,7 +756,7 @@ export default function InterviewScreen() {
   return (
     <section className="session-page">
       <header className="session-toolbar">
-        <button
+        <IconButton
           className="icon-btn"
           aria-label="返回面试记录"
           disabled={busy}
@@ -769,11 +766,11 @@ export default function InterviewScreen() {
               confirm(
                 '结束并返回记录',
                 '将停止采集，并保存本次完整对话与回答。',
-                () => void finish(true),
+                () => finish(true),
               );
           }}>
           <ArrowLeft />
-        </button>
+        </IconButton>
         <span className="session-heading-icon">
           <BriefcaseBusiness size={17} />
         </span>
@@ -798,18 +795,18 @@ export default function InterviewScreen() {
         {session.status !== 'completed' && (
           <>
             {!live && (
-              <select
+              <Select
                 aria-label="恢复采集的音频来源"
                 disabled={busy}
                 value={source}
-                onChange={event => {
-                  const value = event.target.value as 'mic' | 'both';
+                onValueChange={selectedValue => {
+                  const value = selectedValue as 'mic' | 'both';
                   setSource(value);
                   setSession(current => (current ? {...current, capture_source: value} : current));
                 }}>
-                <option value="both">系统音频 + 麦克风</option>
-                <option value="mic">仅麦克风</option>
-              </select>
+                <SelectOption value="both">系统音频 + 麦克风</SelectOption>
+                <SelectOption value="mic">仅麦克风</SelectOption>
+              </Select>
             )}
             {!live && (
               <button
@@ -832,7 +829,7 @@ export default function InterviewScreen() {
               className="btn"
               disabled={busy}
               onClick={() =>
-                confirm('结束这场面试', '完整对话与回答会保留在面试记录中。', () => void finish())
+                confirm('结束这场面试', '完整对话与回答会保留在面试记录中。', () => finish())
               }>
               <Square />
               结束
@@ -849,9 +846,9 @@ export default function InterviewScreen() {
         )}
       </header>
       {(error || state.error) && (
-        <div className="session-alert">
+        <div className="session-alert" role="alert">
           <span>{error || state.error?.message}</span>
-          <button
+          <IconButton
             className="icon-btn"
             aria-label="关闭错误提示"
             onClick={() => {
@@ -859,14 +856,14 @@ export default function InterviewScreen() {
               dispatch({type: 'error', value: null});
             }}>
             <X size={15} />
-          </button>
+          </IconButton>
         </div>
       )}
       {(error || state.error?.stage === 'devices' || state.error?.stage === 'capture') && (
         <AudioPermissions onlyBlocked systemRequired={source === 'both' && !settings.system_device_id} />
       )}
       {saveState === 'offline' && (
-        <div className="session-alert">
+        <div className="session-alert" role="alert">
           <span>同步未完成，已尝试保留本机副本。{saveError}</span>
           <button className="link-button" onClick={() => void retrySave()}>
             重试保存
@@ -906,9 +903,9 @@ export default function InterviewScreen() {
               }}>
               {multi ? '退出多选' : '合并提问'}
             </button>
-            <button className="icon-btn" aria-label="手动添加问题" onClick={() => setManual(true)}>
+            <IconButton className="icon-btn" aria-label="手动添加问题" onClick={() => setManual(true)}>
               <Plus />
-            </button>
+            </IconButton>
           </header>
           <div
             className="chat-scroll"
@@ -1020,19 +1017,19 @@ export default function InterviewScreen() {
             <strong>回答参考</strong>
             <span className="spacer" />
             {state.answers.length > 0 && (
-              <select
+              <Select
                 aria-label="选择已生成的回答"
                 value={answerId || ''}
-                onChange={e => chooseAnswer(e.target.value)}>
+                onValueChange={selectedValue => chooseAnswer(selectedValue)}>
                 {state.answers.map((value, index) => (
-                  <option key={value.id} value={value.id}>
+                  <SelectOption key={value.id} value={value.id}>
                     {index + 1}. {value.question_text.slice(0, 20)} · {answerStyleLabel(value.context_snapshot?.answer_style)}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
             )}
             {answer?.text && (
-              <button
+              <IconButton
                 className="icon-btn"
                 aria-label="复制回答"
                 onClick={() =>
@@ -1042,33 +1039,26 @@ export default function InterviewScreen() {
                     .catch(() => toast('复制失败，请手动选择文本', 'error'))
                 }>
                 <Copy />
-              </button>
+              </IconButton>
             )}
           </header>
           <div className="answer-preferences">
-            <label>
-              表达
-              <select aria-label="本场回答方式" value={session.preferences.answer_style}
-                disabled={busy || generating || session.status === 'completed'}
-                onChange={e => setSession(value => value ? {...value, preferences: {...value.preferences,
-                  answer_style: e.target.value as Settings['answer_style']}} : value)}>
-                {ANSWER_STYLES.map(option => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </label>
+            <AnswerStylePicker compact value={session.preferences.answer_style}
+              disabled={busy || generating || session.status === 'completed'}
+              onChange={answer_style => setSession(value => value ? {...value,
+                preferences: {...value.preferences, answer_style}} : value)} />
             <label>
               长度
-              <select aria-label="本场回答长度" value={session.preferences.answer_length}
+              <Select aria-label="本场回答长度" value={session.preferences.answer_length}
                 disabled={busy || generating || session.status === 'completed'}
-                onChange={e => setSession(value => value ? {...value, preferences: {...value.preferences,
-                  answer_length: e.target.value as Settings['answer_length']}} : value)}>
-                <option value="brief">简短</option>
-                <option value="standard">适中</option>
-                <option value="detailed">详细</option>
-              </select>
+                onValueChange={selectedValue => setSession(value => value ? {...value, preferences: {...value.preferences,
+                  answer_length: selectedValue as Settings['answer_length']}} : value)}>
+                <SelectOption value="brief">简短</SelectOption>
+                <SelectOption value="standard">适中</SelectOption>
+                <SelectOption value="detailed">详细</SelectOption>
+              </Select>
             </label>
-            <span>用于新回答</span>
+            <span className="preference-scope">{generating ? '生成完成后可切换' : '用于下一次回答'}</span>
           </div>
           <div
             className="answer-scroll"
@@ -1257,67 +1247,67 @@ export default function InterviewScreen() {
           </p>
           <label className="field">
             麦克风
-            <select
+            <Select
               value={settings.microphone_id}
-              onChange={event =>
-                setSettings(value => ({...value, microphone_id: event.target.value}))
+              onValueChange={selectedValue =>
+                setSettings(value => ({...value, microphone_id: selectedValue}))
               }>
-              <option value="">系统默认麦克风</option>
+              <SelectOption value="">系统默认麦克风</SelectOption>
               {settings.microphone_id &&
                 !audioDevices.some(device => device.deviceId === settings.microphone_id) && (
-                  <option value={settings.microphone_id}>之前选择的麦克风（暂不可用）</option>
+                  <SelectOption value={settings.microphone_id}>之前选择的麦克风（暂不可用）</SelectOption>
                 )}
               {audioDevices.map(device => (
-                <option key={device.deviceId} value={device.deviceId}>
+                <SelectOption key={device.deviceId} value={device.deviceId}>
                   {device.label}
                   {device.isVirtual ? ' · 虚拟音频' : ''}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </Select>
           </label>
           {/Mac/i.test(navigator.userAgent) && (
             <label className="field">
               系统音频
-              <select
+              <Select
                 value={settings.system_device_id}
-                onChange={event =>
-                  setSettings(value => ({...value, system_device_id: event.target.value}))
+                onValueChange={selectedValue =>
+                  setSettings(value => ({...value, system_device_id: selectedValue}))
                 }>
-                <option value="">系统播放声音（屏幕与系统音频权限）</option>
+                <SelectOption value="">系统播放声音（屏幕与系统音频权限）</SelectOption>
                 {settings.system_device_id &&
                   !audioDevices.some(device => device.deviceId === settings.system_device_id) && (
-                    <option value={settings.system_device_id}>之前选择的输入（暂不可用）</option>
+                    <SelectOption value={settings.system_device_id}>之前选择的输入（暂不可用）</SelectOption>
                   )}
                 {audioDevices.map(device => (
-                  <option key={device.deviceId} value={device.deviceId}>
+                  <SelectOption key={device.deviceId} value={device.deviceId}>
                     {device.label}
                     {device.isVirtual ? ' · 虚拟音频' : ''}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
               <small>已配置虚拟声卡时可选择对应输入；普通麦克风不能代替系统播放声音。</small>
             </label>
           )}
           {isWindows && (
             <label className="field">
               系统音频输出
-              <select
+              <Select
                 value={settings.system_device_id}
-                onChange={event =>
-                  setSettings(value => ({...value, system_device_id: event.target.value}))
+                onValueChange={selectedValue =>
+                  setSettings(value => ({...value, system_device_id: selectedValue}))
                 }>
-                <option value="">系统默认输出</option>
+                <SelectOption value="">系统默认输出</SelectOption>
                 {settings.system_device_id &&
                   !systemOutputs.some(device => device.id === settings.system_device_id) && (
-                    <option value={settings.system_device_id}>之前选择的输出（暂不可用）</option>
+                    <SelectOption value={settings.system_device_id}>之前选择的输出（暂不可用）</SelectOption>
                   )}
                 {systemOutputs.map(device => (
-                  <option key={device.id} value={device.id}>
+                  <SelectOption key={device.id} value={device.id}>
                     {device.name}
                     {device.isDefault ? ' · 当前默认' : ''}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
               <small>与会议软件使用的扬声器或耳机保持一致；点击“继续”后重新连接。</small>
             </label>
           )}

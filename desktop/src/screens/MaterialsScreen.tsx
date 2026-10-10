@@ -1,3 +1,5 @@
+import {IconButton} from '../components/IconButton';
+import {Select, SelectOption} from '../components/Select';
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
 import {
   ArrowUpRight,
@@ -157,12 +159,11 @@ export default function MaterialsScreen() {
   const removeJob = (item: Job) =>
     confirm('删除岗位？', `删除“${item.title}”。历史面试中已保存的岗位信息仍会保留。`, () => {
       setDeletingId(item.id);
-      void deleteJob(item.id)
+      return deleteJob(item.id)
         .then(() => {
           setJobs(old => old.filter(value => value.id !== item.id));
           toast('岗位已删除', 'success');
         })
-        .catch(e => toast(messageOf(e), 'error'))
         .finally(() => setDeletingId(null));
     });
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -226,9 +227,9 @@ export default function MaterialsScreen() {
             onChange={e => setQuery(e.target.value)}
           />
           {query && (
-            <button className="icon-btn" aria-label="清空搜索" onClick={() => setQuery('')}>
+            <IconButton className="icon-btn" aria-label="清空搜索" onClick={() => setQuery('')}>
               <X size={14} />
-            </button>
+            </IconButton>
           )}
         </label>
         <span className="muted small">同名资料按版本收起，面试记录仍保留原版本</span>
@@ -331,13 +332,13 @@ export default function MaterialsScreen() {
                   </div>
                   <p>{item.description || '尚未填写岗位描述'}</p>
                   <footer>
-                    <button
+                    <IconButton
                       className="icon-btn"
                       aria-label={`删除${item.title}`}
                       disabled={!!deletingId}
                       onClick={() => removeJob(item)}>
                       {deletingId === item.id ? <LoaderCircle className="spin" /> : <Trash2 />}
-                    </button>
+                    </IconButton>
                     <button
                       className="btn btn-quiet"
                       onClick={() => navigate(`/tools?tool=jd&job=${encodeURIComponent(item.id)}`)}>
@@ -415,16 +416,16 @@ export default function MaterialsScreen() {
                   </label>
                   <label className="field">
                     主要技术语言
-                    <select
+                    <Select
                       value={job.programming_language || ''}
-                      onChange={e => setJob({...job, programming_language: e.target.value})}>
-                      <option value="">不指定</option>
+                      onValueChange={selectedValue => setJob({...job, programming_language: selectedValue})}>
+                      <SelectOption value="">不指定</SelectOption>
                       {['Java', 'JavaScript', 'TypeScript', 'Python', 'Go', 'C++', 'C#'].map(
                         value => (
-                          <option key={value}>{value}</option>
+                          <SelectOption key={value}>{value}</SelectOption>
                         ),
                       )}
-                    </select>
+                    </Select>
                   </label>
                 </>
               )}

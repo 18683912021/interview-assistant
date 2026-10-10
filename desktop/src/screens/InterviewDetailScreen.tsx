@@ -1,3 +1,5 @@
+import {IconButton} from '../components/IconButton';
+import {Select, SelectOption} from '../components/Select';
 import AnswerBody from '../components/AnswerBody';
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
@@ -179,9 +181,9 @@ export default function InterviewDetailScreen() {
           {session.role || '本场资料'}
           {session.resume_snapshot ? ` · v${session.resume_snapshot.version}` : ''}
         </button>
-        <button className="icon-btn" aria-label="导出文本" onClick={exportText}>
+        <IconButton className="icon-btn" aria-label="导出文本" onClick={exportText}>
           <Download />
-        </button>
+        </IconButton>
         {session.status !== 'completed' && (
           <button
             className="btn btn-primary"
@@ -222,9 +224,9 @@ export default function InterviewDetailScreen() {
                 onChange={e => setQuery(e.target.value)}
               />
               {query && (
-                <button className="icon-btn" aria-label="清除对话搜索" onClick={() => setQuery('')}>
+                <IconButton className="icon-btn" aria-label="清除对话搜索" onClick={() => setQuery('')}>
                   <X size={13} />
-                </button>
+                </IconButton>
               )}
             </label>
             <button
@@ -297,16 +299,16 @@ export default function InterviewDetailScreen() {
             </button>
             <span className="spacer" />
             {tab === 'answer' && !!session.answers.length && (
-              <select
+              <Select
                 value={selected}
-                onChange={e => choose(e.target.value)}
+                onValueChange={selectedValue => choose(selectedValue)}
                 aria-label="已保存的回答">
                 {session.answers.map((value, i) => (
-                  <option key={value.id} value={value.id}>
+                  <SelectOption key={value.id} value={value.id}>
                     {i + 1}. {value.question_text.slice(0, 20)}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
             )}
           </header>
           {tab === 'answer' ? (

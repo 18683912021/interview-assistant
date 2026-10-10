@@ -291,7 +291,7 @@ button.bubble-answer-count:hover {
   align-items: center;
   gap: 8px;
 }
-.answer-preferences select {
+.answer-preferences .select-trigger {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line);

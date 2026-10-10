@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState, type ReactNode} from 'react';
+import * as Dialog from '@radix-ui/react-dialog';
 import {AlertCircle, LoaderCircle, X} from 'lucide-react';
 export function Loading({text = '正在加载…'}: {text?: string}) {
   return (
@@ -53,57 +54,31 @@ export function Modal({
   busy?: boolean;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    (
-      dialog.current?.querySelector<HTMLElement>(
-        'input:not(:disabled),textarea:not(:disabled),select:not(:disabled)',
-      ) || dialog.current?.querySelector<HTMLElement>('button')
-    )?.focus();
-    return () => previous?.focus();
-  }, []);
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={e => {
-        if (!busy && e.target === e.currentTarget) onClose();
-      }}>
-      <div
-        className="modal"
-        ref={dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onKeyDown={e => {
-          if (e.key === 'Escape' && !busy) onClose();
-          if (e.key === 'Tab') {
-            const items = [
-              ...(dialog.current?.querySelectorAll<HTMLElement>(
-                'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-              ) || []),
-            ].filter(el => el.getClientRects().length);
-            const first = items[0],
-              last = items.at(-1);
-            if (e.shiftKey && document.activeElement === first) {
-              e.preventDefault();
-              last?.focus();
-            } else if (!e.shiftKey && document.activeElement === last) {
-              e.preventDefault();
-              first?.focus();
-            }
-          }
-        }}>
-        <header>
-          <h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} disabled={busy} aria-label="关闭">
-            <X size={18} />
-          </button>
-        </header>
-        {children}
-      </div>
-    </div>
+    <Dialog.Root open onOpenChange={open => {if (!open && !busy) onClose();}}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="modal-backdrop">
+          <Dialog.Content className="modal" ref={dialog} aria-describedby={undefined}
+            onEscapeKeyDown={event => {if (busy) event.preventDefault();}}
+            onPointerDownOutside={event => {if (busy) event.preventDefault();}}
+            onOpenAutoFocus={event => {
+              const field = dialog.current?.querySelector<HTMLElement>(
+                'input:not(:disabled),textarea:not(:disabled),[role="combobox"]:not(:disabled),[data-autofocus]',
+              );
+              if (field) {event.preventDefault(); field.focus();}
+            }}>
+            <header>
+              <Dialog.Title asChild><h2>{title}</h2></Dialog.Title>
+              <Dialog.Close className="icon-btn" disabled={busy} aria-label="关闭弹窗"><X size={18} /></Dialog.Close>
+            </header>
+            {children}
+          </Dialog.Content>
+        </Dialog.Overlay>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
+
 export function dateLabel(value: number | string) {
   return new Date(value).toLocaleDateString('zh-CN', {month: '2-digit', day: '2-digit'});
 }

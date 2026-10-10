@@ -1,3 +1,4 @@
+import {IconButton} from '../components/IconButton';
 import {useEffect, useRef, useState} from 'react';
 import {FileText, X} from 'lucide-react';
 import {AnswerBody} from '../components/AnswerBody';
@@ -116,12 +117,12 @@ export default function OverlayScreen() {
         <header className="overlay-header">
           <FileText size={14} />
           回答参考
-          <button
+          <IconButton
             className="icon-btn"
             aria-label="关闭浮窗"
             onClick={() => void window.electronAPI?.window.closeOverlay()}>
             <X size={14} />
-          </button>
+          </IconButton>
         </header>
         <div className="overlay-body">
           {question && <div className="overlay-question">{question}</div>}

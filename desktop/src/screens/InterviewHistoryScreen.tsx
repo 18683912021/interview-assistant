@@ -1,6 +1,8 @@
+import {IconButton} from '../components/IconButton';
+import {Select, SelectOption} from '../components/Select';
 import {useCallback, useContext, useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
-import {FileClock, History, Plus, RefreshCw, Search, Trash2} from 'lucide-react';
+import {FileClock, History, Plus, RefreshCw, Search, Trash2, X, LoaderCircle} from 'lucide-react';
 import {
   deleteWorkspaceInterview,
   getWorkspaceInterviews,
@@ -40,7 +42,6 @@ export default function InterviewHistoryScreen() {
       ]);
       if (remote.status === 'fulfilled') setRecords(remote.value);
       else {
-        setRecords([]);
         setError(messageOf(remote.reason));
       }
       if (local.status === 'fulfilled') setDrafts(local.value);
@@ -69,7 +70,7 @@ export default function InterviewHistoryScreen() {
   const remove = (record: SessionSummary) =>
     confirm('删除这场面试？', `“${record.title}”的对话与回答将删除，此操作无法撤销。`, () => {
       setDeleting(values => [...values, record.id]);
-      void deleteWorkspaceInterview(record.id)
+      return deleteWorkspaceInterview(record.id)
         .then(async () => {
           setRecords(old => old.filter(item => item.id !== record.id));
           try {
@@ -80,11 +81,10 @@ export default function InterviewHistoryScreen() {
             toast('服务器记录已删除，本机恢复副本清理失败，请重试清理', 'warning');
           }
         })
-        .catch(e => toast(messageOf(e), 'error'))
         .finally(() => setDeleting(values => values.filter(value => value !== record.id)));
     });
   return (
-    <section className={`page${loading ? ' page-loading' : ''}`}>
+    <section className={`page${loading && !records.length ? ' page-loading' : ''}`}>
       <div className="page-heading">
         <div>
           <h1>面试记录</h1>
@@ -129,27 +129,29 @@ export default function InterviewHistoryScreen() {
             value={query}
             onChange={e => setQuery(e.target.value)}
           />
+          {query && <IconButton className="icon-btn search-clear" aria-label="清空搜索" onClick={() => setQuery('')}><X size={14} /></IconButton>}
         </label>
         <span className="spacer" />
         <span className="muted small record-count">{filtered.length} 场</span>
-        <select aria-label="按状态筛选" value={status} onChange={e => setStatus(e.target.value)}>
-          <option value="all">全部状态</option>
-          <option value="active">未结束</option>
-          <option value="completed">已结束</option>
-          <option value="interrupted">已暂停</option>
-        </select>
-        <button
+        <Select aria-label="按状态筛选" value={status} onValueChange={selectedValue => setStatus(selectedValue)}>
+          <SelectOption value="all">全部状态</SelectOption>
+          <SelectOption value="active">未结束</SelectOption>
+          <SelectOption value="completed">已结束</SelectOption>
+          <SelectOption value="interrupted">已暂停</SelectOption>
+        </Select>
+        <IconButton
           className="icon-btn"
           title="刷新记录"
           aria-label="刷新记录"
           disabled={loading}
           onClick={() => void load()}>
-          <RefreshCw size={15} />
-        </button>
+          <RefreshCw size={15} className={loading ? 'spin' : undefined} />
+        </IconButton>
       </div>
-      {loading ? (
+      {error && records.length > 0 && <ErrorState message={error} retry={() => void load()} />}
+      {loading && !records.length ? (
         <Loading />
-      ) : error ? (
+      ) : error && !records.length ? (
         <ErrorState message={error} retry={() => void load()} />
       ) : filtered.length ? (
         <table className="records">
@@ -190,13 +192,13 @@ export default function InterviewHistoryScreen() {
                   </span>
                 </td>
                 <td className="row-actions">
-                  <button
+                  <IconButton
                     className="icon-btn"
                     disabled={deleting.includes(record.id)}
                     aria-label={`删除 ${record.title}`}
                     onClick={() => remove(record)}>
-                    <Trash2 size={15} />
-                  </button>
+                    {deleting.includes(record.id) ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />}
+                  </IconButton>
                 </td>
               </tr>
             ))}
@@ -208,7 +210,9 @@ export default function InterviewHistoryScreen() {
           title={records.length ? '没有匹配的面试' : '你的第一场面试，从这里开始'}
           text={records.length ? '试试其他关键词或状态。' : '选择岗位与简历，开始记录对话和回答。'}
           action={
-            !records.length && (
+            records.length ? (
+              <button className="btn" onClick={() => {setQuery(''); setStatus('all');}}>清除筛选</button>
+            ) : (
               <button className="btn" onClick={() => navigate('/interview')}>
                 准备一场面试
               </button>

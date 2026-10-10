@@ -1,3 +1,4 @@
+import {Select, SelectOption} from '../components/Select';
 import AnswerBody from '../components/AnswerBody';
 import {useCallback, useEffect, useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
@@ -287,42 +288,42 @@ export default function ToolsScreen() {
             <fieldset className="form-fields" disabled={busy || saving}>
               <label className="field">
                 目标岗位
-                <select
+                <Select
                   value={jobId}
-                  onChange={e => update({jobId: e.target.value, error: ''})}
+                  onValueChange={selectedValue => update({jobId: selectedValue, error: ''})}
                   disabled={loadingSources}>
-                  <option value="">不关联岗位</option>
+                  <SelectOption value="">不关联岗位</SelectOption>
                   {jobId && !selectedJob && (
-                    <option value={jobId}>
+                    <SelectOption value={jobId}>
                       {loadingSources ? '正在加载…' : '所选岗位已不可用，请重新选择'}
-                    </option>
+                    </SelectOption>
                   )}
                   {jobs.map(value => (
-                    <option key={value.id} value={value.id}>
+                    <SelectOption key={value.id} value={value.id}>
                       {value.title}
                       {value.company ? ` · ${value.company}` : ''}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="field">
                 参考简历
-                <select
+                <Select
                   value={resumeId}
-                  onChange={e => update({resumeId: e.target.value, error: ''})}
+                  onValueChange={selectedValue => update({resumeId: selectedValue, error: ''})}
                   disabled={loadingSources}>
-                  <option value="">不关联简历</option>
+                  <SelectOption value="">不关联简历</SelectOption>
                   {resumeId && !selectedResume && (
-                    <option value={resumeId}>
+                    <SelectOption value={resumeId}>
                       {loadingSources ? '正在加载…' : '所选简历已不可用，请重新选择'}
-                    </option>
+                    </SelectOption>
                   )}
                   {resumes.map(value => (
-                    <option key={value.id} value={value.id}>
+                    <SelectOption key={value.id} value={value.id}>
                       {value.filename} · v{value.version}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="field">
                 {kind === 'answer' ? '原始回答' : '补充内容'}

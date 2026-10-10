@@ -1,3 +1,5 @@
+import {AnswerStylePicker} from '../components/AnswerStylePicker';
+import {Select, SelectOption} from '../components/Select';
 import {useCallback, useContext, useEffect, useRef, useState, type FormEvent} from 'react';
 import {useNavigate, useSearchParams} from 'react-router-dom';
 import {
@@ -9,7 +11,7 @@ import {
   Palette,
   UserRound,
 } from 'lucide-react';
-import {getSettings, saveSettings, DEFAULT_SETTINGS, ANSWER_STYLES, type Settings} from '../api/workspace';
+import {getSettings, saveSettings, DEFAULT_SETTINGS, type Settings} from '../api/workspace';
 import {resetPassword, sendCode, updateProfile} from '../api/auth';
 import {AUTH_EXPIRED_EVENT, messageOf} from '../api/client';
 import {isVirtualDeviceName} from '../utils/audioDevices';
@@ -387,25 +389,25 @@ export default function SettingsScreen() {
                       <span>
                         麦克风<small>用于记录你的回答</small>
                       </span>
-                      <select
+                      <Select
                         value={settings.microphone_id}
-                        onChange={e => change('microphone_id', e.target.value)}>
-                        <option value="">系统默认麦克风</option>
+                        onValueChange={selectedValue => change('microphone_id', selectedValue)}>
+                        <SelectOption value="">系统默认麦克风</SelectOption>
                         {settings.microphone_id &&
                           !devices.some(value => value.deviceId === settings.microphone_id) && (
-                            <option value={settings.microphone_id}>
+                            <SelectOption value={settings.microphone_id}>
                               之前选择的设备（暂不可用）
-                            </option>
+                            </SelectOption>
                           )}
                         {devices
                           .filter(value => value.deviceId)
                           .map((value, i) => (
-                            <option value={value.deviceId} key={value.deviceId}>
+                            <SelectOption value={value.deviceId} key={value.deviceId}>
                               {value.label || `麦克风 ${i + 1}`}
                               {isVirtualDeviceName(value.label) ? ' · 虚拟设备' : ''}
-                            </option>
+                            </SelectOption>
                           ))}
-                      </select>
+                      </Select>
                     </label>
                     <div className="device-test">
                       <div
@@ -428,50 +430,50 @@ export default function SettingsScreen() {
                         <span>
                           系统音频输入<small>采集电脑播放的声音，或选择已配置的虚拟音频输入</small>
                         </span>
-                        <select
+                        <Select
                           value={settings.system_device_id}
-                          onChange={e => change('system_device_id', e.target.value)}>
-                          <option value="">系统播放声音（推荐）</option>
+                          onValueChange={selectedValue => change('system_device_id', selectedValue)}>
+                          <SelectOption value="">系统播放声音（推荐）</SelectOption>
                           {settings.system_device_id &&
                             !devices.some(
                               value => value.deviceId === settings.system_device_id,
                             ) && (
-                              <option value={settings.system_device_id}>
+                              <SelectOption value={settings.system_device_id}>
                                 之前选择的设备（暂不可用）
-                              </option>
+                              </SelectOption>
                             )}
                           {devices
                             .filter(value => value.deviceId)
                             .map((value, i) => (
-                              <option key={value.deviceId} value={value.deviceId}>
+                              <SelectOption key={value.deviceId} value={value.deviceId}>
                                 {value.label || `音频输入 ${i + 1}`}
                                 {isVirtualDeviceName(value.label) ? ' · 虚拟设备' : ''}
-                              </option>
+                              </SelectOption>
                             ))}
-                        </select>
+                        </Select>
                       </label>
                     ) : isWindows ? (
                       <label className="setting-row">
                         <span>
                           系统音频输出<small>选择面试软件正在使用的扬声器或耳机</small>
                         </span>
-                        <select
+                        <Select
                           value={settings.system_device_id}
-                          onChange={e => change('system_device_id', e.target.value)}>
-                          <option value="">系统默认输出</option>
+                          onValueChange={selectedValue => change('system_device_id', selectedValue)}>
+                          <SelectOption value="">系统默认输出</SelectOption>
                           {settings.system_device_id &&
                             !outputs.some(device => device.id === settings.system_device_id) && (
-                              <option value={settings.system_device_id}>
+                              <SelectOption value={settings.system_device_id}>
                                 之前选择的输出（暂不可用）
-                              </option>
+                              </SelectOption>
                             )}
                           {outputs.map(device => (
-                            <option key={device.id} value={device.id}>
+                            <SelectOption key={device.id} value={device.id}>
                               {device.name}
                               {device.isDefault ? ' · 当前默认' : ''}
-                            </option>
+                            </SelectOption>
                           ))}
-                        </select>
+                        </Select>
                       </label>
                     ) : (
                       <div className="setting-row">
@@ -504,13 +506,13 @@ export default function SettingsScreen() {
                   <>
                     <label className="setting-row">
                       <span>回答语言</span>
-                      <select
+                      <Select
                         value={settings.language}
-                        onChange={e => change('language', e.target.value as Settings['language'])}>
-                        <option value="auto">跟随问题</option>
-                        <option value="zh">中文</option>
-                        <option value="en">English</option>
-                      </select>
+                        onValueChange={selectedValue => change('language', selectedValue as Settings['language'])}>
+                        <SelectOption value="auto">跟随问题</SelectOption>
+                        <SelectOption value="zh">中文</SelectOption>
+                        <SelectOption value="en">English</SelectOption>
+                      </Select>
                     </label>
                     <label className="setting-row">
                       <span>
@@ -518,28 +520,23 @@ export default function SettingsScreen() {
                           ? '书面模式内容更充分；选“详细”可进一步展开'
                           : '优先呈现可快速阅读的要点'}</small>
                       </span>
-                      <select
+                      <Select
                         value={settings.answer_length}
-                        onChange={e =>
-                          change('answer_length', e.target.value as Settings['answer_length'])
+                        onValueChange={selectedValue =>
+                          change('answer_length', selectedValue as Settings['answer_length'])
                         }>
-                        <option value="brief">简短</option>
-                        <option value="standard">适中</option>
-                        <option value="detailed">详细</option>
-                      </select>
+                        <SelectOption value="brief">简短</SelectOption>
+                        <SelectOption value="standard">适中</SelectOption>
+                        <SelectOption value="detailed">详细</SelectOption>
+                      </Select>
                     </label>
-                    <label className="setting-row">
-                      <span>表达方式<small>{ANSWER_STYLES.find(option => option.value === settings.answer_style)?.description}</small></span>
-                      <select
-                        value={settings.answer_style}
-                        onChange={e =>
-                          change('answer_style', e.target.value as Settings['answer_style'])
-                        }>
-                        {ANSWER_STYLES.map(option => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </label>
+                    <div className="answer-style-setting">
+                      <div className="section-label">回答方式</div>
+                      <AnswerStylePicker value={settings.answer_style} onChange={value => change('answer_style', value)} />
+                      {settings.answer_style === 'written' && (
+                        <p className="preference-hint">标准书面会展开完整解释、步骤与例子。选择“详细”时，复杂问题目标约 1400–1800 字。</p>
+                      )}
+                    </div>
                     <p className="notice">
                       是否关联简历与岗位，在每场面试开始时选择；修改偏好不会覆盖历史回答。
                     </p>
@@ -569,17 +566,17 @@ export default function SettingsScreen() {
                       <span>
                         回答字号<small>只调整回答区域，不改变对话密度</small>
                       </span>
-                      <select
+                      <Select
                         value={settings.font_size}
-                        onChange={e =>
-                          change('font_size', Number(e.target.value) as Settings['font_size'])
+                        onValueChange={selectedValue =>
+                          change('font_size', Number(selectedValue) as Settings['font_size'])
                         }>
                         {[14, 16, 18].map(value => (
-                          <option key={value} value={value}>
+                          <SelectOption key={value} value={value}>
                             {value} px
-                          </option>
+                          </SelectOption>
                         ))}
-                      </select>
+                      </Select>
                     </label>
                     <div className="font-preview">
                       <span>Aa</span>
@@ -624,9 +621,9 @@ export default function SettingsScreen() {
                     </div>
                     <div className="setting-row">
                       <div>
-                        原始录音<small>当前仅保存转写与回答</small>
+                        音频采集文件<small>用于音频传输与恢复，删除面试记录时一并清理</small>
                       </div>
-                      <span className="muted small">不保存</span>
+                      <span className="muted small">随面试记录管理</span>
                     </div>
                     <div className="setting-row">
                       <div>
