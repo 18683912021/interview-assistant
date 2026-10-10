@@ -19,6 +19,8 @@ macOS 默认使用 Electron 的系统音频回环，需要系统的屏幕与系�
 
 主窗口恢复为普通 macOS 窗口，保留 Dock 运行标记、应用菜单和 ⌘Q。菜单栏托盘使用可见的波形模板图标，关闭最后一个窗口后仍可「打开主窗口」或「退出面试助手」；关闭窗口会停止采集。浮窗保留跨桌面设置，但使用 skipTransformProcessType，避免 Electron 43 的 visibleOnFullScreen 默认隐藏整个应用 Dock。跨其他应用全屏空间的浮窗显示仍受 macOS 限制，不能为此再次隐藏应用入口。回归命令：先编译 Electron，再运行 `pnpm exec electron scripts/smoke-app-lifecycle.cjs`，使用独立临时用户目录与本地空白页面，不接入音频、用户记录或网络。
 
+0.5.4 移除 Windows/Linux 窗口顶部菜单，Alt 也不会重新展开；macOS 隐藏「编辑、显示、窗口」等菜单，仅保留系统顶栏中的应用菜单用于退出和重新打开。原生编辑及关窗快捷键仍保留，托盘不受影响。
+
 Electron 43.4.0 在拒绝显示采集时必须回调 `null`；回调空对象会抛出主进程异常并使页面收到 `Invalid capture constraints`。主进程现在按请求 frame 保留权限、取消及来源失败的具体原因，渲染进程在失败后读取并清除，避免不同窗口或重试串用错误。参见 [Electron 屏幕采集 API](https://www.electronjs.org/docs/latest/api/desktop-capturer) 与 [权限 API](https://www.electronjs.org/docs/latest/api/system-preferences)。
 
 麦克风与系统音频使用不同的处理配置：麦克风优先请求 `echoCancellation: {exact: 'all'}`，消除外部会议软件等系统播放声音的回声，并启用降噪、关闭自动增益；系统音频保留原声。仅在设备明确不支持该回声模式时回退为常规 AEC，并在面试状态栏及输入测试结果中显示实际模式和耳机建议。权限、设备占用等错误不会被回退掩盖。设置中的测试与正式面试共用采集实现；选中同一个输入（包括可解析的默认设备别名）会在开始前报错，不用文本去重或静音整条麦克风轨道来删除重复内容。
