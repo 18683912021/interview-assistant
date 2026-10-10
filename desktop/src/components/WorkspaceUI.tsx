@@ -54,6 +54,7 @@ export function Modal({
   busy?: boolean;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
+  const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   return (
     <Dialog.Root open onOpenChange={open => {if (!open && !busy) onClose();}}>
       <Dialog.Portal>
@@ -61,6 +62,9 @@ export function Modal({
           <Dialog.Content className="modal" ref={dialog} aria-describedby={undefined}
             onEscapeKeyDown={event => {if (busy) event.preventDefault();}}
             onPointerDownOutside={event => {if (busy) event.preventDefault();}}
+            onCloseAutoFocus={event => {
+              if (opener?.isConnected) {event.preventDefault(); opener.focus();}
+            }}
             onOpenAutoFocus={event => {
               const field = dialog.current?.querySelector<HTMLElement>(
                 'input:not(:disabled),textarea:not(:disabled),[role="combobox"]:not(:disabled),[data-autofocus]',

@@ -84,6 +84,8 @@ describe('desktop interaction contracts', () => {
     expect(screen.getByRole('alert').textContent).toContain('网络连接失败');
     expect(operation).toHaveBeenCalledTimes(1);
     expect((screen.getByRole('button', {name: '删除'}) as HTMLButtonElement).disabled).toBe(false);
+    await user.click(screen.getByRole('button', {name: '取消'}));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', {name: '打开确认'})));
   });
 
   it('merges repeated notifications and allows dismissing them', async () => {
