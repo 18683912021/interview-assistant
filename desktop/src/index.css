@@ -1109,6 +1109,16 @@ textarea::placeholder {
   line-height: 1.6;
   margin-top: 5px;
 }
+.audio-permissions {
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 12px 0;
+  flex-shrink: 0;
+}
+.audio-permissions .setting-row:last-child {
+  border-bottom: 0;
+}
 .setting-row input:not([type='checkbox']),
 .setting-row select {
   max-width: 210px;

@@ -5,6 +5,9 @@ interface ElectronAPI {
     startCapture(opts: { source?: 'mic' | 'system' | 'both'; streamUrl?: string; token?: string; sessionId?: string; systemDeviceId?: string; directAddress?: string }): Promise<unknown>;
     stopCapture(): Promise<void>;
     getSnapshot(): Promise<unknown>;
+    takeDisplayCaptureFailure(): Promise<{code: string; message: string} | null>;
+    openPrivacySettings(kind: 'microphone' | 'screen'): Promise<void>;
+    requestPermission(kind: 'microphone' | 'screen'): ReturnType<ElectronAPI['audio']['getPermissions']>;
     listSystemOutputs(): Promise<{id: string; name: string; isDefault: boolean}[]>;
     getPermissions(): Promise<{
       platform: string; osRelease: string; electronVersion: string;

@@ -44,6 +44,7 @@ import {loadDrafts, removeDraft, storeDraft} from '../services/drafts';
 import {genId, interviewReducer} from '../store/interview-reducer';
 import type {ConversationMessage} from '../store/types';
 import {AnswerBody} from '../components/AnswerBody';
+import {AudioPermissions} from '../components/AudioPermissions';
 import {findReusableAnswer, hasRevisedSources} from '../services/conversation';
 import {sessionContentSignature as signature} from '../services/session-content';
 import {checkAIReadiness} from '../api/diagnostics';
@@ -562,6 +563,7 @@ export default function InterviewScreen() {
           </div>
         </div>
         {error && <ErrorState message={error} retry={() => void load()} />}
+        <AudioPermissions onlyBlocked systemRequired={source === 'both' && !settings.system_device_id} />
         {drafts.length > 0 && (
           <div className="recovery-list">
             {drafts.map(value => (
@@ -835,6 +837,9 @@ export default function InterviewScreen() {
             <X size={15} />
           </button>
         </div>
+      )}
+      {(error || state.error?.stage === 'devices' || state.error?.stage === 'capture') && (
+        <AudioPermissions onlyBlocked systemRequired={source === 'both' && !settings.system_device_id} />
       )}
       {saveState === 'offline' && (
         <div className="session-alert">

@@ -20,6 +20,7 @@ import {useToast} from '../components/Toast';
 import {useWorkspaceDraft} from '../utils/WorkspaceDraftContext';
 import {changedSettings} from '../utils/workspaceForms';
 import {audioPreparationError} from '../services/capture-preparation';
+import {AudioPermissions} from '../components/AudioPermissions';
 import {
   accountSettings,
   desktopPlatform,
@@ -381,6 +382,7 @@ export default function SettingsScreen() {
                 )}
                 {category === 'audio' && (
                   <>
+                    <AudioPermissions />
                     <label className="setting-row">
                       <span>
                         麦克风<small>用于记录你的回答</small>

@@ -1,7 +1,8 @@
-import {describe, expect, it, vi} from 'vitest';
-import {prepareAudioStreams} from './capture-preparation';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+import {audioPreparationError, prepareAudioStreams} from './capture-preparation';
 import {DEFAULT_SETTINGS} from '../api/workspace';
 vi.mock('../api/client', () => ({api: {}}));
+afterEach(() => vi.unstubAllGlobals());
 const stream = (audio = true, deviceId = '', groupId = '', label = deviceId) => {
   const track = {
     stop: vi.fn(),
@@ -16,6 +17,27 @@ const stream = (audio = true, deviceId = '', groupId = '', label = deviceId) => 
   } as unknown as MediaStream;
 };
 describe('device preparation before interview creation', () => {
+  it('uses the main-process reason for a failed display request before opening the microphone', async () => {
+    const takeDisplayCaptureFailure = vi.fn().mockResolvedValue({
+      code: 'E_SCREEN_PERMISSION', message: 'macOS 尚未允许屏幕与系统音频录制。',
+    });
+    vi.stubGlobal('window', {electronAPI: {audio: {takeDisplayCaptureFailure}}});
+    const getUserMedia = vi.fn();
+    await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', {
+      getUserMedia,
+      getDisplayMedia: vi.fn().mockRejectedValue(new Error('Invalid capture constraints')),
+    }, true)).rejects.toThrow('macOS 尚未允许屏幕与系统音频录制');
+    expect(takeDisplayCaptureFailure).toHaveBeenCalledOnce();
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
+  it('still explains capture failure if diagnostics are unavailable', async () => {
+    vi.stubGlobal('window', {electronAPI: {audio: {takeDisplayCaptureFailure: vi.fn().mockRejectedValue(new Error('IPC unavailable'))}}});
+    await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', {
+      getUserMedia: vi.fn(),
+      getDisplayMedia: vi.fn().mockRejectedValue(new Error('Invalid capture constraints')),
+    }, true)).rejects.toThrow('系统音频采集未能启动');
+    expect(audioPreparationError(new Error('Invalid capture constraints'))).not.toContain('Invalid');
+  });
   it('keeps system audio unprocessed while requesting system-wide echo cancellation for the mic', async () => {
     const system = stream(true, 'loopback'),
       mic = stream(true, 'physical-mic');

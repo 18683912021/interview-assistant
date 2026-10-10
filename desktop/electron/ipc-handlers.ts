@@ -5,7 +5,7 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { getOverlayWindow, createOverlayWindow, destroyOverlayWindow } from './windows/overlay-window.js';
 import { shell } from 'electron';
 import { audioCapture } from './audio/audio-capture.js';
-import { getAudioPermissions } from './audio/media-permissions.js';
+import { getAudioPermissions, openAudioPrivacySettings, requestAudioPermission, takeDisplayCaptureFailure } from './audio/media-permissions.js';
 import { listSystemOutputs } from './audio/windows-loopback.js';
 import { DesktopStorage } from './storage.js';
 import fs from 'fs';
@@ -175,6 +175,9 @@ export function registerIpcHandlers(): void {
     return audioCapture.getSnapshot();
   });
   ipcMain.handle('audio:get-permissions', getAudioPermissions);
+  ipcMain.handle('audio:display-capture-failure', event => takeDisplayCaptureFailure(event.senderFrame));
+  ipcMain.handle('audio:open-privacy-settings', (_event, kind: unknown) => openAudioPrivacySettings(kind));
+  ipcMain.handle('audio:request-permission', (_event, kind: unknown) => requestAudioPermission(kind));
   ipcMain.handle('audio:list-system-outputs', () => listSystemOutputs());
 
   ipcMain.handle('audio:clear-answer', () => audioCapture.clearAnswer());

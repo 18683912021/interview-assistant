@@ -21,7 +21,22 @@ export function audioPreparationError(error: unknown): string {
     return '已选音频设备不可用，请重新选择设备或使用系统默认输入。';
   if (name === 'NotReadableError')
     return '音频输入或回声消除无法启动，请检查设备连接、麦克风与系统音频权限，并关闭正在独占设备的应用。';
+  if (error instanceof Error && error.message.includes('Invalid capture constraints'))
+    return '系统音频采集未能启动。请检查屏幕与系统音频录制权限，重新允许本应用后重启；也可以选择「仅麦克风」。';
   return error instanceof Error ? error.message : '音频准备失败，请检查设备后重试。';
+}
+
+async function captureSystemPlayback(media: MediaAccess): Promise<MediaStream> {
+  try {
+    return await media.getDisplayMedia({video: true, audio: true});
+  } catch (error) {
+    // Fetch only after the request fails, preserving the start click's user
+    // activation. The main process stores no device names or captured content.
+    const bridge = typeof window !== 'undefined' ? window.electronAPI?.audio : undefined;
+    const failure = await bridge?.takeDisplayCaptureFailure?.().catch(() => null);
+    if (failure) throw new Error(failure.message);
+    throw error;
+  }
 }
 
 /** Acquire permissions/devices before creating a session or opening billable provider streams. */
@@ -49,7 +64,7 @@ export async function prepareAudioStreams(
         ? await media.getUserMedia({
             audio: {...systemConstraints, deviceId: {exact: settings.system_device_id}},
           })
-        : await media.getDisplayMedia({video: true, audio: true});
+        : await captureSystemPlayback(media);
       if (!streams.system.getAudioTracks().some(track => track.readyState === 'live'))
         throw new Error(
           '系统音频未成功获取。请重新选择系统音频来源，或在设备设置中选择已配置的虚拟音频输入。',

@@ -13,6 +13,10 @@
 
 macOS 默认使用 Electron 的系统音频回环，需要系统的屏幕与系统音频录制权限；应用会明确确认电脑播放声音的采集范围，视频轨道取得后立即关闭，画面不会保存或上传。Electron 43 使用官方的 ScreenCaptureKit 兼容路径，避免系统选择器仅返回画面的问题。也可以在设置中手动选择已配置声音路由的虚拟输入。Windows 使用 WASAPI 回环，可在设置中选择默认输出或具体扬声器/耳机；请选择会议软件实际播放声音的输出。麦克风测试只在本机读取输入，离开设置页时释放设备。设备、系统权限和实际音频路由仍需在对应操作系统上验证。
 
+0.5.2 在面试准备页和“设置 → 音频与设备”显示本机权限与“申请权限”按钮：首次麦克风授权使用系统弹框；系统音频通过 Electron 请求屏幕来源，未开启时直接进入对应的 macOS 权限面板。不会自动开启权限或启动录音。已拒绝的权限不能靠重复请求绕过，开启后须完全退出并重新打开应用。当前 Mac 包为 ad-hoc 签名，更新会改变代码签名，可能需要重新授权；正式分发应使用稳定的 Developer ID 签名与公证。
+
+Electron 43.4.0 在拒绝显示采集时必须回调 `null`；回调空对象会抛出主进程异常并使页面收到 `Invalid capture constraints`。主进程现在按请求 frame 保留权限、取消及来源失败的具体原因，渲染进程在失败后读取并清除，避免不同窗口或重试串用错误。参见 [Electron 屏幕采集 API](https://www.electronjs.org/docs/latest/api/desktop-capturer) 与 [权限 API](https://www.electronjs.org/docs/latest/api/system-preferences)。
+
 麦克风与系统音频使用不同的处理配置：麦克风优先请求 `echoCancellation: {exact: 'all'}`，消除外部会议软件等系统播放声音的回声，并启用降噪、关闭自动增益；系统音频保留原声。仅在设备明确不支持该回声模式时回退为常规 AEC，并在面试状态栏及输入测试结果中显示实际模式和耳机建议。权限、设备占用等错误不会被回退掩盖。设置中的测试与正式面试共用采集实现；选中同一个输入（包括可解析的默认设备别名）会在开始前报错，不用文本去重或静音整条麦克风轨道来删除重复内容。
 
 Electron 43.4.0 对应 Chromium 150，支持标准 `all` 模式，无需额外开关。macOS 的全系统回声消除可能另外请求「系统音频录制」权限；开发启动时授权对象可能是负责启动应用的终端。已允许屏幕录制不代表这项权限已允许。全系统 AEC 的模式协商成功与实际声学效果应分别验证；不同音量、扬声器位置和双人同时说话仍需实机验收。Chromium 默认给此模式的麦克风增加约 170ms 的参考对齐延迟，独立的系统音频转写轨道不经此处理。来源：[Chromium 150 AEC 模式选择](https://chromium.googlesource.com/chromium/src/+/refs/tags/150.0.7871.224/third_party/blink/renderer/platform/mediastream/media_stream_audio_processor_options.cc)、[平台与延迟定义](https://chromium.googlesource.com/chromium/src/+/refs/tags/150.0.7871.224/media/base/media_switches.cc)、[W3C 回声消除定义](https://www.w3.org/TR/mediacapture-streams/#dom-echocancellationmodeenum)。
