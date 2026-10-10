@@ -11,7 +11,7 @@ import { DesktopStorage } from './storage.js';
 import fs from 'fs';
 import net from 'node:net';
 import { app } from 'electron';
-import { mainWindow } from './main.js';
+import { mainWindow, restartApplication } from './main.js';
 
 const storage = new DesktopStorage(app.getPath('userData'));
 
@@ -79,6 +79,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('storage:remove', (_e, key: string) => storage.remove(key));
 
   // ── 窗口管理 ──
+  ipcMain.handle('window:restart-app', () => restartApplication());
   ipcMain.handle('window:open-overlay', () => {
     createOverlayWindow();
   });

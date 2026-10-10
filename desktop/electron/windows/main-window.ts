@@ -32,8 +32,8 @@ export function createMainWindow(): BrowserWindow {
     },
   });
 
-  // ContentProtection 默认关闭，用户手动开关
-  win.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
+  // A normal workspace window must retain the Dock/menu bar. In Electron 43,
+  // visibleOnFullScreen:true transforms the whole app into a Dock-hidden agent.
 
   win.once('ready-to-show', () => {
     win.show();

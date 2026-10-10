@@ -33,6 +33,7 @@ interface ElectronAPI {
     saveFile(data: Uint8Array, defaultName: string): Promise<string | null>;
   };
   window: {
+    restartApp(): Promise<void>;
     openOverlay(): Promise<void>;
     closeOverlay(): Promise<void>;
     toggleOverlay(): Promise<void>;

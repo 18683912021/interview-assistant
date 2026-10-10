@@ -7,6 +7,7 @@ const electron = vi.hoisted(() => ({
   windows: [] as Array<{
     loadURL: ReturnType<typeof vi.fn>;
     loadFile: ReturnType<typeof vi.fn>;
+    setVisibleOnAllWorkspaces: ReturnType<typeof vi.fn>;
     webContents: {openDevTools: ReturnType<typeof vi.fn>};
   }>,
 }));
@@ -21,7 +22,7 @@ vi.mock('electron', () => ({
       electron.options.push(options);
     }
     once() {}
-    setVisibleOnAllWorkspaces() {}
+    setVisibleOnAllWorkspaces = vi.fn();
     setIgnoreMouseEvents() {}
     isDestroyed() {
       return false;
@@ -48,6 +49,7 @@ describe('desktop page loading', () => {
     expect(window.loadURL).not.toHaveBeenCalled();
     expect(path.basename(window.loadFile.mock.calls[0]![0])).toBe('index.html');
     expect(window.webContents.openDevTools).not.toHaveBeenCalled();
+    expect(window.setVisibleOnAllWorkspaces).not.toHaveBeenCalled();
     expect(electron.options[0]!.webPreferences?.backgroundThrottling).toBe(false);
   });
 
@@ -58,6 +60,9 @@ describe('desktop page loading', () => {
     expect(window.loadURL).not.toHaveBeenCalled();
     expect(window.loadFile).toHaveBeenCalledWith(expect.stringContaining('dist-renderer'), {
       hash: '/overlay',
+    });
+    expect(window.setVisibleOnAllWorkspaces).toHaveBeenCalledWith(true, {
+      visibleOnFullScreen: true, skipTransformProcessType: true,
     });
     expect(electron.options[0]!.webPreferences?.backgroundThrottling).toBe(false);
   });

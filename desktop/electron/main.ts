@@ -6,6 +6,7 @@ import { flushStorage, registerIpcHandlers } from './ipc-handlers.js';
 import { createTray, destroyTray } from './tray.js';
 import { audioCapture } from './audio/audio-capture.js';
 import { configureSystemAudioCapture } from './audio/media-permissions.js';
+import { createApplicationMenu } from './menu.js';
 
 configureSystemAudioCapture();
 
@@ -14,6 +15,15 @@ let initialized = false;
 let quitting = false;
 let readyToQuit = false;
 let captureStop: Promise<void> | null = null;
+let restartRequested = false;
+
+export function restartApplication(): void {
+  if (quitting || restartRequested) return;
+  if (audioCapture.getSnapshot().captureState === 'capturing')
+    throw new Error('请先暂停面试或停止音频测试，再重启应用。');
+  restartRequested = true;
+  app.quit();
+}
 
 function stopCapture(reason: string): Promise<void> {
   if (!captureStop) {
@@ -35,11 +45,9 @@ function showMainWindow(): void {
   }
   const window = createMainWindow();
   mainWindow = window;
-  createTray();
   window.once('closed', () => {
     if (mainWindow === window) mainWindow = null;
     destroyOverlayWindow();
-    destroyTray();
     void stopCapture('main_window_closed');
   });
 }
@@ -48,6 +56,10 @@ function initialize(): void {
   if (!initialized) {
     allowMediaPermissions();
     registerIpcHandlers();
+    // Keep the app discoverable after its last window is closed on macOS.
+    if (process.platform === 'darwin') app.setActivationPolicy('regular');
+    createApplicationMenu(showMainWindow);
+    createTray(showMainWindow);
     initialized = true;
   }
   showMainWindow();
@@ -57,7 +69,6 @@ app.whenReady().then(initialize);
 
 app.on('window-all-closed', () => {
   destroyOverlayWindow();
-  destroyTray();
   void stopCapture('all_windows_closed');
   if (process.platform !== 'darwin') app.quit();
 });
@@ -78,7 +89,10 @@ app.on('before-quit', (event) => {
     // Native macOS menu quit can flush Promise callbacks before its original
     // before-quit handler returns. A nested quit is then cancelled by that
     // outer preventDefault, leaving a windowless process. Resume on a new turn.
-    setImmediate(() => app.quit());
+    setImmediate(() => {
+      if (restartRequested) app.relaunch();
+      app.quit();
+    });
   });
 });
 

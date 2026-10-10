@@ -5,17 +5,20 @@ const mocks = vi.hoisted(() => ({
   windows: [] as any[],
   register: vi.fn(), permissions: vi.fn(), createTray: vi.fn(), destroyTray: vi.fn(),
   destroyOverlay: vi.fn(), stop: vi.fn(), flushStorage: vi.fn(), quit: vi.fn(),
+  relaunch: vi.fn(), activation: vi.fn(), menu: vi.fn(), snapshot: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
   app: {
     whenReady: () => Promise.resolve(), isReady: () => true, quit: mocks.quit,
+    relaunch: mocks.relaunch, setActivationPolicy: mocks.activation,
     on: (name: string, fn: (...args: any[]) => void) => mocks.handlers.set(name, fn),
   },
   BrowserWindow: {},
 }));
 vi.mock('../ipc-handlers.js', () => ({ registerIpcHandlers: mocks.register, flushStorage: mocks.flushStorage }));
-vi.mock('../audio/audio-capture.js', () => ({ audioCapture: { stop: mocks.stop } }));
+vi.mock('../audio/audio-capture.js', () => ({ audioCapture: { stop: mocks.stop, getSnapshot: mocks.snapshot } }));
+vi.mock('../menu.js', () => ({ createApplicationMenu: mocks.menu }));
 vi.mock('../audio/media-permissions.js', () => ({ configureSystemAudioCapture: vi.fn() }));
 vi.mock('../tray.js', () => ({ createTray: mocks.createTray, destroyTray: mocks.destroyTray }));
 vi.mock('../windows/overlay-window.js', () => ({ destroyOverlayWindow: mocks.destroyOverlay }));
@@ -45,6 +48,7 @@ beforeEach(() => {
   mocks.windows.length = 0;
   mocks.stop.mockResolvedValue(undefined);
   mocks.flushStorage.mockResolvedValue(undefined);
+  mocks.snapshot.mockReturnValue({ captureState: 'idle' });
 });
 
 describe('native app lifecycle', () => {
@@ -55,15 +59,51 @@ describe('native app lifecycle', () => {
     mocks.windows[0].close();
     expect(mocks.stop).toHaveBeenCalledWith('main_window_closed');
     expect(mocks.destroyOverlay).toHaveBeenCalledOnce();
-    expect(mocks.destroyTray).toHaveBeenCalledOnce();
+    expect(mocks.destroyTray).not.toHaveBeenCalled();
     mocks.handlers.get('activate')?.();
     expect(mocks.windows).toHaveLength(2);
     expect(mocks.register).toHaveBeenCalledOnce();
     expect(mocks.permissions).toHaveBeenCalledOnce();
-    expect(mocks.createTray).toHaveBeenCalledTimes(2);
+    expect(mocks.createTray).toHaveBeenCalledOnce();
     mocks.handlers.get('activate')?.();
     expect(mocks.windows).toHaveLength(2);
     expect(mocks.windows[1].focus).toHaveBeenCalledOnce();
+  });
+
+  it('reopens the real main window from the persistent tray after close', async () => {
+    await import('../main.js');
+    await flush();
+    mocks.windows[0].close();
+    const reopen = mocks.createTray.mock.calls[0]![0];
+    reopen();
+    expect(mocks.windows).toHaveLength(2);
+    expect(mocks.createTray).toHaveBeenCalledOnce();
+    expect(mocks.menu).toHaveBeenCalledOnce();
+    expect(mocks.menu.mock.calls[0]![0]).toBe(reopen);
+  });
+
+  it('schedules one relaunch only after capture and storage have drained', async () => {
+    const { restartApplication } = await import('../main.js');
+    await flush();
+    restartApplication();
+    restartApplication();
+    expect(mocks.quit).toHaveBeenCalledOnce();
+    expect(mocks.relaunch).not.toHaveBeenCalled();
+    mocks.handlers.get('before-quit')?.({ preventDefault: vi.fn() });
+    await flush();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(mocks.flushStorage).toHaveBeenCalledOnce();
+    expect(mocks.relaunch).toHaveBeenCalledOnce();
+    expect(mocks.destroyTray).toHaveBeenCalledOnce();
+  });
+
+  it('does not restart during an active interview', async () => {
+    const { restartApplication } = await import('../main.js');
+    await flush();
+    mocks.snapshot.mockReturnValue({ captureState: 'capturing' });
+    expect(restartApplication).toThrow('请先暂停');
+    expect(mocks.quit).not.toHaveBeenCalled();
+    expect(mocks.relaunch).not.toHaveBeenCalled();
   });
 
   it('waits for capture finalization once before quitting', async () => {

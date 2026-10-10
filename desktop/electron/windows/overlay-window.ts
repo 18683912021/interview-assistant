@@ -37,7 +37,11 @@ export function createOverlayWindow(): BrowserWindow {
   });
 
   // ContentProtection 默认关闭，用户手动开关
-  overlayWindow.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
+  // Never let an auxiliary window hide the whole application's Dock/menu bar.
+  overlayWindow.setVisibleOnAllWorkspaces(true, {
+    visibleOnFullScreen: true,
+    skipTransformProcessType: true,
+  });
   // The answer scroll area and close button must receive normal pointer input.
   overlayWindow.setIgnoreMouseEvents(false);
 

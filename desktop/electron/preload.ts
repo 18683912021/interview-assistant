@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 窗口管理
   window: {
+    restartApp: () => ipcRenderer.invoke('window:restart-app'),
     openOverlay: () => ipcRenderer.invoke('window:open-overlay'),
     closeOverlay: () => ipcRenderer.invoke('window:close-overlay'),
     toggleOverlay: () => ipcRenderer.invoke('window:toggle-overlay'),

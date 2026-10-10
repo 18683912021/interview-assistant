@@ -13,12 +13,13 @@ export function AudioPermissions({onlyBlocked = false, systemRequired = true}: {
   const [permissions, setPermissions] = useState<Permissions | null>(null);
   const [error, setError] = useState('');
   const [requesting, setRequesting] = useState<'microphone' | 'screen' | null>(null);
+  const [restarting, setRestarting] = useState(false);
   const api = window.electronAPI?.audio;
   useEffect(() => {
     if (!api?.getPermissions || !/Mac/i.test(navigator.userAgent)) return;
     let active = true;
     const refresh = () => void api.getPermissions().then(value => {
-      if (active) setPermissions(value);
+      if (active) { setPermissions(value); setError(''); }
     }).catch(() => { if (active) setError('无法读取系统权限，请重启客户端后重试。'); });
     refresh();
     window.addEventListener('focus', refresh);
@@ -49,7 +50,15 @@ export function AudioPermissions({onlyBlocked = false, systemRequired = true}: {
         </div>
       ))}
       {rows.some(row => row.status !== 'granted') && (
-        <p className="notice">允许「AI面试助手」后，请完全退出并重新打开应用。若更新后原来的开关已开启但仍显示未允许，请在系统设置中重新确认授权。</p>
+        <div>
+          <p className="notice">系统开关已开启，但这里仍显示未允许？macOS 可能需要重启应用后才能生效。关闭窗口不等于退出，请使用下面的按钮。</p>
+          <button className="btn" type="button" disabled={restarting || requesting !== null} onClick={async () => {
+            setError(''); setRestarting(true);
+            try { await window.electronAPI?.window.restartApp(); }
+            catch { setError('重启未完成。请先暂停面试或停止音频测试，再重试；也可按 ⌘Q 退出后重新打开。'); }
+            finally { setRestarting(false); }
+          }}>{restarting ? '正在重启…' : '已授权，重启应用'}</button>
+        </div>
       )}
       {error && <p className="notice" role="status">{error}</p>}
     </div>
