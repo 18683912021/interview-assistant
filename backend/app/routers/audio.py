@@ -34,13 +34,12 @@ from app.services.audio_service import (
 )
 from app.services.llm_service import LLMService, answer_token_budget
 from app.services.stt_streaming import StreamingASRSession
+from app.services.asr_provider import asr_ready, create_asr_session
 
 logger = logging.getLogger("audio")
 router = APIRouter()
 
-# 火山引擎 API Key（新版控制台，Realtime API）
-_VOLC_API_KEY = os.getenv("VOLC_API_KEY", "")
-_ASR_READY = bool(_VOLC_API_KEY)
+_ASR_READY = asr_ready()
 
 # 0.5: mode → max_tokens 路由
 # 5000 tokens ≈ 1500-1800 汉字，四维度深度回答绰绰有余
@@ -208,7 +207,7 @@ async def audio_stream(ws: WebSocket):
 
     async def start_asr(source_mode):
         async def open_source(src):
-            session = StreamingASRSession(_VOLC_API_KEY, src, transcription_queue)
+            session = create_asr_session(src, transcription_queue)
             asr_sessions[src] = session
             try:
                 await session.connect()
@@ -337,7 +336,7 @@ async def audio_stream(ws: WebSocket):
                                 background_tasks.add(asyncio.create_task(start_asr(v1_session.source_mode)))
                             else:
                                 await socket.send_json({"type": "error", "code": "E_ASR_UNAVAILABLE",
-                                    "message": "语音识别未配置，请检查后端 VOLC_API_KEY；可手动输入问题",
+                                    "message": "语音识别未配置，请检查后端所选语音服务的凭据；可手动输入问题",
                                     "stage": "transcription", "recoverable": False})
                         if msg_type == "session_stopped":
                             await socket.send_json({"type": "session_stopped", "session_id": str(v1_session.session_id)})

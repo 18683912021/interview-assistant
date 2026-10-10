@@ -768,7 +768,7 @@ async def test_both_sources_finalize_concurrently_before_session_stopped_ack(mon
     async def authorize(*_): pass
 
     class FakeASR:
-        def __init__(self, _, source, queue):
+        def __init__(self, source, queue):
             self.source, self.queue, self.task = source, queue, None
         async def connect(self): pass
         async def finish(self):
@@ -786,7 +786,7 @@ async def test_both_sources_finalize_concurrently_before_session_stopped_ack(mon
 
     monkeypatch.setattr(audio, "authenticate_socket", authenticate)
     monkeypatch.setattr(audio, "authorize_audio_session", authorize)
-    monkeypatch.setattr(audio, "StreamingASRSession", FakeASR)
+    monkeypatch.setattr(audio, "create_asr_session", FakeASR)
     monkeypatch.setattr(audio, "_ASR_READY", True)
     monkeypatch.setattr(audio, "storage_root", lambda: tmp_path)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)

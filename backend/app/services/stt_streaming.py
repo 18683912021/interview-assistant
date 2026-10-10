@@ -294,26 +294,29 @@ class StreamingASRSession:
             self._emit_error("E_ASR_CONNECTION", "语音识别连接中断，正在恢复；中断片段可能不完整")
             self._schedule_reconnect()
 
+    def _parse_response(self, raw: bytes | str) -> ASRResponse:
+        if not isinstance(raw, bytes):
+            raise ASRProtocolError("Expected binary ASR response")
+        return parse_server_frame(raw)
+
+    def _reject_response(self, response: ASRResponse) -> None:
+        self._provider_error_code = response.error_code
+        code, reason, message = provider_failure(response)
+        headers = getattr(getattr(self._ws, "response", None), "headers", {})
+        log_id = headers.get("X-Tt-Logid", "")
+        if not isinstance(log_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", log_id):
+            log_id = "unavailable"
+        logger.warning("ASR rejected: source=%s code=%s reason=%s resource=%s request_id=%s log_id=%s",
+                       self._source, response.error_code, reason, RESOURCE_ID, self._stream_id, log_id)
+        self._emit_error(code, message, recoverable=False, provider_code=response.error_code)
+        self._running = False
+
     async def _recv_loop(self) -> None:
         try:
             async for raw in self._ws:
-                if not isinstance(raw, bytes):
-                    raise ASRProtocolError("Expected binary ASR response")
-                response = parse_server_frame(raw)
+                response = self._parse_response(raw)
                 if response.error_code is not None:
-                    self._provider_error_code = response.error_code
-                    code, reason, message = provider_failure(response)
-                    headers = getattr(getattr(self._ws, "response", None), "headers", {})
-                    log_id = headers.get("X-Tt-Logid", "")
-                    # Only safe diagnostic metadata; no API key, audio, transcript,
-                    # or arbitrary provider payload goes into logs/client errors.
-                    if not isinstance(log_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", log_id):
-                        log_id = "unavailable"
-                    logger.warning("ASR rejected: source=%s code=%s reason=%s resource=%s request_id=%s log_id=%s",
-                                   self._source, response.error_code, reason, RESOURCE_ID, self._stream_id, log_id)
-                    self._emit_error(code, message,
-                                     recoverable=False, provider_code=response.error_code)
-                    self._running = False
+                    self._reject_response(response)
                     break
                 await self._consume(response)
                 if response.is_last:

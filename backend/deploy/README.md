@@ -58,7 +58,39 @@ bash /root/interview-deploy/release.sh deploy 20261010-workspace-v050
 
 发布后的新进程启动会运行事务性增量迁移。脚本等待 `/health` 返回 `status=ok` 且 `version=0.5.0`；这只是应用存活检查，不能替代业务联调。随后应验证公网 HTTPS、鉴权、用户历史归属、迁移记录、流式回答和 WebSocket 反代。检查只读统计即可，不输出简历、对话或账号明细。
 
-## 语音识别并发与错误排查
+## 腾讯普通版主服务与火山备用
+
+实时语音通过后端 `ASR_PROVIDER` 显式选择，未设置时保持旧版 `volcengine`。
+生产接入腾讯时，在服务器私有 `.env` 设置：
+
+```dotenv
+ASR_PROVIDER=tencent
+TENCENT_ASR_APP_ID=<数字 AppID>
+TENCENT_ASR_SECRET_ID=<SecretId>
+TENCENT_ASR_SECRET_KEY=<SecretKey>
+ASR_TRUST_ENV=false
+```
+
+腾讯固定使用 **普通通用引擎 `16k_zh`**，不调用大模型，不自动开通后付费。
+虽然请求地址包含 `/asr/v2/`，实际引擎仍是普通版；以 `engine_model_type` 为准。
+鉴权在服务器完成，密钥及签名 URL 不下发桌面、不写入日志或 Git。
+腾讯连接默认直连；若已有 `ASR_PROXY_URL`，它仍会生效，部署前应确认代理出口区域。
+
+保留原有 `VOLC_API_KEY` 和 `VOLC_ASR_RESOURCE_ID`。需切回时，只修改 `.env`
+中的 `ASR_PROVIDER=volcengine`，执行 `systemctl restart interview-assistant.service`。
+恢复腾讯则改回 `tencent` 并重启。切换前结束正在采集的面试，桌面恢复采集后使用新服务；
+无需重新打包。备用为运维切换，不在识别途中自动换供应商，避免重复气泡、时间戳错位及火山并发再次耗尽。
+
+两路来源分别建立连接；10 人双音源需 20 路。腾讯每包 200ms，握手或短暂断线后
+也按音频实时速率发送，避免积压音频瞬间发送触发限流。`slice_type=0/1` 更新同一气泡，
+`slice_type=2` 确认该句；流结束 `final=1` 仅确认连接收尾。重连使用新 `voice_id`。
+暂停/结束会发送尾部音频和 end，等待供应商确认；不会把未确认草稿伪装成最终结果。
+
+腾讯错误：4002 鉴权、4003 未开通、4004 时长用尽、4005 欠费、4006 并发满、6001 区域/代理不匹配。
+以上错误给出明确提示并释放连接，不循环重试消耗额度。
+参考：[普通版 WebSocket 契约](https://cloud.tencent.com/document/product/1093/48982)。
+
+## 火山备用的并发与错误排查
 
 每位用户选择「麦克风 + 系统音频」时会建立 **2 路**火山实时 ASR 连接；单音源占 1 路。供应商配额由使用同一项目/服务资源的调用共享，不能按桌面在线人数计算。容量至少按 `双音源面试人数 × 2 + 单音源面试人数` 估算，并为重连和其他调用预留余量；准确信息以豆包语音控制台的服务详情为准。
 
