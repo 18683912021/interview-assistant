@@ -9,6 +9,7 @@ import gzip
 import json
 import logging
 import os
+import re
 import ssl
 import struct
 import uuid
@@ -21,7 +22,19 @@ from app.services.ai_config import read_proxy_config
 
 logger = logging.getLogger("stt_streaming")
 WS_ENDPOINT = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
-RESOURCE_ID = "volc.seedasr.sauc.duration"
+
+
+def configured_resource_id() -> str:
+    resource = os.getenv("VOLC_ASR_RESOURCE_ID", "").strip() or "volc.seedasr.sauc.duration"
+    if resource not in {
+        "volc.seedasr.sauc.duration", "volc.seedasr.sauc.concurrent",
+        "volc.bigasr.sauc.duration", "volc.bigasr.sauc.concurrent",
+    }:
+        raise ValueError("VOLC_ASR_RESOURCE_ID must be a supported streaming ASR resource")
+    return resource
+
+
+RESOURCE_ID = configured_resource_id()
 PACKET_BYTES = 6400  # 200 ms, 16 kHz mono PCM signed 16-bit little-endian
 FINISH_CONNECT_TIMEOUT = 3.0
 
@@ -36,6 +49,44 @@ class ASRResponse:
     sequence: int | None = None
     is_last: bool = False
     error_code: int | None = None
+
+
+def provider_failure(response: ASRResponse) -> tuple[str, str, str]:
+    """Classify the provider's reason without exposing its raw payload.
+
+    45000292 covers multiple quota types. A concurrency refusal must not be
+    mistaken for exhausted audio duration (or solved by retrying indefinitely).
+    """
+    details = []
+    for field in ("error", "message"):
+        value = response.payload.get(field)
+        if isinstance(value, dict):
+            value = value.get("message")
+        if isinstance(value, str):
+            details.append(value[:2048].lower())
+    detail = " ".join(details)
+    suffix = f"（{response.error_code}）"
+    if "quota exceeded" in detail:
+        if "concurrency" in detail:
+            return ("E_ASR_CONCURRENCY", "concurrency",
+                    f"语音识别并发额度已满{suffix}，请稍后继续，或联系管理员增加并发额度")
+        if "audio_duration" in detail:
+            return ("E_ASR_QUOTA", "audio_duration",
+                    f"语音识别可用时长额度不足{suffix}，请联系管理员检查服务额度")
+        return ("E_ASR_QUOTA", "quota",
+                f"语音识别服务额度受限{suffix}，请联系管理员检查并发与用量额度")
+    if response.error_code == 45000292:
+        return ("E_ASR_QUOTA", "quota_unspecified",
+                f"语音识别服务额度受限{suffix}，请联系管理员检查并发与用量额度")
+    messages = {
+        45000001: ("invalid_request", "语音识别请求参数有误，请联系管理员检查服务配置"),
+        45000002: ("empty_audio", "未收到有效音频，请检查音源后继续"),
+        45000081: ("audio_timeout", "语音识别等待音频超时，请检查音源后继续"),
+        45000151: ("invalid_audio", "语音识别音频格式有误，请联系管理员检查采集配置"),
+        55000031: ("provider_busy", "语音识别服务暂时繁忙，请稍后继续"),
+    }
+    reason, message = messages.get(response.error_code, ("unknown", "语音识别服务暂不可用，请稍后重试"))
+    return "E_ASR_PROVIDER", reason, f"{message}{suffix}"
 
 
 def _header(msg_type: int, flags: int, ser: int, comp: int) -> bytes:
@@ -181,7 +232,11 @@ class StreamingASRSession:
             },
         }
         body = gzip.compress(json.dumps(config).encode())
-        await self._ws.send(_header(1, 0, 1, 1) + struct.pack(">I", len(body)) + body)
+        try:
+            await self._ws.send(_header(1, 0, 1, 1) + struct.pack(">I", len(body)) + body)
+        except BaseException:
+            await self._ws.close()
+            raise
         # The server auto-assigns sequence 1 to the full request even though that
         # frame omits an explicit sequence. The first audio frame must be 2.
         self._seq = 2
@@ -247,7 +302,16 @@ class StreamingASRSession:
                 response = parse_server_frame(raw)
                 if response.error_code is not None:
                     self._provider_error_code = response.error_code
-                    self._emit_error("E_ASR_PROVIDER", f"语音识别服务返回错误（{response.error_code}），请检查服务配置后重试",
+                    code, reason, message = provider_failure(response)
+                    headers = getattr(getattr(self._ws, "response", None), "headers", {})
+                    log_id = headers.get("X-Tt-Logid", "")
+                    # Only safe diagnostic metadata; no API key, audio, transcript,
+                    # or arbitrary provider payload goes into logs/client errors.
+                    if not isinstance(log_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", log_id):
+                        log_id = "unavailable"
+                    logger.warning("ASR rejected: source=%s code=%s reason=%s resource=%s request_id=%s log_id=%s",
+                                   self._source, response.error_code, reason, RESOURCE_ID, self._stream_id, log_id)
+                    self._emit_error(code, message,
                                      recoverable=False, provider_code=response.error_code)
                     self._running = False
                     break
@@ -262,11 +326,21 @@ class StreamingASRSession:
             self._emit_error("E_ASR_CONNECTION", "语音识别连接中断，正在恢复；中断片段可能不完整")
         finally:
             self._running = False
-            self._response_done.set()
             # A provider rejection is not a broken transport. Retrying the same
             # invalid request can consume quota and obscure the original error.
-            if self._provider_error_code is not None and self._send_task:
-                self._send_task.cancel()
+            if self._provider_error_code is not None:
+                if self._send_task:
+                    self._send_task.cancel()
+                    await asyncio.gather(self._send_task, return_exceptions=True)
+                # Release rejected streams even if a client never acknowledges
+                # the error. Stop sending/queuing audio until an explicit restart.
+                while not self._send_queue.empty():
+                    self._send_queue.get_nowait()
+                try:
+                    await self._ws.close()
+                except Exception:
+                    logger.warning("ASR rejected stream close failed: source=%s", self._source)
+            self._response_done.set()
             if not self._closing and self._provider_error_code is None:
                 self._schedule_reconnect()
 

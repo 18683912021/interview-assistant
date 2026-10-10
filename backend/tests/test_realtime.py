@@ -606,17 +606,26 @@ async def test_stop_reports_unconfirmed_tail_if_pending_connection_never_opens(m
 
 
 @pytest.mark.asyncio
-async def test_provider_rejection_does_not_reconnect_or_hide_error_with_final_timeout(monkeypatch):
+@pytest.mark.parametrize("provider_code, details, code, reason, message", [
+    (45000151, "invalid audio parameters", "E_ASR_PROVIDER", "invalid_audio", "音频格式"),
+    (45000292, "quota exceeded for types: concurrency", "E_ASR_CONCURRENCY", "concurrency", "并发额度已满"),
+    (45000292, "quota exceeded for types: audio_duration_lifetime", "E_ASR_QUOTA", "audio_duration", "时长额度不足"),
+])
+async def test_provider_rejection_does_not_reconnect_or_hide_error_with_final_timeout(
+    monkeypatch, caplog, provider_code, details, code, reason, message,
+):
     queue = asyncio.Queue()
     session = StreamingASRSession("test-only", "system", queue)
     incoming = asyncio.Queue()
+    closed = asyncio.Event()
     class Socket:
         async def send(self, packet):
             if packet[1] >> 4 == 2:
-                await incoming.put(frame({"message": "invalid audio parameters"}, flags=0, error=45000151))
+                await incoming.put(frame({"error": details, "message": "secret-key and private interview text"},
+                                         flags=0, error=provider_code))
         def __aiter__(self): return self
         async def __anext__(self): return await incoming.get()
-        async def close(self): pass
+        async def close(self): closed.set()
     calls = 0
     async def connect(*_, **__):
         nonlocal calls
@@ -626,14 +635,55 @@ async def test_provider_rejection_does_not_reconnect_or_hide_error_with_final_ti
     await session.connect()
     session.feed(bytes(6400))
     await asyncio.wait_for(session._response_done.wait(), 1)
-    assert session._provider_error_code == 45000151
+    assert session._provider_error_code == provider_code
     assert session._reconnect_task is None
+    assert closed.is_set() and session._send_task.done()
     session.feed(bytes(6400))
+    assert session._send_queue.empty()
     await asyncio.wait_for(session.finish(), 0.1)
     error = queue.get_nowait()
-    assert error["code"] == "E_ASR_PROVIDER" and "45000151" in error["message"]
-    assert error["recoverable"] is False and error["provider_code"] == 45000151
+    assert error["code"] == code and str(provider_code) in error["message"] and message in error["message"]
+    assert error["recoverable"] is False and error["provider_code"] == provider_code
+    assert f"reason={reason}" in caplog.text and "request_id=" in caplog.text
+    assert "secret-key" not in caplog.text and "private interview text" not in json.dumps(error)
     assert queue.empty() and not session._finished.is_set() and calls == 1
+
+
+@pytest.mark.parametrize("payload, expected", [
+    ({"message": "quota exceeded for types: concurrency"}, "E_ASR_CONCURRENCY"),
+    ({"error": {"message": "Quota exceeded for types: concurrency"}}, "E_ASR_CONCURRENCY"),
+    ({"error": "quota exceeded for types: audio_duration_lifetime"}, "E_ASR_QUOTA"),
+    ({"error": "quota exceeded for types: other"}, "E_ASR_QUOTA"),
+    ({"error": None, "message": ["not a valid message"]}, "E_ASR_QUOTA"),
+])
+def test_quota_reason_is_classified_from_payload_not_numeric_code_alone(payload, expected):
+    code, _, _ = stt_module.provider_failure(ASRResponse(payload, error_code=45000292))
+    assert code == expected
+
+
+@pytest.mark.parametrize("resource", ["", "volc.seedasr.sauc.duration", "volc.seedasr.sauc.concurrent",
+                                     "volc.bigasr.sauc.duration", "volc.bigasr.sauc.concurrent"])
+def test_asr_resource_can_match_purchased_service(monkeypatch, resource):
+    monkeypatch.setenv("VOLC_ASR_RESOURCE_ID", resource)
+    assert stt_module.configured_resource_id() == (resource or "volc.seedasr.sauc.duration")
+    monkeypatch.setenv("VOLC_ASR_RESOURCE_ID", "volc.seedasr.auc")
+    with pytest.raises(ValueError, match="VOLC_ASR_RESOURCE_ID"):
+        stt_module.configured_resource_id()
+
+
+@pytest.mark.asyncio
+async def test_initial_request_failure_releases_provider_connection(monkeypatch):
+    closed = asyncio.Event()
+    class Socket:
+        async def send(self, packet): raise OSError("socket closed")
+        async def close(self): closed.set()
+    async def connect(*_, **__): return Socket()
+    monkeypatch.setattr(stt_module.websockets, "connect", connect)
+    session = StreamingASRSession("test", "mic", asyncio.Queue())
+    with pytest.raises(OSError):
+        await session.connect()
+    assert closed.is_set() and session._recv_task is None and session._send_task is None
+    await session.finish()
 
 
 @pytest.mark.asyncio

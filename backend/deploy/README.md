@@ -58,6 +58,23 @@ bash /root/interview-deploy/release.sh deploy 20261010-workspace-v050
 
 发布后的新进程启动会运行事务性增量迁移。脚本等待 `/health` 返回 `status=ok` 且 `version=0.5.0`；这只是应用存活检查，不能替代业务联调。随后应验证公网 HTTPS、鉴权、用户历史归属、迁移记录、流式回答和 WebSocket 反代。检查只读统计即可，不输出简历、对话或账号明细。
 
+## 语音识别并发与错误排查
+
+每位用户选择「麦克风 + 系统音频」时会建立 **2 路**火山实时 ASR 连接；单音源占 1 路。供应商配额由使用同一项目/服务资源的调用共享，不能按桌面在线人数计算。容量至少按 `双音源面试人数 × 2 + 单音源面试人数` 估算，并为重连和其他调用预留余量；准确信息以豆包语音控制台的服务详情为准。
+
+`45000292` 不能只凭数字判断是余额不足：返回信息为 `quota exceeded for types: concurrency` 表示并发额度已满，`audio_duration_lifetime` 则表示时长额度受限。后端分别返回 `E_ASR_CONCURRENCY` / `E_ASR_QUOTA`，桌面端暂停采集并显示具体提示。此类错误不会自动循环重试；拒绝的连接会立即关闭。其他用户已经正常识别的连接继续工作。
+
+服务器日志记录错误码、分类、音源、资源 ID、请求 ID 和供应商 `X-Tt-Logid`，不记录密钥、原始错误正文或面试内容。可用这些信息排查配额，或向供应商提交工单。
+
+默认资源仍为 `volc.seedasr.sauc.duration`（2.0 小时版）；小时版也支持并发，容量取决于已开通的配额。需要扩容时，先在[豆包语音控制台](https://console.volcengine.com/speech/app)查看对应项目的服务详情，再调整该服务的并发额度。不要为解决并发问题改成按句返回的 `bigmodel_nostream`，那会丢失逐字流式显示。
+
+如果实际购买了其他服务类型，可以在生产 `.env` 设置 `VOLC_ASR_RESOURCE_ID` 后重启后端，支持以下值：
+
+- `volc.seedasr.sauc.duration` / `volc.seedasr.sauc.concurrent`：2.0 小时版 / 并发版。
+- `volc.bigasr.sauc.duration` / `volc.bigasr.sauc.concurrent`：1.0 小时版 / 并发版。
+
+仅修改这个变量不会增加供应商额度，也不会自动开通付费服务。资源必须与对应项目实际开通的服务匹配。参考：[官方流式 ASR 接口](https://docs.volcengine.com/docs/DoubaoVoice/LargemodelstreamingautomaticspeechrecognitionAPI?lang=zh)、[控制台服务与配额说明](https://docs.volcengine.com/docs/DoubaoVoice/QuickStartNewConsole?lang=zh)。
+
 ## 数据库迁移预演
 
 建议先对生产库做在线逻辑备份，将它恢复到**名称唯一、专供本次预演的临时数据库**，让候选代码只连接该副本执行迁移。临时连接必须通过明确的 `DATABASE_URL` 覆盖，并且保留 `LOCAL_DEV=false`，不要启动监听生产端口的第二套 API。迁移本身不调用邮件、AI 或 ASR；供应商连接检查应与迁移分开记录。
