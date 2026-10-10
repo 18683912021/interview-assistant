@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     takeDisplayCaptureFailure: () => ipcRenderer.invoke('audio:display-capture-failure'),
     openPrivacySettings: (kind: 'microphone' | 'screen') => ipcRenderer.invoke('audio:open-privacy-settings', kind),
     requestPermission: (kind: 'microphone' | 'screen') => ipcRenderer.invoke('audio:request-permission', kind),
+    repairScreenPermission: () => ipcRenderer.invoke('audio:repair-screen-permission'),
     listSystemOutputs: () => ipcRenderer.invoke('audio:list-system-outputs'),
     clearAnswer: () => ipcRenderer.invoke('audio:clear-answer'),
     sendControl: (msg: unknown) => ipcRenderer.invoke('audio:send-control', msg),

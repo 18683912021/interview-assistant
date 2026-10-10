@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   check: vi.fn(), request: vi.fn(), display: vi.fn(), sources: vi.fn(), dialog: vi.fn(),
   status: vi.fn(), ask: vi.fn(), getSwitch: vi.fn(), appendSwitch: vi.fn(), openExternal: vi.fn(),
+  execFile: vi.fn(), app: { isPackaged: true },
 }));
 vi.mock('electron', () => ({
-  app: { commandLine: { getSwitchValue: mocks.getSwitch, appendSwitch: mocks.appendSwitch } },
+  app: { get isPackaged() { return mocks.app.isPackaged; }, commandLine: { getSwitchValue: mocks.getSwitch, appendSwitch: mocks.appendSwitch } },
   session: { defaultSession: {
     setPermissionCheckHandler: mocks.check, setPermissionRequestHandler: mocks.request,
     setDisplayMediaRequestHandler: mocks.display,
@@ -14,8 +15,9 @@ vi.mock('electron', () => ({
   dialog: { showMessageBox: mocks.dialog }, systemPreferences: { getMediaAccessStatus: mocks.status, askForMediaAccess: mocks.ask },
   shell: { openExternal: mocks.openExternal },
 }));
+vi.mock('node:child_process', () => ({ execFile: mocks.execFile }));
 
-import { allowMediaPermissions, configureSystemAudioCapture, getAudioPermissions, openAudioPrivacySettings, requestAudioPermission, takeDisplayCaptureFailure } from '../audio/media-permissions.js';
+import { allowMediaPermissions, configureSystemAudioCapture, getAudioPermissions, openAudioPrivacySettings, requestAudioPermission, repairScreenPermission, takeDisplayCaptureFailure } from '../audio/media-permissions.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -23,9 +25,49 @@ beforeEach(() => {
   mocks.sources.mockResolvedValue([{ id: 'screen:1:0', name: 'Display' }]);
   mocks.getSwitch.mockReturnValue('ExistingFlag');
   mocks.status.mockReturnValue('granted');
+  mocks.app.isPackaged = true;
+  mocks.execFile.mockImplementation((_file, _args, _options, callback) => callback(null));
 });
 
 describe('desktop system audio permissions', () => {
+  it('only resets this installed app screen permission after explicit native confirmation', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    mocks.status.mockReturnValue('denied');
+    try {
+      await repairScreenPermission();
+      expect(mocks.execFile).toHaveBeenCalledExactlyOnceWith('/usr/bin/tccutil',
+        ['reset', 'ScreenCapture', 'com.coagent.audio-capture'], { timeout: 10000 }, expect.any(Function));
+      expect(mocks.ask).not.toHaveBeenCalled();
+      expect(mocks.sources).toHaveBeenCalledOnce();
+      expect(mocks.openExternal).toHaveBeenCalledExactlyOnceWith('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    } finally { vi.restoreAllMocks(); }
+  });
+
+  it('does not reset any permission on cancel, during development, or on Windows', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    mocks.dialog.mockResolvedValue({ response: 1 });
+    try {
+      await repairScreenPermission();
+      mocks.app.isPackaged = false;
+      await expect(repairScreenPermission()).rejects.toThrow('仅支持');
+      mocks.app.isPackaged = true;
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+      await expect(repairScreenPermission()).rejects.toThrow('仅支持');
+      expect(mocks.execFile).not.toHaveBeenCalled();
+      expect(mocks.sources).not.toHaveBeenCalled();
+      expect(mocks.openExternal).not.toHaveBeenCalled();
+    } finally { vi.restoreAllMocks(); }
+  });
+
+  it('reports a failed reset without claiming to have reapplied permission', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    mocks.execFile.mockImplementation((_file, _args, _options, callback) => callback(new Error('denied')));
+    try {
+      await expect(repairScreenPermission()).rejects.toThrow('旧授权清理失败');
+      expect(mocks.sources).not.toHaveBeenCalled();
+      expect(mocks.openExternal).not.toHaveBeenCalled();
+    } finally { vi.restoreAllMocks(); }
+  });
   it('requests an undecided microphone permission and does not open settings after approval', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
     mocks.status.mockReturnValue('not-determined');

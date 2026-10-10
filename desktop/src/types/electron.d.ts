@@ -8,9 +8,11 @@ interface ElectronAPI {
     takeDisplayCaptureFailure(): Promise<{code: string; message: string} | null>;
     openPrivacySettings(kind: 'microphone' | 'screen'): Promise<void>;
     requestPermission(kind: 'microphone' | 'screen'): ReturnType<ElectronAPI['audio']['getPermissions']>;
+    repairScreenPermission(): ReturnType<ElectronAPI['audio']['getPermissions']>;
     listSystemOutputs(): Promise<{id: string; name: string; isDefault: boolean}[]>;
     getPermissions(): Promise<{
       platform: string; osRelease: string; electronVersion: string;
+      canRepairScreenPermission: boolean;
       microphone: 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown' | 'unsupported';
       screen: 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown' | 'unsupported';
       systemAudioMode: string;

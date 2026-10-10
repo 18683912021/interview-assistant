@@ -1,5 +1,6 @@
 import { app, desktopCapturer, dialog, session, shell, systemPreferences, type WebFrameMain } from 'electron';
 import { release } from 'node:os';
+import { execFile } from 'node:child_process';
 
 type DisplayCaptureFailure = { code: string; message: string };
 // Electron turns every rejected display callback into "Invalid capture
@@ -43,6 +44,26 @@ export async function requestAudioPermission(kind: unknown) {
   return getAudioPermissions();
 }
 
+/** User-confirmed recovery for stale ad-hoc signatures; never grants access. */
+export async function repairScreenPermission() {
+  if (process.platform !== 'darwin' || !app.isPackaged)
+    throw new Error('仅支持已安装的 Mac 客户端');
+  const choice = await dialog.showMessageBox({
+    type: 'question', title: '重新申请录屏权限',
+    message: '清除本应用的旧授权，然后重新申请？',
+    detail: '仅清除「AI面试助手」的屏幕与系统音频授权记录，不影响麦克风、其他应用或面试数据。随后请在系统弹框或设置中允许，再点击「已授权，重启应用」。',
+    buttons: ['重新申请', '取消'], defaultId: 1, cancelId: 1, noLink: true,
+  });
+  if (choice.response !== 0) return getAudioPermissions();
+  await new Promise<void>((resolve, reject) => {
+    // This fixed bundle identifier matches electron-builder.yml. Never accept
+    // a service, bundle id, executable or shell string from the renderer.
+    execFile('/usr/bin/tccutil', ['reset', 'ScreenCapture', 'com.coagent.audio-capture'],
+      { timeout: 10000 }, error => error ? reject(new Error('旧授权清理失败，请在系统设置中移除本应用后重新添加。')) : resolve());
+  });
+  return requestAudioPermission('screen');
+}
+
 function sourceFailure(): DisplayCaptureFailure {
   const screen = process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : '';
   if (screen === 'denied' || screen === 'restricted' || screen === 'not-determined')
@@ -65,6 +86,7 @@ export function getAudioPermissions() {
     platform: process.platform,
     osRelease: release(),
     electronVersion: process.versions.electron || '',
+    canRepairScreenPermission: process.platform === 'darwin' && app.isPackaged,
     microphone: ['darwin', 'win32'].includes(process.platform)
       ? systemPreferences.getMediaAccessStatus('microphone') : 'unsupported',
     screen: process.platform === 'darwin'

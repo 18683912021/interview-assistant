@@ -58,6 +58,17 @@ export function AudioPermissions({onlyBlocked = false, systemRequired = true}: {
             catch { setError('重启未完成。请先暂停面试或停止音频测试，再重试；也可按 ⌘Q 退出后重新打开。'); }
             finally { setRestarting(false); }
           }}>{restarting ? '正在重启…' : '已授权，重启应用'}</button>
+          {systemRequired && permissions.screen === 'denied' && permissions.canRepairScreenPermission && (
+            <div>
+              <p className="notice">重启后仍未允许，可能是更新后的签名与旧授权不匹配。可清除本应用的旧录屏授权，再由你重新允许。</p>
+              <button className="btn" type="button" disabled={restarting || requesting !== null} onClick={async () => {
+                setError(''); setRequesting('screen');
+                try { if (api) setPermissions(await api.repairScreenPermission()); }
+                catch { setError('重新申请未完成，请在系统权限设置中移除「AI面试助手」后，重新添加「应用程序」里的当前版本。'); }
+                finally { setRequesting(null); }
+              }}>重新申请录屏权限</button>
+            </div>
+          )}
         </div>
       )}
       {error && <p className="notice" role="status">{error}</p>}

@@ -5,7 +5,7 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { getOverlayWindow, createOverlayWindow, destroyOverlayWindow } from './windows/overlay-window.js';
 import { shell } from 'electron';
 import { audioCapture } from './audio/audio-capture.js';
-import { getAudioPermissions, openAudioPrivacySettings, requestAudioPermission, takeDisplayCaptureFailure } from './audio/media-permissions.js';
+import { getAudioPermissions, openAudioPrivacySettings, requestAudioPermission, repairScreenPermission, takeDisplayCaptureFailure } from './audio/media-permissions.js';
 import { listSystemOutputs } from './audio/windows-loopback.js';
 import { DesktopStorage } from './storage.js';
 import fs from 'fs';
@@ -80,6 +80,10 @@ export function registerIpcHandlers(): void {
 
   // ── 窗口管理 ──
   ipcMain.handle('window:restart-app', () => restartApplication());
+  ipcMain.handle('audio:repair-screen-permission', () => {
+    if (audioCapture.getSnapshot().captureState === 'capturing') throw new Error('请先暂停面试，再重新申请权限。');
+    return repairScreenPermission();
+  });
   ipcMain.handle('window:open-overlay', () => {
     createOverlayWindow();
   });
