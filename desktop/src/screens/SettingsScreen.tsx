@@ -353,11 +353,16 @@ export default function SettingsScreen() {
                       <span>
                         昵称<small>显示在你的个人空间中</small>
                       </span>
-                      <input
-                        value={nickname}
-                        maxLength={100}
-                        onChange={e => setDraft(old => ({...old, nickname: e.target.value}))}
-                      />
+                      <span className="setting-input-field">
+                        <input
+                          value={nickname}
+                          maxLength={100}
+                          aria-invalid={nicknameChanged && !nickname.trim()}
+                          aria-describedby={nicknameChanged && !nickname.trim() ? 'nickname-error' : undefined}
+                          onChange={e => setDraft(old => ({...old, nickname: e.target.value}))}
+                        />
+                        {nicknameChanged && !nickname.trim() && <small id="nickname-error" className="field-error" role="alert">昵称不能为空</small>}
+                      </span>
                     </label>
                     <div className="setting-row">
                       <div>登录邮箱</div>
@@ -656,11 +661,6 @@ export default function SettingsScreen() {
                   </div>
                 </footer>
               )}
-              {nicknameChanged && !nickname.trim() && (
-                <p className="field-error" role="status">
-                  昵称不能为空。
-                </p>
-              )}
             </>
           )}
         </div>
@@ -672,6 +672,9 @@ export default function SettingsScreen() {
   );
 }
 function PasswordDialog({email, onClose}: {email: string; onClose: () => void}) {
+  const codeInput = useRef<HTMLInputElement>(null);
+  const passwordInput = useRef<HTMLInputElement>(null);
+  const [fieldErrors, setFieldErrors] = useState<{code?: string; password?: string}>({});
   const [code, setCode] = useState(''),
     [password, setPassword] = useState(''),
     [error, setError] = useState(''),
@@ -693,6 +696,7 @@ function PasswordDialog({email, onClose}: {email: string; onClose: () => void}) 
       if (!value.ok) throw new Error(value.message);
       setRemaining(value.cooldown || 60);
       setSent(true);
+      requestAnimationFrame(() => codeInput.current?.focus());
     } catch (e) {
       setError(messageOf(e));
     } finally {
@@ -702,6 +706,12 @@ function PasswordDialog({email, onClose}: {email: string; onClose: () => void}) 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy || sending) return;
+    const invalid = {code: /^\d{6}$/.test(code) ? undefined : '请输入 6 位邮箱验证码',
+      password: password.length >= 8 ? undefined : '密码至少需要 8 个字符'};
+    setFieldErrors(invalid);
+    if (invalid.code || invalid.password) {
+      (invalid.code ? codeInput : passwordInput).current?.focus(); return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -709,7 +719,10 @@ function PasswordDialog({email, onClose}: {email: string; onClose: () => void}) 
       if (!result.ok) throw new Error('密码更新失败');
       window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
     } catch (e) {
-      setError(messageOf(e));
+      const message = messageOf(e);
+      if (/^验证码/.test(message)) {
+        setFieldErrors({code: message}); requestAnimationFrame(() => codeInput.current?.focus());
+      } else setError(message);
     } finally {
       setBusy(false);
     }
@@ -721,19 +734,23 @@ function PasswordDialog({email, onClose}: {email: string; onClose: () => void}) 
       onClose={() => {
         if (!busy) onClose();
       }}>
-      <form onSubmit={submit}>
+      <form onSubmit={submit} noValidate>
         <p className="notice">验证 {email} 后设置新密码，完成后需要重新登录。</p>
         <label className="field">
           邮箱验证码
           <div className="input-with-icon">
             <input
+              ref={codeInput}
+              aria-invalid={!!fieldErrors.code}
+              aria-describedby={fieldErrors.code ? 'reset-code-error' : undefined}
+              autoComplete="one-time-code"
               required
               disabled={busy || sending}
               inputMode="numeric"
               maxLength={6}
               pattern="[0-9]{6}"
               value={code}
-              onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+              onChange={e => {setCode(e.target.value.replace(/\D/g, '')); setFieldErrors(old => ({...old, code: undefined}));}}
             />
             <button
               type="button"
@@ -742,11 +759,15 @@ function PasswordDialog({email, onClose}: {email: string; onClose: () => void}) 
               {remaining ? `${remaining} 秒后重发` : sending ? '发送中…' : '获取验证码'}
             </button>
           </div>
+          {fieldErrors.code && <small className="field-error" id="reset-code-error" role="alert">{fieldErrors.code}</small>}
+          {sent && <small className="field-success" role="status">验证码已发送，请查看邮箱。</small>}
         </label>
-        {sent && <p className="muted small">验证码已发送，请查看邮箱。</p>}
         <label className="field">
           新密码
           <input
+            ref={passwordInput}
+            aria-invalid={!!fieldErrors.password}
+            aria-describedby={fieldErrors.password ? 'reset-password-error' : 'reset-password-hint'}
             required
             minLength={8}
             maxLength={128}
@@ -754,8 +775,10 @@ function PasswordDialog({email, onClose}: {email: string; onClose: () => void}) 
             type="password"
             autoComplete="new-password"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={e => {setPassword(e.target.value); setFieldErrors(old => ({...old, password: undefined}));}}
           />
+          {fieldErrors.password ? <small className="field-error" id="reset-password-error" role="alert">{fieldErrors.password}</small>
+            : <small id="reset-password-hint">至少 8 个字符，建议组合字母、数字与符号。</small>}
         </label>
         {error && <ErrorState message={error} />}
         <div className="form-actions">

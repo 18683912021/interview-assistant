@@ -1,3 +1,5 @@
+import {ScrollToTop} from '../components/ScrollToTop';
+import {SessionSplit} from '../components/SessionSplit';
 import {IconButton} from '../components/IconButton';
 import {Select, SelectOption} from '../components/Select';
 import AnswerBody from '../components/AnswerBody';
@@ -205,7 +207,7 @@ export default function InterviewDetailScreen() {
           回答与复盘
         </button>
       </div>
-      <div className="session-grid" data-pane={pane}>
+      <SessionSplit pane={pane}>
         <div className="chat-column">
           <header className="panel-header">
             <strong>完整对话</strong>
@@ -391,6 +393,7 @@ export default function InterviewDetailScreen() {
             </div>
           )}
           <footer className="panel-footer">
+            <ScrollToTop target={answerScroll} contentKey={positionKey} />
             <span>{tab === 'answer' ? `${session.answers.length} 份已保存回答` : '本场复盘'}</span>
             <button
               className="btn btn-quiet"
@@ -401,7 +404,7 @@ export default function InterviewDetailScreen() {
             </button>
           </footer>
         </div>
-      </div>
+      </SessionSplit>
       {context && (
         <Modal title="本场资料快照" onClose={() => setContext(false)}>
           <div className="text-document">

@@ -47,6 +47,8 @@ export default function MaterialsScreen() {
     [originalJob, setOriginalJob] = useState<JobInput | null>(null),
     [query, setQuery] = useState(''),
     [deletingId, setDeletingId] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const editorForm = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false),
     [formError, setFormError] = useState(''),
     [uploading, setUploading] = useState(false),
@@ -74,6 +76,7 @@ export default function MaterialsScreen() {
     setResumeText(resume?.text || '');
     setFilename(resume?.filename || '个人简历');
     setFormError('');
+    setFieldErrors({});
     setModal('resume');
   };
   const editJob = (value?: Job) => {
@@ -90,17 +93,21 @@ export default function MaterialsScreen() {
     );
     setEditingId(value?.id || null);
     setFormError('');
+    setFieldErrors({});
     setModal('job');
   };
   async function save(e: FormEvent) {
     e.preventDefault();
     if (saving || !modal) return;
-    if (modal === 'resume' && (!resumeText.trim() || !filename.trim())) {
-      setFormError('请填写资料名称和简历正文');
-      return;
-    }
-    if (modal === 'job' && !job.title.trim()) {
-      setFormError('请填写岗位名称');
+    const invalid: Record<string, string> = {};
+    if (modal === 'resume') {
+      if (!filename.trim()) invalid.filename = '请填写资料名称';
+      if (!resumeText.trim()) invalid.resumeText = '请填写简历正文';
+    } else if (!job.title.trim()) invalid.title = '请填写岗位名称';
+    setFieldErrors(invalid);
+    const first = Object.keys(invalid)[0];
+    if (first) {
+      (editorForm.current?.elements.namedItem(first) as HTMLElement | null)?.focus();
       return;
     }
     if (unchanged) return;
@@ -193,7 +200,7 @@ export default function MaterialsScreen() {
     else setModal(null);
   };
   return (
-    <section className={`page${loading ? ' page-loading' : ''}`}>
+    <section className="page collection-page">
       <div className="page-heading">
         <div>
           <h1>我的资料</h1>
@@ -235,6 +242,7 @@ export default function MaterialsScreen() {
         <span className="muted small">同名资料按版本收起，面试记录仍保留原版本</span>
       </div>
       {error && <ErrorState message={error} retry={() => void load()} />}{' '}
+      <div className="collection-scroll">
       {loading ? (
         <Loading />
       ) : (
@@ -356,12 +364,13 @@ export default function MaterialsScreen() {
           </div>
         </div>
       )}
+      </div>
       {modal && (
         <Modal
           title={modal === 'resume' ? '保存简历版本' : editingId ? '编辑岗位' : '添加岗位'}
           busy={saving}
           onClose={closeEditor}>
-          <form onSubmit={save}>
+          <form ref={editorForm} onSubmit={save} noValidate>
             <fieldset disabled={saving} className="form-fields">
               {modal === 'resume' ? (
                 <>
@@ -370,19 +379,27 @@ export default function MaterialsScreen() {
                     <input
                       required
                       maxLength={200}
+                      name="filename"
+                      aria-invalid={!!fieldErrors.filename}
+                      aria-describedby={fieldErrors.filename ? "material-filename-error" : undefined}
                       value={filename}
-                      onChange={e => setFilename(e.target.value)}
+                      onChange={e => {setFilename(e.target.value); setFieldErrors(old => ({...old, filename: ''}));}}
                     />
+                    {fieldErrors.filename && <small className="field-error" id="material-filename-error" role="alert">{fieldErrors.filename}</small>}
                   </label>
                   <label className="field">
                     简历正文
                     <textarea
                       required
                       rows={12}
+                      name="resumeText"
+                      aria-invalid={!!fieldErrors.resumeText}
+                      aria-describedby={fieldErrors.resumeText ? "material-resumeText-error" : undefined}
                       value={resumeText}
-                      onChange={e => setResumeText(e.target.value)}
+                      onChange={e => {setResumeText(e.target.value); setFieldErrors(old => ({...old, resumeText: ''}));}}
                       placeholder="粘贴教育背景、工作与项目经历…"
                     />
+                    {fieldErrors.resumeText && <small className="field-error" id="material-resumeText-error" role="alert">{fieldErrors.resumeText}</small>}
                     <small>保存会创建新版本，不覆盖旧面试关联的内容。</small>
                   </label>
                 </>
@@ -393,9 +410,13 @@ export default function MaterialsScreen() {
                     <input
                       required
                       maxLength={200}
+                      name="title"
+                      aria-invalid={!!fieldErrors.title}
+                      aria-describedby={fieldErrors.title ? "material-title-error" : undefined}
                       value={job.title}
-                      onChange={e => setJob({...job, title: e.target.value})}
+                      onChange={e => {setJob({...job, title: e.target.value}); setFieldErrors(old => ({...old, title: ''}));}}
                     />
+                    {fieldErrors.title && <small className="field-error" id="material-title-error" role="alert">{fieldErrors.title}</small>}
                   </label>
                   <label className="field">
                     公司

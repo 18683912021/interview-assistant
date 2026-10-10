@@ -1,3 +1,5 @@
+import {ScrollToTop} from '../components/ScrollToTop';
+import {SessionSplit} from '../components/SessionSplit';
 import {IconButton} from '../components/IconButton';
 import {AnswerStylePicker} from '../components/AnswerStylePicker';
 import {Select, SelectOption} from '../components/Select';
@@ -376,9 +378,12 @@ export default function InterviewScreen() {
     }
     request([id]);
   };
+  const [roleError, setRoleError] = useState('');
+  const roleInput = useRef<HTMLInputElement>(null);
   const begin = async () => {
     if (!role.trim()) {
-      setError('请填写本次面试岗位。');
+      setRoleError('请填写本次面试岗位');
+      roleInput.current?.focus();
       return;
     }
     if (!window.electronAPI) {
@@ -599,6 +604,7 @@ export default function InterviewScreen() {
                   const job = jobs.find(value => value.id === selectedValue);
                   if (job) {
                     setRole(job.title);
+                    setRoleError('');
                     setCompany(job.company);
                     setJd(job.description);
                   }
@@ -616,11 +622,15 @@ export default function InterviewScreen() {
               <label className="field">
                 面试岗位
                 <input
+                  ref={roleInput}
+                  aria-invalid={!!roleError}
+                  aria-describedby={roleError ? 'interview-role-error' : undefined}
                   value={role}
-                  onChange={e => setRole(e.target.value)}
+                  onChange={e => {setRole(e.target.value); setRoleError('');}}
                   placeholder="例如：Java 后端工程师"
                   maxLength={100}
                 />
+                {roleError && <small id="interview-role-error" className="field-error" role="alert">{roleError}</small>}
               </label>
               <label className="field">
                 <span>
@@ -745,6 +755,7 @@ export default function InterviewScreen() {
               <Play />
               {busy ? startStage || '正在连接…' : '开始面试'}
             </button>
+            {!role.trim() && <small className="setup-requirement">填写左侧面试岗位后即可开始。</small>}
             <button className="btn btn-quiet" onClick={() => navigate('/settings?tab=audio')}>
               检查音频设备
             </button>
@@ -888,7 +899,7 @@ export default function InterviewScreen() {
           回答
         </button>
       </div>
-      <div className="session-grid" data-pane={pane}>
+      <SessionSplit pane={pane}>
         <div className="chat-column">
           <header className="panel-header">
             <MessageSquare size={15} />
@@ -1118,6 +1129,7 @@ export default function InterviewScreen() {
             )}
           </div>
           <footer className="panel-footer">
+            <ScrollToTop target={answerScroll} contentKey={answerId} />
             <span>
               {answer
                 ? {
@@ -1129,6 +1141,7 @@ export default function InterviewScreen() {
                     truncated: '回答未完整',
                   }[answer.status]
                 : '等待选择问题'}
+              {answer?.text ? ` · ${answer.text.length.toLocaleString()} 字符` : ''}
               {answer?.first_token_at
                 ? ` · 首字 ${((answer.first_token_at - answer.timestamp) / 1000).toFixed(1)}s`
                 : ''}
@@ -1149,7 +1162,7 @@ export default function InterviewScreen() {
               ))}
           </footer>
         </div>
-      </div>
+      </SessionSplit>
       <footer className="session-status">
         <div className="audio-status">
           <Mic size={13} />

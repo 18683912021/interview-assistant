@@ -1,4 +1,4 @@
-import {useEffect, useState, type FormEvent} from 'react';
+import {useEffect, useRef, useState, type FormEvent} from 'react';
 import {
   AudioLines,
   ArrowRight,
@@ -17,8 +17,19 @@ import {messageOf} from '../api/client';
 import {saveToken} from '../utils/token';
 import {ErrorState} from '../components/WorkspaceUI';
 
+type AuthField = 'email' | 'code' | 'password';
+type FieldErrors = Partial<Record<AuthField, string>>;
+const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
 type Mode = 'login' | 'register' | 'reset';
 export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<void>}) {
+  const emailInput = useRef<HTMLInputElement>(null);
+  const codeInput = useRef<HTMLInputElement>(null);
+  const passwordInput = useRef<HTMLInputElement>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [capsLock, setCapsLock] = useState(false);
+  const focusField = (field: AuthField) => ({email: emailInput, code: codeInput, password: passwordInput})[field].current?.focus();
+  const clearField = (field: AuthField) => {setFieldErrors(old => ({...old, [field]: undefined})); setError('');};
   const [mode, setMode] = useState<Mode>('login'),
     [method, setMethod] = useState<'code' | 'password'>('code');
   const [email, setEmail] = useState(''),
@@ -43,16 +54,29 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
     needPassword = mode !== 'login' || method === 'password';
   function changeMode(next: Mode) {
     setMode(next);
+    setFieldErrors({});
+    setCapsLock(false);
     setError('');
     setNotice('');
     setCode('');
     setPassword('');
     setShowPassword(false);
   }
+  function showFailure(value: unknown) {
+    const message = messageOf(value);
+    const field: AuthField | undefined = /^验证码(错误|无效|已过期)/.test(message) ? 'code'
+      : message === '密码错误' ? 'password'
+      : /^该邮箱(未注册|已注册)/.test(message) ? 'email' : undefined;
+    if (field) {
+      setFieldErrors(old => ({...old, [field]: message}));
+      window.requestAnimationFrame(() => focusField(field));
+    } else setError(message);
+  }
   async function requestCode() {
     if (busy || sending || remaining > 0) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setError('请先填写有效的邮箱地址');
+    if (!validEmail(normalizedEmail)) {
+      setFieldErrors(old => ({...old, email: '请输入有效的邮箱地址，例如 name@example.com'}));
+      focusField('email');
       return;
     }
     setSending(true);
@@ -65,9 +89,10 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
         ...old,
         [cooldownKey]: Date.now() + Math.max(result.cooldown || 60, 1) * 1000,
       }));
-      setNotice(result.message || '验证码已发送，请查看邮箱');
+      setNotice(result.message || `验证码已发送至 ${normalizedEmail}，请查看收件箱或垃圾邮件。`);
+      window.requestAnimationFrame(() => focusField('code'));
     } catch (e) {
-      setError(messageOf(e));
+      showFailure(e);
     } finally {
       setSending(false);
     }
@@ -77,14 +102,14 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
     if (busy || sending) return;
     setError('');
     setNotice('');
-    if (needCode && !/^\d{6}$/.test(code.trim())) {
-      setError('请输入 6 位邮箱验证码');
-      return;
-    }
-    if (needPassword && password.length < (mode === 'login' ? 1 : 8)) {
-      setError(mode === 'login' ? '请输入密码' : '密码至少需要 8 个字符');
-      return;
-    }
+    const invalid: FieldErrors = {};
+    if (!validEmail(normalizedEmail)) invalid.email = '请输入有效的邮箱地址，例如 name@example.com';
+    if (needCode && !/^\d{6}$/.test(code.trim())) invalid.code = '请输入 6 位邮箱验证码';
+    if (needPassword && password.length < (mode === 'login' ? 1 : 8))
+      invalid.password = mode === 'login' ? '请输入密码' : '密码至少需要 8 个字符';
+    setFieldErrors(invalid);
+    const first = (['email', 'code', 'password'] as const).find(field => invalid[field]);
+    if (first) {focusField(first); return;}
     setBusy(true);
     try {
       if (mode === 'reset') {
@@ -107,7 +132,7 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
         await onLogin();
       }
     } catch (e) {
-      setError(messageOf(e));
+      showFailure(e);
     } finally {
       setBusy(false);
     }
@@ -161,7 +186,7 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
         </div>
       </aside>
       <main className="auth-main">
-        <form className="auth-form" onSubmit={submit}>
+        <form className="auth-form" onSubmit={submit} noValidate aria-busy={busy}>
           <h1>
             {mode === 'register' ? '创建你的账号' : mode === 'reset' ? '重新设置密码' : '欢迎回来'}
           </h1>
@@ -182,6 +207,8 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
                 onClick={() => {
                   setMethod('code');
                   setError('');
+                  setFieldErrors({});
+                  setShowPassword(false);
                 }}>
                 验证码登录
               </button>
@@ -193,38 +220,60 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
                 onClick={() => {
                   setMethod('password');
                   setError('');
+                  setFieldErrors({});
+                  setShowPassword(false);
                 }}>
                 密码登录
               </button>
             </div>
           )}
-          <label className="field">
-            邮箱
+          <div className="field">
+            <label htmlFor="auth-email">邮箱</label>
             <div className="input-with-icon">
               <Mail />
               <input
+                id="auth-email"
+                ref={emailInput}
+                name="email"
+                aria-invalid={!!fieldErrors.email}
+                aria-describedby={fieldErrors.email ? 'auth-email-error' : undefined}
+                spellCheck={false}
+                autoCapitalize="none"
                 required
                 type="email"
                 autoComplete="email"
                 placeholder="name@example.com"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={e => {
+                  setEmail(e.target.value); clearField('email'); setCode(''); setNotice('');
+                  setFieldErrors(old => ({...old, code: undefined}));
+                }}
+                onBlur={() => {
+                  if (email.trim() && !validEmail(normalizedEmail))
+                    setFieldErrors(old => ({...old, email: '请输入有效的邮箱地址，例如 name@example.com'}));
+                }}
                 disabled={busy || sending}
               />
             </div>
-          </label>
+            <small className="field-error field-feedback" id="auth-email-error" role={fieldErrors.email ? 'alert' : undefined}>{fieldErrors.email || '\u00a0'}</small>
+          </div>
           {needCode && (
-            <label className="field">
-              验证码
+            <div className="field">
+              <label htmlFor="auth-code">验证码</label>
               <div className="input-with-icon">
                 <KeyRound />
                 <input
+                  id="auth-code"
+                  ref={codeInput}
+                  name="code"
+                  aria-invalid={!!fieldErrors.code}
+                  aria-describedby={fieldErrors.code ? 'auth-code-error' : notice && needCode ? 'auth-code-notice' : undefined}
                   autoComplete="one-time-code"
                   inputMode="numeric"
                   maxLength={6}
                   placeholder="6 位验证码"
                   value={code}
-                  onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+                  onChange={e => {setCode(e.target.value.replace(/\D/g, '')); clearField('code');}}
                   disabled={busy || sending}
                 />
                 <button
@@ -234,20 +283,30 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
                   {sending ? '正在发送' : remaining ? `${remaining} 秒后重发` : '获取验证码'}
                 </button>
               </div>
-            </label>
+              {fieldErrors.code && <small className="field-error" id="auth-code-error" role="alert">{fieldErrors.code}</small>}
+              {notice && <small className="field-success" id="auth-code-notice" role="status">{notice}</small>}
+            </div>
           )}
           {needPassword && (
-            <label className="field">
-              {mode === 'reset' ? '新密码' : '密码'}
+            <div className="field">
+              <label htmlFor="auth-password">{mode === 'reset' ? '新密码' : '密码'}</label>
               <div className="input-with-icon">
                 <LockKeyhole />
                 <input
+                  id="auth-password"
+                  ref={passwordInput}
+                  name="password"
+                  aria-invalid={!!fieldErrors.password}
+                  aria-describedby={fieldErrors.password ? 'auth-password-error' : mode !== 'login' ? 'auth-password-hint' : undefined}
+                  onKeyDown={event => setCapsLock(event.getModifierState('CapsLock'))}
+                  onKeyUp={event => setCapsLock(event.getModifierState('CapsLock'))}
+                  onBlur={() => setCapsLock(false)}
                   type={showPassword ? 'text' : 'password'}
                   maxLength={128}
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   placeholder={mode === 'login' ? '输入密码' : '至少 8 个字符'}
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={e => {setPassword(e.target.value); clearField('password');}}
                   disabled={busy || sending}
                 />
                 <button
@@ -257,7 +316,10 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-            </label>
+              {fieldErrors.password ? <small className="field-error" id="auth-password-error" role="alert">{fieldErrors.password}</small>
+                : mode !== 'login' && <small id="auth-password-hint">至少 8 个字符，建议组合字母、数字与符号。</small>}
+              {capsLock && <small className="field-warning" role="status">大写锁定已开启</small>}
+            </div>
           )}
           <div className="auth-extra">
             <span>{mode === 'register' ? '验证码用于验证邮箱归属' : '使用邮箱安全登录'}</span>
@@ -272,14 +334,14 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
             )}
           </div>
           {error && <ErrorState message={error} />}{' '}
-          {notice && (
+          {notice && !needCode && (
             <p className="notice" role="status">
               {notice}
             </p>
           )}
           <button className="btn btn-primary auth-submit" disabled={busy || sending}>
             {busy
-              ? '正在处理…'
+              ? mode === 'register' ? '正在创建账号…' : mode === 'reset' ? '正在重设密码…' : '正在登录…'
               : mode === 'register'
                 ? '创建账号'
                 : mode === 'reset'

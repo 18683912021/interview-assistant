@@ -1,6 +1,6 @@
 import {Select, SelectOption} from '../components/Select';
 import AnswerBody from '../components/AnswerBody';
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {
   ArrowLeft,
@@ -87,6 +87,8 @@ const initialDrafts = (): Record<ToolKind, ToolDraft> => ({
 });
 const initialKind = () => null as ToolKind | null;
 export default function ToolsScreen() {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [inputError, setInputError] = useState('');
   const [params, setParams] = useSearchParams();
   const [kind, setKind] = useWorkspaceDraft<ToolKind | null>('tools:kind', initialKind);
   const [drafts, setDrafts] = useWorkspaceDraft('tools:drafts', initialDrafts);
@@ -154,9 +156,11 @@ export default function ToolsScreen() {
       return;
     }
     if (!input.trim() && !selectedResume && !selectedJob) {
-      update({error: '请填写内容，或选择一份简历和岗位'});
+      setInputError('请填写内容，或在上方选择简历或岗位');
+      inputRef.current?.focus();
       return;
     }
+    setInputError('');
     const requestKind = kind;
     update({busy: true, error: ''}, requestKind);
     setEditingResult(false);
@@ -255,6 +259,7 @@ export default function ToolsScreen() {
                   key={key}
                   onClick={() => {
                     setKind(key);
+                    setInputError('');
                     setEditingResult(false);
                   }}>
                   <span className="tool-card-icon">
@@ -290,7 +295,7 @@ export default function ToolsScreen() {
                 目标岗位
                 <Select
                   value={jobId}
-                  onValueChange={selectedValue => update({jobId: selectedValue, error: ''})}
+                  onValueChange={selectedValue => {update({jobId: selectedValue, error: ''}); setInputError('');}}
                   disabled={loadingSources}>
                   <SelectOption value="">不关联岗位</SelectOption>
                   {jobId && !selectedJob && (
@@ -310,7 +315,7 @@ export default function ToolsScreen() {
                 参考简历
                 <Select
                   value={resumeId}
-                  onValueChange={selectedValue => update({resumeId: selectedValue, error: ''})}
+                  onValueChange={selectedValue => {update({resumeId: selectedValue, error: ''}); setInputError('');}}
                   disabled={loadingSources}>
                   <SelectOption value="">不关联简历</SelectOption>
                   {resumeId && !selectedResume && (
@@ -328,11 +333,15 @@ export default function ToolsScreen() {
               <label className="field">
                 {kind === 'answer' ? '原始回答' : '补充内容'}
                 <textarea
+                  ref={inputRef}
+                  aria-invalid={!!inputError}
+                  aria-describedby={inputError ? 'tool-input-error' : undefined}
                   rows={9}
                   value={input}
-                  onChange={e => update({input: e.target.value})}
+                  onChange={e => {update({input: e.target.value}); setInputError('');}}
                   placeholder={tool?.placeholder}
                 />
+                {inputError && <small id="tool-input-error" className="field-error" role="alert">{inputError}</small>}
               </label>
             </fieldset>
             {error && <ErrorState message={error} />}

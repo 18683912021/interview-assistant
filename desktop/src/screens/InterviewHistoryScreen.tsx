@@ -1,6 +1,7 @@
+import {useWorkspaceDraft} from '../utils/WorkspaceDraftContext';
 import {IconButton} from '../components/IconButton';
 import {Select, SelectOption} from '../components/Select';
-import {useCallback, useContext, useEffect, useState} from 'react';
+import {useCallback, useContext, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {FileClock, History, Plus, RefreshCw, Search, Trash2, X, LoaderCircle} from 'lucide-react';
 import {
@@ -18,9 +19,18 @@ import './interview.css';
 export default function InterviewHistoryScreen() {
   const [records, setRecords] = useState<SessionSummary[]>([]),
     [loading, setLoading] = useState(true),
-    [error, setError] = useState(''),
-    [query, setQuery] = useState(''),
-    [status, setStatus] = useState('all');
+    [error, setError] = useState('');
+  const [query, setQuery] = useWorkspaceDraft('history:query', () => '');
+  const [status, setStatus] = useWorkspaceDraft('history:status', () => 'all');
+  const [scroll, setScroll] = useWorkspaceDraft('history:scroll', () => 0);
+  const viewport = useRef<HTMLDivElement>(null);
+  const initialScroll = useRef(scroll);
+  const restored = useRef(false);
+  useLayoutEffect(() => {
+    if (!loading && !restored.current && viewport.current) {
+      viewport.current.scrollTop = initialScroll.current; restored.current = true;
+    }
+  }, [loading]);
   const [drafts, setDrafts] = useState<WorkspaceSession[]>([]),
     [localError, setLocalError] = useState(''),
     [deleting, setDeleting] = useState<string[]>([]);
@@ -84,7 +94,7 @@ export default function InterviewHistoryScreen() {
         .finally(() => setDeleting(values => values.filter(value => value !== record.id)));
     });
   return (
-    <section className={`page${loading && !records.length ? ' page-loading' : ''}`}>
+    <section className="page history-page">
       <div className="page-heading">
         <div>
           <h1>面试记录</h1>
@@ -95,7 +105,37 @@ export default function InterviewHistoryScreen() {
           新建面试
         </button>
       </div>
-      {!loading && recoverable.length > 0 && (
+      <div className="list-toolbar">
+        <label className="search-input">
+          <Search />
+          <input
+            aria-label="搜索面试记录"
+            placeholder="搜索面试名称、公司或岗位"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+          {query && <IconButton className="icon-btn search-clear" aria-label="清空搜索" onClick={() => setQuery('')}><X size={14} /></IconButton>}
+        </label>
+        <span className="spacer" />
+        <span className="muted small record-count" role="status">{loading ? '正在刷新…' : query || status !== 'all' ? `${filtered.length} / ${records.length} 场` : `${records.length} 场`}</span>
+        <Select aria-label="按状态筛选" value={status} onValueChange={selectedValue => setStatus(selectedValue)}>
+          <SelectOption value="all">全部状态</SelectOption>
+          <SelectOption value="active">未结束</SelectOption>
+          <SelectOption value="completed">已结束</SelectOption>
+          <SelectOption value="interrupted">已暂停</SelectOption>
+        </Select>
+        <IconButton
+          className="icon-btn"
+          title="刷新记录"
+          aria-label="刷新记录"
+          disabled={loading}
+          onClick={() => void load()}>
+          <RefreshCw size={15} className={loading ? 'spin' : undefined} />
+        </IconButton>
+      </div>
+      {error && records.length > 0 && <ErrorState message={error} retry={() => void load()} />}
+      <div ref={viewport} onScroll={event => {if (restored.current) setScroll(event.currentTarget.scrollTop);}} className="records-viewport" role="region" aria-label="面试记录列表" tabIndex={0} aria-busy={loading}>
+      {recoverable.length > 0 && (
         <div className="history-recovery">
           <div className="history-recovery-heading">
             <FileClock size={17} />
@@ -120,35 +160,6 @@ export default function InterviewHistoryScreen() {
         </div>
       )}
       {localError && <p className="notice">{localError}</p>}
-      <div className="list-toolbar">
-        <label className="search-input">
-          <Search />
-          <input
-            aria-label="搜索面试记录"
-            placeholder="搜索面试名称、公司或岗位"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-          />
-          {query && <IconButton className="icon-btn search-clear" aria-label="清空搜索" onClick={() => setQuery('')}><X size={14} /></IconButton>}
-        </label>
-        <span className="spacer" />
-        <span className="muted small record-count">{filtered.length} 场</span>
-        <Select aria-label="按状态筛选" value={status} onValueChange={selectedValue => setStatus(selectedValue)}>
-          <SelectOption value="all">全部状态</SelectOption>
-          <SelectOption value="active">未结束</SelectOption>
-          <SelectOption value="completed">已结束</SelectOption>
-          <SelectOption value="interrupted">已暂停</SelectOption>
-        </Select>
-        <IconButton
-          className="icon-btn"
-          title="刷新记录"
-          aria-label="刷新记录"
-          disabled={loading}
-          onClick={() => void load()}>
-          <RefreshCw size={15} className={loading ? 'spin' : undefined} />
-        </IconButton>
-      </div>
-      {error && records.length > 0 && <ErrorState message={error} retry={() => void load()} />}
       {loading && !records.length ? (
         <Loading />
       ) : error && !records.length ? (
@@ -220,6 +231,7 @@ export default function InterviewHistoryScreen() {
           }
         />
       )}
+      </div>
     </section>
   );
 }
