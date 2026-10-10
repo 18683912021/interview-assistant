@@ -18,19 +18,19 @@ export function createApplicationMenu(showMainWindow: () => void): void {
         { role: 'unhide', label: '显示全部' },
         { type: 'separator' },
         { role: 'quit', label: '退出面试助手' },
+        // Hide individual items, not their parent menu: AppKit stops dispatching
+        // standard text shortcuts when the entire top-level menu is hidden.
+        { role: 'undo', visible: false, acceleratorWorksWhenHidden: true },
+        { role: 'redo', visible: false, acceleratorWorksWhenHidden: true },
+        { role: 'cut', visible: false, acceleratorWorksWhenHidden: true },
+        { role: 'copy', visible: false, acceleratorWorksWhenHidden: true },
+        { role: 'paste', visible: false, acceleratorWorksWhenHidden: true },
+        { role: 'selectAll', visible: false, acceleratorWorksWhenHidden: true },
+        { role: 'minimize', visible: false, acceleratorWorksWhenHidden: true },
+        { role: 'close', visible: false, acceleratorWorksWhenHidden: true },
+        { role: 'togglefullscreen', visible: false, acceleratorWorksWhenHidden: true },
       ],
     },
-    // macOS needs native editing roles for standard text shortcuts. Hide the
-    // menu while retaining those shortcuts (acceleratorWorksWhenHidden=true).
-    { label: '编辑', visible: false, submenu: [
-      { role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' },
-      { type: 'separator' },
-      { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' },
-      { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' },
-    ] },
-    { label: '窗口', visible: false, submenu: [
-      { role: 'minimize' }, { role: 'close' }, { role: 'togglefullscreen' },
-    ] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
