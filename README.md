@@ -82,6 +82,8 @@ docker compose up -d --build     # 仅兜底/回滚参考；正式迁移见下
 ## 文档索引
 
 - [backend/README.md](backend/README.md) — 后端技术实现、设计取舍与简历项目素材
+- [desktop/docs/workspace-setup.md](desktop/docs/workspace-setup.md) — 新版桌面工作区与本地联调
+- [desktop/docs/windows-build.md](desktop/docs/windows-build.md) — Windows 安装包构建与下载
 - `mobile/RN_ANDROID_STUDIO_SETUP.md` — Android 开发环境搭建
 - `mobile/docs/AUDIO_PROTOCOL_V1.md` — 音频流协议 v1（两端 WebSocket 帧约定）
 - `mobile/docs/MIGRATION_MATRIX.md` — 移动端/桌面端功能迁移对照

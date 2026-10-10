@@ -102,10 +102,17 @@ jobs:
           PYTHON: ${{ steps.python.outputs.python-path }}
         run: pnpm exec electron-builder --win nsis --x64 --publish never
 
-      - name: Verify packaged native binary and create delivery metadata
+      - name: Verify packaged executable, native loading and delivery metadata
         run: |
           $ErrorActionPreference = 'Stop'
           $package = Get-Content -LiteralPath package.json -Raw | ConvertFrom-Json
+          $packagedExe = (Resolve-Path -LiteralPath 'release/win-unpacked/AI面试助手.exe').Path
+          $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($packagedExe)
+          # Builder 26 uses a four-part ProductVersion and preserves the raw FileVersion.
+          $expectedProductVersion = "$(($package.version -split '[-+]')[0]).0"
+          if ($versionInfo.ProductName -cne 'AI面试助手' -or $versionInfo.ProductVersion -ne $expectedProductVersion -or $versionInfo.FileVersion -ne $package.version) {
+            throw "Packaged executable resources are incorrect: name=$($versionInfo.ProductName), productVersion=$($versionInfo.ProductVersion), fileVersion=$($versionInfo.FileVersion)"
+          }
           $native = Get-Content -LiteralPath electron/audio/native/build/Release/.electron-target -Raw | ConvertFrom-Json
           if ($native.platform -ne 'win32' -or $native.arch -ne 'x64' -or $native.electronVersion -ne $package.devDependencies.electron) {
             throw 'Native build metadata does not match the requested Windows package'
@@ -115,6 +122,21 @@ jobs:
           if ($packagedHash -ne $native.addonHash) {
             throw 'The packaged WASAPI binary differs from the load-validated binary'
           }
+          # Spawn synchronously through Node so the GUI-subsystem EXE is also awaited
+          # reliably on Windows. Node mode neither creates a window nor opens devices.
+          @'
+          const { spawnSync } = require('node:child_process');
+          const path = require('node:path');
+          const electron = require('./package.json').devDependencies.electron;
+          const result = spawnSync(path.resolve('release/win-unpacked/AI面试助手.exe'), [
+            path.resolve('scripts/smoke-addon.cjs'), '--addon',
+            path.resolve('release/win-unpacked/resources/app.asar.unpacked/dist-electron/audio/native/build/Release/wasapi_loopback.node'),
+            '--expect-electron=' + electron, '--expect-arch=x64',
+          ], { stdio: 'inherit', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, timeout: 30000 });
+          if (result.error) throw result.error;
+          process.exit(result.status ?? 1);
+          '@ | node
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged Electron failed the non-recording WASAPI load check' }
           $installers = @(Get-ChildItem -LiteralPath release -File -Filter '*.exe')
           if ($installers.Count -ne 1) { throw "Expected one NSIS installer; found $($installers.Count)" }
           $delivery = New-Item -ItemType Directory -Path release/windows-artifacts -Force
@@ -135,8 +157,13 @@ jobs:
             runnerImageVersion = $env:ImageVersion
             apiBase = 'https://interview.iyouzi.cc'
             streamUrl = 'wss://interview.iyouzi.cc/api/ws/audio/stream'
+            executable = [ordered]@{
+              productName = $versionInfo.ProductName
+              productVersion = $versionInfo.ProductVersion
+              fileVersion = $versionInfo.FileVersion
+            }
             native = $native
-            checks = @('typecheck', 'tests', 'lint', 'electron-native-load', 'packaged-native-sha256')
+            checks = @('typecheck', 'tests', 'lint', 'electron-native-load', 'packaged-executable-version', 'packaged-native-sha256', 'packaged-electron-native-load')
             signing = 'unsigned'
             hardwareAudioValidated = $false
           }

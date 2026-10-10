@@ -22,7 +22,8 @@ win:
       arch:
         - x64
   icon: assets/icon.ico
-  signAndEditExecutable: false
+  # Preserve application icon/version resources even without a signing certificate.
+  signExecutable: false
 mac:
   target:
     - target: dmg
