@@ -519,28 +519,10 @@ export default function SettingsScreen() {
                         <SelectOption value="en">English</SelectOption>
                       </Select>
                     </label>
-                    <label className="setting-row">
-                      <span>
-                        回答长度<small>{settings.answer_style === 'written'
-                          ? '书面模式内容更充分；选“详细”可进一步展开'
-                          : '优先呈现可快速阅读的要点'}</small>
-                      </span>
-                      <Select
-                        value={settings.answer_length}
-                        onValueChange={selectedValue =>
-                          change('answer_length', selectedValue as Settings['answer_length'])
-                        }>
-                        <SelectOption value="brief">简短</SelectOption>
-                        <SelectOption value="standard">适中</SelectOption>
-                        <SelectOption value="detailed">详细</SelectOption>
-                      </Select>
-                    </label>
                     <div className="answer-style-setting">
                       <div className="section-label">回答方式</div>
                       <AnswerStylePicker value={settings.answer_style} onChange={value => change('answer_style', value)} />
-                      {settings.answer_style === 'written' && (
-                        <p className="preference-hint">标准书面会展开完整解释、步骤与例子。选择“详细”时，复杂问题目标约 1400–1800 字。</p>
-                      )}
+                      <p className="preference-hint">每种方式已包含合适的展开程度：解释关键原因与做法，并补充相关边界和取舍。</p>
                     </div>
                     <p className="notice">
                       是否关联简历与岗位，在每场面试开始时选择；修改偏好不会覆盖历史回答。

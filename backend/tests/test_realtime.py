@@ -130,7 +130,7 @@ async def test_llm_wire_thinking_disabled_context_and_truncation(monkeypatch):
                             source_message_ids=["m1"], source_revisions=[4], context_version=2)
     assert captured["thinking"] == {"type": "disabled"}
     assert "做过组件库" in captured["messages"][1]["content"]
-    assert captured["max_tokens"] == 600
+    assert captured["max_tokens"] == 1800
     assert [x["delta"] for x in recorder.events[:-1]] == ["核心结论", "。"]
     done = recorder.events[-1]
     assert done["full_answer"] == "核心结论。" and done["status"] == "truncated"
@@ -150,17 +150,29 @@ def test_answer_format_and_output_budget_are_consistent(style, length):
         assert "标准书面回答" in prompt["content"] and "实现步骤" in prompt["content"]
         assert "控制在约 150 字" not in prompt["content"]
         assert "控制在约 300 字" not in prompt["content"]
-        assert llm_module.answer_token_budget(context) == {"brief": 1800, "standard": 3000, "detailed": 4500}[length]
+        assert llm_module.answer_token_budget(context) == 5000
+        assert "可进一步补充" in prompt["content"]
     else:
         assert "标准书面回答" not in prompt["content"]
-        assert llm_module.answer_token_budget(context) == {"brief": 600, "standard": 1200, "detailed": 2400}[length]
+        assert llm_module.answer_token_budget(context) == {"conversational": 1800, "structured": 2400}[style]
+
+
+@pytest.mark.parametrize("style", ["conversational", "structured", "written"])
+def test_mode_depth_cannot_be_silently_shortened_by_old_preferences(style):
+    # Installed clients and historical sessions can still send a hidden brief value.
+    prompts = [llm_module.build_messages("解释缓存一致性", None, "zh", {
+        "answer_style": style, "answer_length": length}) for length in [None, "brief", "standard", "detailed"]]
+    assert all(messages == prompts[0] for messages in prompts)
+    assert "answer_length" not in json.loads(prompts[0][1]["content"])["context"]
+    assert "不只列追问标题" in prompts[0][0]["content"]
+    assert "假设例子要明确标注" in prompts[0][0]["content"]
 
 
 def test_written_english_and_legacy_preferences():
     prompt = llm_module.build_messages("Explain idempotency", None, "en", {
         "answer_style": "标准书面", "answer_length": "balanced"})[0]["content"]
-    assert "550～750 个英文单词" in prompt
-    assert llm_module.answer_token_budget({"answer_length": "short"}) == 600
+    assert "1000～1300 个英文单词" in prompt
+    assert llm_module.answer_token_budget({"answer_length": "short"}) == 1800
     assert llm_module.answer_preferences({"answer_style": "untrusted instructions"}) == ("conversational", "standard")
 
 
@@ -189,7 +201,7 @@ async def test_written_answer_streams_before_completion_with_larger_budget(monke
         await asyncio.wait_for(recorder.first.wait(), 1)
         assert not task.done()
         assert recorder.events[0]["delta"] == "先给核心结论。"
-        assert captured["max_tokens"] == 4500
+        assert captured["max_tokens"] == 5000
         assert captured["stream"] is True and captured["thinking"] == {"type": "disabled"}
         gate.set()
         await asyncio.wait_for(task, 1)

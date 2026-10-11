@@ -2013,7 +2013,6 @@ fieldset:disabled .select-trigger { opacity: .55; cursor: default; }
 .session-alert > button { flex-shrink: 0; }
 .setting-row > .select-trigger { min-width: 140px; }
 .answer-preferences { gap: 8px 12px; }
-.answer-preferences .select-trigger { min-height: 30px; }
 @media (max-width: 720px) { .answer-style-picker:not(.compact) { grid-template-columns: 1fr; } }
 
 .permission-help { padding: 12px 0; }

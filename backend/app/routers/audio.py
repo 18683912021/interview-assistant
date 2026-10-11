@@ -41,8 +41,7 @@ router = APIRouter()
 
 _ASR_READY = asr_ready()
 
-# 0.5: mode → max_tokens 路由
-# 5000 tokens ≈ 1500-1800 汉字，四维度深度回答绰绰有余
+# Answer budgets follow the selected response mode.
 LLM_MAX_TOKENS = 1200
 SESSION_AUTH_INTERVAL = 3.0
 _active_sessions: dict[tuple[str, str], set[Callable[[], Awaitable[None]]]] = {}

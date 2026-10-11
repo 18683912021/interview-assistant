@@ -38,31 +38,40 @@ def answer_preferences(context: dict[str, Any] | None = None) -> tuple[str, str]
 
 
 def answer_token_budget(context: dict[str, Any] | None = None) -> int:
-    style, length = answer_preferences(context)
-    budgets = {"brief": 1800, "standard": 3000, "detailed": 4500} if style == "written" else {
-        "brief": 600, "standard": 1200, "detailed": 2400}
-    return budgets[length]
+    style, _ = answer_preferences(context)
+    # Length is part of each mode. Retain the legacy field in stored sessions,
+    # but do not let an old "brief" preference silently shorten written answers.
+    return {"conversational": 1800, "structured": 2400, "written": 5000}[style]
 
 
 def answer_format_rule(context: dict[str, Any], language: str) -> str:
-    style, length = answer_preferences(context)
+    style, _ = answer_preferences(context)
+    detail_rule = """内容要具体：关键做法说明为什么有效、如何执行或如何判断结果，不能只说“提高性能”“保证可靠性”等笼统结论。
+明确每种机制能保证什么、不能保证什么，以及依赖的前提；不要使用“绝对可靠”等无条件保证。异常场景不能与前面介绍的机制自相矛盾。
+涉及失败和重试时区分未执行、已成功、结果未知；示例步骤和代码也必须遵守正文中的边界，不能以“简化示例”为由省略会改变正确性的条件。
+在主问题回答充分后，按相关性补充容易被追问的前提、边界、取舍或验证方法；补充必须写出可直接使用的解释，不只列追问标题，不重复正文。
+涉及本人经历时只使用背景资料中明确提供的事实，缺失细节不能用通用方案冒充；假设例子要明确标注。没有相应经历依据时用“可以这样实现”，不用“我一般这样做”“我做过”。
+篇幅是参考而非必须凑满的字数。简单问题和范围明确的短追问应直接答清，不机械附加补充章节；复杂问题优先覆盖关键因果和实际过程。"""
     if style == "written":
-        size = ({"brief": "300～450 个英文单词", "standard": "550～750 个英文单词",
-                 "detailed": "850～1100 个英文单词"} if language == "en" else {
-                    "brief": "500～700 字", "standard": "900～1200 字", "detailed": "1400～1800 字"})[length]
+        size = "1000～1300 个英文单词" if language == "en" else "1600～2100 字"
         return f"""表达方式：标准书面回答。输出可直接使用的完整参考答案，使用专业、自然的完整句子与段落，不只列提纲。
 第一段用 1～2 句话直接给出结论，随即展开正文。按问题选择适用的内容：核心概念与原理、实现步骤、选择理由、适用场景与边界、具体例子。
-技术题把关键机制和因果关系解释清楚；方案题说明步骤、取舍及风险；经历题围绕真实背景、本人职责、行动与结果展开。不要对每道题机械套用所有章节。
-说明关键异常条件和方案边界，不把有前提的结论说成绝对规则。知识题不强行追加个人经历或重复总结。
-用少量短标题、短段落和必要的列表方便扫读。重要要点至少解释为什么或如何做；例子说明具体过程及结果，不用同义重复凑篇幅。
-目标篇幅约 {size}，简单问题可更短；优先回答完整，复杂问题覆盖主要追问点，避免无关扩展。"""
-    style_rule = ("表达方式：结构化要点。第一句话给出结论，随后用 3～5 条带简短解释的要点展开，必要时补例子。"
-                  if style == "structured" else
-                  "表达方式：自然口述。第一句话给出可口述的结论，随后用自然短句解释关键点，像候选人直接回答，不写成目录。")
-    length_rule = {"brief": "控制在约 150 字，先结论后最必要的要点。",
-                   "standard": "控制在约 300 字，适合面试现场快速阅读。",
-                   "detailed": "先给简短结论，再展开必要原理和例子，避免无关延伸。"}[length]
-    return style_rule + "\n" + length_rule
+技术题解释机制的触发条件、执行过程及结果，区分相近概念；方案题说明实现步骤、方案取舍、异常处理和验证方法；经历题围绕真实背景、本人职责、行动与结果展开。
+用一个贴合问题的具体例子串起过程，说明输入或场景、关键操作以及结果；只在有帮助时提供少量代码。不要对每道题机械套用所有章节。
+复杂问题末尾可用“可进一步补充”写 2～3 个最相关的延伸点，每点用 2～3 句话解释其条件、理由或做法，让用户面对“还有补充吗”时有实质内容可讲。
+用少量短标题、短段落和必要的列表方便扫读。知识题不强行追加个人经历，也不重复总结。
+复杂问题目标篇幅约 {size}。{detail_rule}"""
+    if style == "structured":
+        size = "300～450 个英文单词" if language == "en" else "500～750 字"
+        return f"""表达方式：结构化要点。第一句话给出结论，随后按逻辑分为 3～5 个要点，方便快速扫读。
+每点用简短标题和 2～3 句话讲清一个具体机制或做法，并说明理由、条件或结果；不能只有名词和口号。必要时用一个小例子串联关键步骤。
+有相关延伸时，最后增加 1～2 条“可补充”，写出具体边界、取舍或验证方法，不只给关键词。
+一般问题目标篇幅约 {size}。{detail_rule}"""
+    size = "200～300 个英文单词" if language == "en" else "350～500 字"
+    return f"""表达方式：自然口述。第一句话给出可口述的结论，随后用自然短句与短段落解释 2～3 个关键点，像候选人现场回答，不写成目录或书面论文。
+关键点要有具体原因、执行方式或小例子，使回答不止于概念定义。用自然过渡把内容连起来，避免连续堆砌术语。
+有相关延伸时，最后自然补充一个值得注意的前提、取舍或实际细节，并说清原因，方便继续展开；不生硬添加固定章节。
+一般问题目标篇幅约 {size}。{detail_rule}"""
 
 
 def build_system_prompt(track_key: str | None = None, language: str = "zh") -> str:
@@ -88,7 +97,7 @@ def build_messages(question: str, track: str | None, language: str,
     context = context or {}
     background: dict[str, Any] = {}
     for key, limit in (("role", 300), ("job_description", 5000), ("resume_text", 12000),
-                       ("answer_length", 30), ("answer_style", 60)):
+                       ("answer_style", 60)):
         value = context.get(key)
         if isinstance(value, str):
             background[key] = value[:limit]

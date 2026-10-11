@@ -19,15 +19,16 @@ export interface Settings {
   theme: 'system' | 'light' | 'dark';
   font_size: 14 | 16 | 18;
   language: 'zh' | 'en' | 'auto';
+  /** Legacy field retained for saved-session compatibility; depth now follows answer_style. */
   answer_length: 'brief' | 'standard' | 'detailed';
   answer_style: 'conversational' | 'structured' | 'written';
   microphone_id: string;
   system_device_id: string;
 }
 export const ANSWER_STYLES = [
-  {value: 'conversational', label: '自然口述', description: '自然短句，适合现场组织语言'},
-  {value: 'structured', label: '结构化要点', description: '结论与关键要点，方便快速扫读'},
-  {value: 'written', label: '标准书面', description: '完整展开原理、步骤与例子，适合深入回答'},
+  {value: 'conversational', label: '自然口述', description: '自然表达，讲清关键原因与做法，补充实用细节'},
+  {value: 'structured', label: '结构化要点', description: '分点解释机制、条件与例子，重点清晰，便于补充'},
+  {value: 'written', label: '标准书面', description: '充分展开原理、步骤、例子与取舍，备好深入补充'},
 ] as const;
 export const answerStyleLabel = (style: unknown) =>
   ANSWER_STYLES.find(option => option.value === style)?.label || '自然口述';

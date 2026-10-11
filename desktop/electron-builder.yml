@@ -25,6 +25,8 @@ win:
   # Preserve application icon/version resources even without a signing certificate.
   signExecutable: false
 mac:
+  # Seal local builds consistently; override with Developer ID for notarized releases.
+  identity: "-"
   target:
     - target: dmg
       arch:

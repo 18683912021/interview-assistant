@@ -286,19 +286,6 @@ button.bubble-answer-count:hover {
   color: var(--muted);
   font-size: 11px;
 }
-.answer-preferences label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.answer-preferences .select-trigger {
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 4px 6px;
-  font: inherit;
-}
 .answer-preferences > span {
   margin-left: auto;
   font-size: 10px;

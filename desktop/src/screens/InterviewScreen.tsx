@@ -676,18 +676,7 @@ export default function InterviewScreen() {
               <AnswerStylePicker value={settings.answer_style}
                 onChange={answer_style => setSettings(value => ({...value, answer_style}))} />
             </div>
-            <div className="field-row">
-              <label className="field">
-                回答长度
-                <Select value={settings.answer_length} onValueChange={selectedValue => setSettings(value => ({...value,
-                  answer_length: selectedValue as Settings['answer_length']}))}>
-                  <SelectOption value="brief">简短</SelectOption>
-                  <SelectOption value="standard">适中</SelectOption>
-                  <SelectOption value="detailed">详细</SelectOption>
-                </Select>
-                <small>本场使用，默认偏好可在设置中保存。</small>
-              </label>
-            </div>
+            <p className="preference-hint">每种方式已包含合适的展开程度。本场使用，默认偏好可在设置中保存。</p>
           </div>
           <aside className="setup-preview">
             <div className="setup-preview-top">
@@ -1058,17 +1047,6 @@ export default function InterviewScreen() {
               disabled={busy || generating || session.status === 'completed'}
               onChange={answer_style => setSession(value => value ? {...value,
                 preferences: {...value.preferences, answer_style}} : value)} />
-            <label>
-              长度
-              <Select aria-label="本场回答长度" value={session.preferences.answer_length}
-                disabled={busy || generating || session.status === 'completed'}
-                onValueChange={selectedValue => setSession(value => value ? {...value, preferences: {...value.preferences,
-                  answer_length: selectedValue as Settings['answer_length']}} : value)}>
-                <SelectOption value="brief">简短</SelectOption>
-                <SelectOption value="standard">适中</SelectOption>
-                <SelectOption value="detailed">详细</SelectOption>
-              </Select>
-            </label>
             <span className="preference-scope">{generating ? '生成完成后可切换' : '用于下一次回答'}</span>
           </div>
           <div
