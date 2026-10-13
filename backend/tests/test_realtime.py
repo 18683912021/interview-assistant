@@ -168,6 +168,18 @@ def test_mode_depth_cannot_be_silently_shortened_by_old_preferences(style):
     assert "假设例子要明确标注" in prompts[0][0]["content"]
 
 
+@pytest.mark.parametrize("style", ["conversational", "structured", "written"])
+@pytest.mark.parametrize("language", ["zh", "en"])
+def test_code_examples_include_candidate_explanation_rules(style, language):
+    prompt = llm_module.build_messages("实现 LRU 缓存并解释", "backend", language,
+                                       {"answer_style": style})[0]["content"]
+    assert "在关键步骤旁写有解释价值的注释" in prompt
+    assert "解释为什么这样写、数据如何流转" in prompt
+    assert "该编程语言合法的注释语法" in prompt
+    assert "JSON 等不支持注释的格式保持合法" in prompt
+    assert "不重复所有注释，不输出内部思考过程" in prompt
+
+
 def test_written_english_and_legacy_preferences():
     prompt = llm_module.build_messages("Explain idempotency", None, "en", {
         "answer_style": "标准书面", "answer_length": "balanced"})[0]["content"]

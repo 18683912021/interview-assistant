@@ -27,19 +27,39 @@ describe('device preparation before interview creation', () => {
     expect(media.getDisplayMedia).not.toHaveBeenCalled();
     expect(media.getUserMedia).toHaveBeenCalledOnce();
   });
+  it('reports mic and system steps separately and treats silence as unverified signal', async () => {
+    vi.stubGlobal('window', {electronAPI: {audio: {checkSystemAudio: vi.fn().mockResolvedValue({signal: false})}}});
+    const progress = vi.fn();
+    await prepareAudioStreams(DEFAULT_SETTINGS, 'both', {
+      getUserMedia: vi.fn().mockResolvedValue(stream()), getDisplayMedia: vi.fn(),
+    }, true, () => false, progress);
+    expect(progress.mock.calls.map(([step]) => [step.source, step.status])).toEqual([
+      ['mic', 'checking'], ['mic', 'ready'], ['system', 'checking'], ['system', 'quiet'],
+    ]);
+  });
+  it('identifies mic denial and does not start system permission or capture', async () => {
+    const checkSystemAudio = vi.fn();
+    vi.stubGlobal('window', {electronAPI: {audio: {checkSystemAudio}}});
+    await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', {
+      getUserMedia: vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError')), getDisplayMedia: vi.fn(),
+    }, true)).rejects.toMatchObject({source: 'mic', name: 'AudioPreparationIssue'});
+    expect(checkSystemAudio).not.toHaveBeenCalled();
+  });
   it('does not silently fall back to screen capture when native audio fails', async () => {
     vi.stubGlobal('window', {electronAPI: {audio: {checkSystemAudio: vi.fn().mockRejectedValue(new Error('audio denied'))}}});
-    const media = {getUserMedia: vi.fn(), getDisplayMedia: vi.fn()};
+    const mic = stream();
+    const media = {getUserMedia: vi.fn().mockResolvedValue(mic), getDisplayMedia: vi.fn()};
     await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', media, true)).rejects.toThrow('audio denied');
     expect(media.getDisplayMedia).not.toHaveBeenCalled();
-    expect(media.getUserMedia).not.toHaveBeenCalled();
+    expect(mic.getTracks()[0]!.stop).toHaveBeenCalledOnce();
   });
-  it('does not request a microphone after a native probe was cancelled', async () => {
+  it('releases the prepared microphone after a native probe was cancelled', async () => {
     let cancelled = false;
     vi.stubGlobal('window', {electronAPI: {audio: {checkSystemAudio: vi.fn(async () => {cancelled = true;})}}});
-    const media = {getUserMedia: vi.fn(), getDisplayMedia: vi.fn()};
+    const mic = stream();
+    const media = {getUserMedia: vi.fn().mockResolvedValue(mic), getDisplayMedia: vi.fn()};
     await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', media, true, () => cancelled)).rejects.toThrow('启动已取消');
-    expect(media.getUserMedia).not.toHaveBeenCalled();
+    expect(mic.getTracks()[0]!.stop).toHaveBeenCalledOnce();
   });
   it('uses the main-process reason for a failed display request before opening the microphone', async () => {
     const takeDisplayCaptureFailure = vi.fn().mockResolvedValue({
@@ -185,7 +205,7 @@ describe('device preparation before interview creation', () => {
         },
         true,
       ),
-    ).rejects.toThrow('未获音频权限');
+    ).rejects.toThrow('麦克风未获授权');
     expect(system.getTracks()[0]!.stop).toHaveBeenCalled();
   });
   it('does not capture system audio for mic-only mode and releases input if preparation was cancelled', async () => {

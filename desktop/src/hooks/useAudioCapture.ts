@@ -5,6 +5,8 @@ import {
   prepareAudioStreams,
   releaseStreams,
   type PreparedStreams,
+  type AudioPreparationStep,
+  AudioPreparationIssue,
 } from '../services/capture-preparation';
 import {getToken} from '../utils/token';
 import {messageOf} from '../utils/error-message';
@@ -72,6 +74,8 @@ export function useAudioCapture() {
   const forwarding = useRef(false);
   const [settling, setSettling] = useState(false);
   const [echoMode, setEchoMode] = useState<MicrophoneEchoMode | null>(null);
+  const [preparation, setPreparation] = useState<Partial<Record<'mic' | 'system', AudioPreparationStep>>>({});
+  const clearPreparationFeedback = useCallback(() => setPreparation({}), []);
   const nativeStopTask = useRef<Promise<void> | null>(null);
   const stopNative = useCallback(() => {
     if (nativeStopTask.current) return nativeStopTask.current;
@@ -257,7 +261,7 @@ export function useAudioCapture() {
   );
 
   const prepare = useCallback(
-    async (settings: Settings, source: 'both' | 'mic' = 'both') => {
+    async (settings: Settings, source: 'both' | 'mic' = 'both', forceCheck = false) => {
       if (!api) throw new Error('实时采集需要在桌面客户端中打开。');
       // Do not await an old stop here: media permission must retain this click's
       // activation. The UI disables resume until the old native stream is closed.
@@ -266,7 +270,7 @@ export function useAudioCapture() {
         throw new Error('当前窗口无法访问音频设备，请重启桌面客户端。');
       const key = JSON.stringify([source, settings.microphone_id, settings.system_device_id]);
       if (
-        preparedKey.current === key &&
+        !forceCheck && preparedKey.current === key &&
         micRef.current?.stream.getAudioTracks().some(track => track.readyState === 'live') &&
         (source !== 'both' ||
           !/Mac/i.test(navigator.userAgent) || !settings.system_device_id ||
@@ -275,6 +279,10 @@ export function useAudioCapture() {
         return;
       stopLocal();
       const epoch = ++startEpoch.current;
+      setPreparation({});
+      const progress = (step: AudioPreparationStep) => {
+        if (epoch === startEpoch.current) setPreparation(value => ({...value, [step.source]: step}));
+      };
       stoppingRef.current = false;
       dispatch({type: 'error', value: null});
       dispatch({type: 'asr_error', message: null});
@@ -282,12 +290,16 @@ export function useAudioCapture() {
       let streams: PreparedStreams | null = null;
       let preparedMic: AudioHandle | null = null;
       let preparedSystem: AudioHandle | null = null;
+      let pipelineSource: 'mic' | 'system' = 'mic';
       try {
         // Windows enumeration opens no audio stream; fail before saving a new
         // session or opening provider connections if its selected output vanished.
         if (source === 'both' && desktopPlatform() === 'windows') {
-          assertSystemOutput(await listSystemOutputs(), settings.system_device_id);
+          progress({source: 'system', status: 'checking', message: '正在检查系统播放设备…'});
+          try {assertSystemOutput(await listSystemOutputs(), settings.system_device_id);}
+          catch (error) {throw new AudioPreparationIssue(messageOf(error), 'system');}
           if (epoch !== startEpoch.current) throw new Error('启动已取消');
+          progress({source: 'system', status: 'ready', message: '系统输出设备可用，开始后采集电脑播放声音'});
         }
         streams = await prepareAudioStreams(
           settings,
@@ -295,14 +307,17 @@ export function useAudioCapture() {
           navigator.mediaDevices,
           /Mac/i.test(navigator.userAgent),
           () => epoch !== startEpoch.current,
+          progress,
         );
         if (epoch !== startEpoch.current) throw new Error('启动已取消');
         preparedMic = await attachPipeline(streams.mic, frame => api.sendMicFrame(frame), epoch);
         if (epoch !== startEpoch.current) throw new Error('启动已取消');
-        if (streams.system)
+        if (streams.system) {
+          pipelineSource = 'system';
           preparedSystem = await attachPipeline(streams.system, frame =>
             api.sendSystemFrame(frame), epoch,
           );
+        }
         if (epoch !== startEpoch.current) throw new Error('启动已取消');
         // Publish only after all async work still belongs to this attempt.
         micRef.current = preparedMic;
@@ -316,6 +331,8 @@ export function useAudioCapture() {
         // A cancelled permission/worklet operation can finish after a new start.
         // Its cleanup must never stop or reset the newer attempt.
         if (epoch !== startEpoch.current) throw error;
+        const issue = error instanceof AudioPreparationIssue ? error : new AudioPreparationIssue(messageOf(error), pipelineSource);
+        setPreparation({[issue.source]: {source: issue.source, status: 'error', message: issue.message}});
         stoppingRef.current = true;
         stopLocal();
         dispatch({type: 'captureState', value: 'paused'});
@@ -328,7 +345,7 @@ export function useAudioCapture() {
             recoverable: true,
           },
         });
-        throw error;
+        throw issue;
       }
     },
     [api, attachPipeline, stopLocal],
@@ -508,6 +525,8 @@ export function useAudioCapture() {
     state,
     settling,
     echoMode,
+    preparation,
+    clearPreparationFeedback,
     dispatch,
     prepare,
     assertPrepared,

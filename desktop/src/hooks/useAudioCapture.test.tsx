@@ -47,5 +47,11 @@ describe('cancelled capture preparation', () => {
     expect(() => result.current.assertPrepared(newerSettings, 'mic')).not.toThrow();
     expect(oldMic.track.stop).toHaveBeenCalled();
     expect(newMic.track.stop).not.toHaveBeenCalled();
+    expect(result.current.preparation.mic?.status).toBe('ready');
+    // A deliberate recheck must reacquire input instead of reusing cached success.
+    getUserMedia.mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'));
+    await act(async () => {await expect(result.current.prepare(newerSettings, 'mic', true)).rejects.toMatchObject({source: 'mic'});});
+    expect(result.current.preparation.mic?.status).toBe('error');
+    expect(newMic.track.stop).toHaveBeenCalled();
   });
 });

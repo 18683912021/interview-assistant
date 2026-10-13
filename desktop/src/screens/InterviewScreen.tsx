@@ -1,4 +1,5 @@
-import {SCREEN_AUDIO_FALLBACK} from '../services/capture-preparation';
+import {SCREEN_AUDIO_FALLBACK, AudioPreparationIssue} from '../services/capture-preparation';
+import {AudioReadiness} from '../components/AudioReadiness';
 import {ScrollToTop} from '../components/ScrollToTop';
 import {SessionSplit} from '../components/SessionSplit';
 import {IconButton} from '../components/IconButton';
@@ -87,6 +88,8 @@ export default function InterviewScreen() {
     state,
     settling,
     echoMode,
+    preparation,
+    clearPreparationFeedback,
     dispatch,
     prepare,
     assertPrepared,
@@ -402,7 +405,31 @@ export default function InterviewScreen() {
   };
   const [roleError, setRoleError] = useState('');
   const roleInput = useRef<HTMLInputElement>(null);
+  const audioSetup = useRef<HTMLElement>(null);
+  const setupAttempt = useRef(0);
+  useEffect(() => () => {setupAttempt.current++;}, []);
+  const cancelAudioCheck = () => {
+    setupAttempt.current++;
+    discardPreparation(); clearPreparationFeedback();
+    setBusy(false); setStartStage('');
+  };
+  const showAudioHelp = () => {
+    audioSetup.current?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+    audioSetup.current?.focus({preventScroll: true});
+  };
+  const checkAudio = async () => {
+    if (busy) return;
+    const attempt = ++setupAttempt.current;
+    setBusy(true); setError('');
+    try {await prepare(settings, source, true);}
+    catch (error) {
+      if (attempt !== setupAttempt.current) return;
+      if (error instanceof AudioPreparationIssue) showAudioHelp();
+      else setError(messageOf(error));
+    } finally {if (attempt === setupAttempt.current) setBusy(false);}
+  };
   const begin = async () => {
+    if (busy) return;
     if (!role.trim()) {
       setRoleError('请填写本次面试岗位');
       roleInput.current?.focus();
@@ -412,13 +439,16 @@ export default function InterviewScreen() {
       setError('请在桌面客户端中开始面试。浏览器可查看资料和历史，无法采集桌面音频。');
       return;
     }
+    const attempt = ++setupAttempt.current;
     setBusy(true);
     setError('');
     try {
       setStartStage('正在准备音频设备…');
       await prepare(settings, source);
+      if (attempt !== setupAttempt.current) return;
       setStartStage('正在检查 AI 连接…');
       const readiness = await checkAIReadiness();
+      if (attempt !== setupAttempt.current) return;
       if (!readiness.ready) throw new Error(readiness.message);
       assertPrepared(settings, source);
       setStartStage('正在建立面试连接…');
@@ -455,11 +485,13 @@ export default function InterviewScreen() {
       await storeDraft(email, {...saved, sync_base_revision: saved.revision});
       await start(saved.id, settings, source);
     } catch (e) {
+      if (attempt !== setupAttempt.current) return;
       discardPreparation();
-      setError(messageOf(e));
+      if (!(e instanceof AudioPreparationIssue)) clearPreparationFeedback();
+      if (e instanceof AudioPreparationIssue) showAudioHelp();
+      else setError(messageOf(e));
     } finally {
-      setBusy(false);
-      setStartStage('');
+      if (attempt === setupAttempt.current) {setBusy(false); setStartStage('');}
     }
   };
   const resumeCapture = async () => {
@@ -594,7 +626,6 @@ export default function InterviewScreen() {
           </div>
         </div>
         {error && <ErrorState message={error} retry={() => void load()} />}
-        <AudioPermissions onlyBlocked systemRequired={source === 'both' && (!settings.system_device_id || settings.system_device_id === SCREEN_AUDIO_FALLBACK)} screenFallback={settings.system_device_id === SCREEN_AUDIO_FALLBACK} />
         {drafts.length > 0 && (
           <div className="recovery-list">
             {drafts.map(value => (
@@ -728,33 +759,14 @@ export default function InterviewScreen() {
                 </small>
               </div>
             </div>
-            <div className="setup-audio">
-              <h2>02 / 音频来源</h2>
-              <label>
-                <input
-                  type="radio"
-                  name="source"
-                  checked={source === 'both'}
-                  onChange={() => setSource('both')}
-                />
-                <span>
-                  系统音频 + 麦克风<small>远程面试，对话双方分别记录</small>
-                </span>
-                <Monitor size={18} />
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="source"
-                  checked={source === 'mic'}
-                  onChange={() => setSource('mic')}
-                />
-                <span>
-                  仅麦克风<small>练习或手动补充问题</small>
-                </span>
-                <Mic size={18} />
-              </label>
-            </div>
+            <AudioReadiness sectionRef={audioSetup} source={source} steps={preparation} busy={busy}
+              isMac={desktopPlatform() === 'mac'} onCheck={() => void checkAudio()} onCancel={cancelAudioCheck}
+              onRestart={() => {discardPreparation(); clearPreparationFeedback(); void window.electronAPI?.window.restartApp().catch(error => toast(messageOf(error), 'error'));}}
+              onSource={value => {discardPreparation(); clearPreparationFeedback(); setSource(value);}}
+              onSettings={kind => {
+                if (desktopPlatform() === 'mac') void window.electronAPI?.audio.openPrivacySettings(kind === 'mic' ? 'microphone' : 'screen').catch(error => toast(messageOf(error), 'error'));
+                else navigate('/settings?tab=audio');
+              }} />
             <div className="setup-preview-foot">
               <CheckCheck size={15} />
               <span>点击气泡后才生成回答 · 对话持续记录</span>
@@ -764,7 +776,7 @@ export default function InterviewScreen() {
               disabled={busy || !role.trim()}
               onClick={() => void begin()}>
               <Play />
-              {busy ? startStage || '正在连接…' : '开始面试'}
+              {busy ? startStage || '正在检查音频…' : '开始面试'}
             </button>
             {!role.trim() && <small className="setup-requirement">填写左侧面试岗位后即可开始。</small>}
             <button className="btn btn-quiet" onClick={() => navigate('/settings?tab=audio')}>

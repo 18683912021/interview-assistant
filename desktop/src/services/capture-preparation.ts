@@ -3,6 +3,10 @@ import {captureMicrophone} from './microphone-capture';
 import {messageOf} from '../utils/error-message';
 
 export type PreparedStreams = {mic: MediaStream; system: MediaStream | null};
+export type AudioPreparationStep = {source: 'mic' | 'system'; status: 'checking' | 'ready' | 'quiet' | 'error'; message: string};
+export class AudioPreparationIssue extends Error {
+  constructor(message: string, public source: 'mic' | 'system') {super(message); this.name = 'AudioPreparationIssue';}
+}
 type MediaAccess = Pick<MediaDevices, 'getUserMedia' | 'getDisplayMedia'>;
 export const SCREEN_AUDIO_FALLBACK = '__screen_capture__';
 const systemConstraints: MediaTrackConstraints = {
@@ -48,9 +52,21 @@ export async function prepareAudioStreams(
   media: MediaAccess,
   isMac: boolean,
   cancelled: () => boolean = () => false,
+  progress: (step: AudioPreparationStep) => void = () => {},
 ): Promise<PreparedStreams> {
   const streams: Partial<PreparedStreams> = {};
+  let current: 'mic' | 'system' = 'mic';
+  const prepareMic = async () => {
+    current = 'mic';
+    progress({source: current, status: 'checking', message: '首次使用请在系统弹框中允许麦克风；授权后会自动继续。'});
+    streams.mic = await captureMicrophone(media, settings.microphone_id);
+    if (!streams.mic.getAudioTracks().some(track => track.readyState === 'live'))
+      throw new Error('麦克风没有可用音轨，请重新选择输入设备。');
+    if (cancelled()) throw new Error('启动已取消');
+    progress({source: current, status: 'ready', message: '麦克风已连接'});
+  };
   try {
+    if (cancelled()) throw new Error('启动已取消');
     if (
       source === 'both' &&
       isMac &&
@@ -62,11 +78,21 @@ export async function prepareAudioStreams(
       );
     // Screen capture is an explicit fallback; native audio never requests a screen.
     if (source === 'both' && isMac && !settings.system_device_id) {
+      await prepareMic();
+      current = 'system';
+      progress({source: current, status: 'checking', message: '请允许系统音频录制；可播放一段声音帮助检查，不会读取屏幕。'});
       const api = typeof window !== 'undefined' ? window.electronAPI?.audio : undefined;
       if (!api?.checkSystemAudio) throw new Error('纯系统音频需要最新版桌面客户端。');
-      await api.checkSystemAudio();
+      const result = await api.checkSystemAudio();
+      if (cancelled()) throw new Error('启动已取消');
+      progress({source: current, status: result.signal ? 'ready' : 'quiet', message: result.signal
+        ? '已检测到电脑播放的声音'
+        : '音频组件已启动，当前没有检测到播放声音。可继续开始；如播放声音后仍无信号，请检查系统音频权限。'});
     }
     if (source === 'both' && isMac && settings.system_device_id) {
+      current = 'system';
+      progress({source: current, status: 'checking', message: settings.system_device_id === SCREEN_AUDIO_FALLBACK
+        ? '请按系统提示允许兼容采集；该模式会显示屏幕共享提示。' : '正在连接所选系统音频输入…'});
       streams.system = settings.system_device_id !== SCREEN_AUDIO_FALLBACK
         ? await media.getUserMedia({
             audio: {...systemConstraints, deviceId: {exact: settings.system_device_id}},
@@ -78,13 +104,12 @@ export async function prepareAudioStreams(
         );
       // Only audio is needed. Do not keep the screen/video track running.
       streams.system.getVideoTracks().forEach(track => track.stop());
+      progress({source: current, status: 'ready', message: '系统音频输入已连接'});
     }
     if (cancelled()) throw new Error('启动已取消');
-    streams.mic = await captureMicrophone(media, settings.microphone_id);
-    if (!streams.mic.getAudioTracks().some(track => track.readyState === 'live'))
-      throw new Error('麦克风没有可用音轨，请重新选择输入设备。');
+    if (!streams.mic) await prepareMic();
     if (streams.system && settings.system_device_id) {
-      const micTrack = streams.mic.getAudioTracks()[0];
+      const micTrack = streams.mic!.getAudioTracks()[0];
       const systemTrack = streams.system.getAudioTracks()[0];
       const mic = micTrack?.getSettings();
       const system = systemTrack?.getSettings();
@@ -107,9 +132,11 @@ export async function prepareAudioStreams(
         throw new Error('麦克风与系统音频实际使用了同一个输入，请重新选择麦克风设备。');
     }
     if (cancelled()) throw new Error('启动已取消');
-    return {mic: streams.mic, system: streams.system || null};
+    return {mic: streams.mic!, system: streams.system || null};
   } catch (error) {
     releaseStreams(streams);
-    throw new Error(audioPreparationError(error));
+    const denied = error instanceof Error && ['NotAllowedError', 'PermissionDeniedError'].includes(error.name);
+    const message = denied ? `${current === 'mic' ? '麦克风' : '所选系统音频来源'}未获授权或已取消选择。请在系统权限设置中允许当前应用，再重新检查。` : audioPreparationError(error);
+    throw new AudioPreparationIssue(message, current);
   }
 }
