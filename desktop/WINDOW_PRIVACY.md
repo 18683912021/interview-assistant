@@ -33,4 +33,4 @@
 - Windows 使用原生 always-on-top 与 skipTaskbar，可覆盖普通及最大化应用。独占全屏、UAC 安全桌面、锁屏不承诺覆盖；不会提高至系统安全窗口级别。
 - 窗口置顶不等同于共享排除；ScreenCaptureKit 限制仍适用。
 
-验证：`scripts/smoke-app-lifecycle.cjs` 在真实 Electron 中校验置顶、竖屏尺寸、还原、隐藏恢复、Mac Dock 与退出保存；Windows CI 同样执行，不开启麦克风或系统录音。单元测试另外覆盖全屏异步切换、重复切换、显示器移除和置顶状态隔离。具体 IDE/会议应用的全屏显示与共享预览需分别检查。
+验证：`node scripts/run-smoke-app.cjs` 在真实 Electron 中校验置顶、竖屏尺寸、还原、隐藏恢复、Mac Dock 与退出保存；Windows CI 同样执行，不开启麦克风或系统录音。单元测试另外覆盖全屏异步切换、重复切换、显示器移除和置顶状态隔离。具体 IDE/会议应用的全屏显示与共享预览需分别检查。

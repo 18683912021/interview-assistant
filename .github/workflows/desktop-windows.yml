@@ -99,16 +99,7 @@ jobs:
         run: node scripts/ensure-native.cjs --platform=win32 --arch=x64
 
       - name: Verify native windows, compact mode and safe quit without recording
-        run: |
-          @'
-          const {spawnSync} = require('node:child_process');
-          const env = {...process.env};
-          delete env.ELECTRON_RUN_AS_NODE;
-          const result = spawnSync(require('electron'), ['scripts/smoke-app-lifecycle.cjs'], {stdio: 'inherit', env, timeout: 40000});
-          if (result.error) throw result.error;
-          process.exit(result.status ?? 1);
-          '@ | node
-          if ($LASTEXITCODE -ne 0) { throw 'Native window lifecycle check failed' }
+        run: node scripts/run-smoke-app.cjs
 
       - name: Build Windows installer
         env:

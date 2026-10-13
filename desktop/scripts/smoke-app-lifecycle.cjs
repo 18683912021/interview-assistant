@@ -1,4 +1,4 @@
-// Run after tsc: pnpm exec electron scripts/smoke-app-lifecycle.cjs
+// Run after tsc: node scripts/run-smoke-app.cjs
 // Real Electron windows, menus and Dock; isolated profile, no audio/network/UI data.
 const {app, BrowserWindow, Menu} = require('electron');
 const fs = require('node:fs');
@@ -7,7 +7,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const {once} = require('node:events');
 const root = path.resolve(__dirname, '..');
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'interview-lifecycle-test-'));
+const tmp = process.env.INTERVIEW_SMOKE_ROOT || fs.mkdtempSync(path.join(os.tmpdir(), 'interview-lifecycle-test-'));
 app.setPath('userData', path.join(tmp, 'profile'));
 Object.defineProperty(app, 'isPackaged', {get: () => true});
 const fixture = path.join(tmp, 'index.html');
@@ -105,7 +105,7 @@ app.whenReady().then(async () => {
   win.close();
 }).catch(error => { console.error(error); process.exitCode = 1; app.quit(); });
 app.on('will-quit', () => {
-  fs.rmSync(tmp, {recursive:true,force:true});
+  if (!process.env.INTERVIEW_SMOKE_ROOT && process.platform !== 'win32') fs.rmSync(tmp, {recursive:true,force:true});
   if (!passed) app.exit(1);
 });
 setTimeout(() => {console.error('lifecycle timeout');app.exit(1);}, 25000).unref();
