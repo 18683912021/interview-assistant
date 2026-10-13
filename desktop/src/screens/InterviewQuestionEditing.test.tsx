@@ -38,6 +38,8 @@ it('edits the question in place and keeps it for regeneration and supplements, w
   setup();
   await userEvent.click(await screen.findByRole('button', {name: '编辑问题'}));
   expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.queryByRole('button', {name: '重新回答'})).toBeNull();
+  expect(screen.queryByRole('button', {name: '补充一个例子'})).toBeNull();
   fireEvent.change(screen.getByRole('textbox', {name: '编辑本次问题'}), {target: {value: '请解释事务隔离级别'}});
   await userEvent.click(screen.getByRole('button', {name: '重新生成'}));
   await screen.findByText('新答案：请解释事务隔离级别');

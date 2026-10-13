@@ -1,12 +1,13 @@
 import {useEffect, useRef, useState} from 'react';
 import {Pencil, RotateCcw} from 'lucide-react';
 
-export function AnswerQuestion({question, edited = false, editable, busy, onGenerate}: {
+export function AnswerQuestion({question, edited = false, editable, busy, onGenerate, onEditingChange}: {
   question: string;
   edited?: boolean;
   editable: boolean;
   busy: boolean;
   onGenerate: (question: string) => boolean;
+  onEditingChange?: (editing: boolean) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(question);
@@ -14,6 +15,10 @@ export function AnswerQuestion({question, edited = false, editable, busy, onGene
   const submitting = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {if (editing && editable) input.current?.focus();}, [editing, editable]);
+  useEffect(() => {
+    onEditingChange?.(editing && editable);
+    return () => onEditingChange?.(false);
+  }, [editing, editable, onEditingChange]);
   const open = () => {setDraft(question); setError(''); setEditing(true);};
   const generate = () => {
     if (submitting.current || !editable || busy) return;

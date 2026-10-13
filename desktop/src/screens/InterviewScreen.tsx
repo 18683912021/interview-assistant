@@ -129,6 +129,7 @@ export default function InterviewScreen() {
     [multi, setMulti] = useState(false),
     [answerId, setAnswerId] = useState<string | null>(null);
   const [pane, setPane] = useState<'chat' | 'answer'>('chat');
+  const [questionEditing, setQuestionEditing] = useState(false);
   const [editing, setEditing] = useState<{id: string; text: string} | null>(null),
     [splitEditing, setSplitEditing] = useState(false),
     [manual, setManual] = useState(false),
@@ -1086,10 +1087,10 @@ export default function InterviewScreen() {
           </header>
           <div className="answer-preferences">
             <AnswerStylePicker compact value={session.preferences.answer_style}
-              disabled={busy || generating || session.status === 'completed'}
+              disabled={busy || generating || questionEditing || session.status === 'completed'}
               onChange={answer_style => setSession(value => value ? {...value,
                 preferences: {...value.preferences, answer_style}} : value)} />
-            <span className="preference-scope">{generating ? '生成完成后可切换' : '用于下一次回答'}</span>
+            <span className="preference-scope">{questionEditing ? '先完成问题编辑' : generating ? '生成完成后可切换' : '用于下一次回答'}</span>
           </div>
           <div
             className="answer-scroll"
@@ -1107,7 +1108,7 @@ export default function InterviewScreen() {
               <div
                 className={`answer-document${generating && !answer.text ? ' answer-document-waiting' : ''}`}>
                 <AnswerQuestion key={answer.id} question={answer.question_text}
-                  edited={!!answer.context_snapshot?.question_edited} editable={canAnswer} busy={generating}
+                  edited={!!answer.context_snapshot?.question_edited} editable={canAnswer} busy={generating} onEditingChange={setQuestionEditing}
                   onGenerate={question => !!request(answer.source_message_ids, undefined, question)} />
                 <div className="answer-format-label">
                   {answer.context_snapshot?.supplement_instruction ? '深入补充 · ' : ''}{answerStyleLabel(answer.context_snapshot?.answer_style)}
@@ -1125,7 +1126,7 @@ export default function InterviewScreen() {
                 {answer.status === 'error' && (
                   <ErrorState message={answer.error || '生成失败，请重试。'} />
                 )}
-                {!!answer.text && !generating && canAnswer && (
+                {!!answer.text && !generating && !questionEditing && canAnswer && (
                   <div className="answer-supplements" aria-label="深入补充">
                     <button className="btn btn-quiet" onClick={() => request(answer.source_message_ids, '补充一个具体例子，串起关键步骤，并解释结果和适用边界。', answerQuestionOverride)}>补充一个例子</button>
                     <button className="btn btn-quiet" onClick={() => request(answer.source_message_ids, '补充原回答未充分解释的原理、取舍和异常场景，提供能直接使用的解释。', answerQuestionOverride)}>深入解释与取舍</button>
@@ -1174,7 +1175,7 @@ export default function InterviewScreen() {
                 ? ` · 首字 ${((answer.first_token_at - answer.timestamp) / 1000).toFixed(1)}s`
                 : ''}
             </span>
-            {answer &&
+            {answer && !questionEditing &&
               (generating ? (
                 <button className="link-button" onClick={() => cancelAnswer(answer.request_id)}>
                   停止生成
