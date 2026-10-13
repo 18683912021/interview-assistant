@@ -502,7 +502,7 @@ export default function SettingsScreen() {
                       </p>
                     )}
                     <p className="notice">
-                      设备测试只在本机读取麦克风，不会保存录音。切换页面或关闭测试会立即释放设备。
+                      输入测试只读取麦克风；系统音频检测只读取电脑播放声音。均在本机完成，不保存或上传录音。切换页面会停止测试。
                     </p>
                     <button className="btn btn-quiet" onClick={() => void refreshDevices()}>
                       刷新设备列表

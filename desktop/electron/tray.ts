@@ -1,5 +1,4 @@
-import { Tray, Menu, nativeImage, app } from 'electron';
-import {hideWindows} from './windows/window-privacy.js';
+import { Tray, nativeImage } from 'electron';
 
 let tray: Tray | null = null;
 
@@ -31,13 +30,10 @@ export function createTray(showMainWindow: () => void): Tray {
   tray = new Tray(createTrayIcon());
   // OS tray tooltips are not covered by BrowserWindow content protection.
   tray.setToolTip('');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '打开主窗口', click: showMainWindow },
-    { label: '隐藏所有窗口', click: hideWindows },
-    { type: 'separator' },
-    { label: '退出面试助手', click: () => app.quit() },
-  ]));
-  // macOS single click opens the menu; Windows also supports double-click.
+  // A native context menu is a separate unprotected OS surface. Restore the
+  // protected window directly; hide/quit actions live in its DOM toolbar.
+  tray.on('click', showMainWindow);
+  tray.on('right-click', showMainWindow);
   tray.on('double-click', showMainWindow);
   return tray;
 }
