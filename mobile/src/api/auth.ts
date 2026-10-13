@@ -17,12 +17,35 @@ export interface UserProfile {
   answer_style: string;
 }
 
-export interface SendCodeResult { ok: boolean; message: string; cooldown: number; }
-export interface CheckEmailResult { ok: boolean; exists: boolean; }
-export interface LoginResult { ok: boolean; token: string; email: string; is_new?: boolean; expires_in: number; expires_at: number; }
-export interface VerifyResult { ok: boolean; email: string; }
-export interface ProfileResult { ok: boolean; user: UserProfile; }
-export interface DeductResult { ok: boolean; user: UserProfile; }
+export interface SendCodeResult {
+  ok: boolean;
+  message: string;
+  cooldown: number;
+}
+export interface CheckEmailResult {
+  ok: boolean;
+  exists: boolean;
+}
+export interface LoginResult {
+  ok: boolean;
+  token: string;
+  email: string;
+  is_new?: boolean;
+  expires_in: number;
+  expires_at: number;
+}
+export interface VerifyResult {
+  ok: boolean;
+  email: string;
+}
+export interface ProfileResult {
+  ok: boolean;
+  user: UserProfile;
+}
+export interface DeductResult {
+  ok: boolean;
+  user: UserProfile;
+}
 
 export function sendCode(email: string): Promise<SendCodeResult> {
   return api.post('/api/auth/send-code', {email});
@@ -36,11 +59,18 @@ export function login(email: string, code: string): Promise<LoginResult> {
   return api.post('/api/auth/login', {email, code});
 }
 
-export function loginPassword(email: string, password: string): Promise<LoginResult> {
+export function loginPassword(
+  email: string,
+  password: string,
+): Promise<LoginResult> {
   return api.post('/api/auth/login-password', {email, password});
 }
 
-export function register(email: string, code: string, password: string): Promise<LoginResult> {
+export function register(
+  email: string,
+  code: string,
+  password: string,
+): Promise<LoginResult> {
   return api.post('/api/auth/register', {email, code, password});
 }
 
@@ -59,6 +89,9 @@ export function deductTime(seconds: number): Promise<DeductResult> {
 }
 
 /** 更新用户偏好 */
-export function updateProfile(data: {programming_language?: string; interview_language?: string}): Promise<ProfileResult> {
+export function updateProfile(data: {
+  programming_language?: string;
+  interview_language?: string;
+}): Promise<ProfileResult> {
   return api.put<ProfileResult>('/api/user/profile', data, true);
 }

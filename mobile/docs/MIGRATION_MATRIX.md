@@ -1,23 +1,19 @@
-# poc-audio-capture 功能迁移矩阵
+# Android 1.1 与桌面端功能对应
 
-| 原项目能力 | 新 RN CLI 实现 | 处理方式 |
+| 能力 | 移动端实现 | 适配说明 |
 |---|---|---|
-| MIC / SYSTEM / BOTH | `AudioCaptureScreen` + `AudioCaptureService` | 保留；BOTH 始终为双轨 |
-| RECORD_AUDIO 权限 | JS `PermissionsAndroid` + Native 二次校验 | 修正拒绝和重复点击状态 |
-| MediaProjection 授权 | `AudioCaptureModule.requestProjectionConsent` | 重写；每个 SYSTEM/BOTH 会话一次性授权 |
-| Android 10 支持检测 | `getCapabilities()` | 保留；API 24–28 只开放 MIC |
-| 状态灯 | `StatusLight` | 保留并扩展 preparing/finalizing/error |
-| 计时器 | `Timer` | 修正为 Native UTC 开始时间，不依赖累加计时 |
-| 双路音量 | Native 10Hz 事件 + `VolumeBar`/`AudioVisualizer` | 保留；移除随机假波形 |
-| PCM 文件 | `CaptureFileStore` | 重写；`.part` → 原子 `.pcm` |
-| WAV 文件 | `WavWriter` | 新增可播放、可分享 WAV |
-| 文件路径展示 | `FileInfo` | 保留并增加大小、时长、SHA-256 |
-| adb pull 提示 | FileProvider 系统分享 | 修正私有目录无法直接 pull 的问题 |
-| WebSocket URL/连接状态 | `StreamingControl` | 保留 |
-| “实时”发送 | Native OkHttp 40ms PCM 帧 | 修正旧版停止后伪实时发送 |
-| 停止后文件上传 | Native 64KiB backfill | 保留并增加长度/SHA-256 校验 |
-| 发送统计 | queued/transport/ACK/dropped/backfill | 扩展并区分客户端与服务端确认 |
-| Expo/EAS 残留 | 无 | 删除 |
-| React Navigation 单页壳 | 无 | 删除无用户价值依赖 |
-| CLI 20 postinstall 补丁 | CLI 15.0.1 官方模板 | 删除 |
-| 本机 Gradle ZIP | Gradle 8.12 HTTPS Wrapper | 修正为可移植构建 |
+| 登录、注册、重置密码 | 邮箱验证 / 密码 | 行内校验、键盘避让、验证码倒计时 |
+| 目标岗位、简历版本 | 同一 workspace API | 底部选择弹层；事实资料与草稿分离 |
+| 实时面试 | 仅麦克风 | 移除系统采集与录屏权限；前台服务通知可暂停 |
+| 句子更新 | utterance_id + revision | 不重复追加修订，已修正文本不被覆盖，恢复时隔离片段 |
+| 对话 / 回答 | 手机页签，平板双栏 | 查看回答时继续记录，显示新增数量，不强制滚动 |
+| 提问 | 点选、合并、手动输入 | 不自动回答，长按修正说话人和内容 |
+| 回答方式 | 自然口述、结构化要点、标准书面 | 沿用后端提示词，取消重复长度选择 |
+| 回答补充 | 例子 / 深入解释与取舍 | 保留原答案；已结束场次禁止生成 |
+| 网络流式 | 原生 XHR 增量事件 | NDJSON 分包解析、取消、部分结果保留 |
+| 面试记录 | 服务端分页 / 搜索 / 详情 | 固定页头，可查看、复盘、分享、删除 |
+| 面试准备 | 自我介绍 / 项目 / 岗位 / 回答 | 结果保存为 AI 草稿，不自动变成个人经历 |
+| 设置 | 外观 / 字号 / 语言 / 默认回答 / 录音保留 | 不修改桌面端设备 ID |
+| 中断恢复 | 按账号存本机草稿、revision 乐观锁 | 冲突保留本机记录，可导出，不覆盖云端版本 |
+| 系统音频、文档转换、订阅购买 | 删除入口 | 当前产品不需要 |
+| iOS | 未实现 | 原仓库只有 Android；需独立原生音频与工程工作 |

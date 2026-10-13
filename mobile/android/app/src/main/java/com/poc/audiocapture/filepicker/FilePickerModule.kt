@@ -24,6 +24,7 @@ class FilePickerModule(reactContext: ReactApplicationContext) :
         override fun onActivityResult(
             activity: Activity, requestCode: Int, resultCode: Int, data: Intent?
         ) {
+            if (requestCode != PICK_PDF && requestCode != PICK_DOC) return
             val promise = pickPromise ?: return
             pickPromise = null
 
@@ -48,11 +49,19 @@ class FilePickerModule(reactContext: ReactApplicationContext) :
                         }
                     }
                 }
-                val destFile = java.io.File(reactApplicationContext.cacheDir, originalName.ifBlank { "file" })
+                val destFile = java.io.File.createTempFile("resume-", ".upload", reactApplicationContext.cacheDir)
 
                 contentResolver.openInputStream(uri)?.use { input ->
                     destFile.outputStream().use { output ->
-                        input.copyTo(output)
+                        val buffer = ByteArray(8192)
+                        var total = 0
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            if (total > 10 * 1024 * 1024) { destFile.delete(); throw IllegalArgumentException("文件不能超过 10 MB") }
+                            output.write(buffer, 0, count)
+                        }
                     }
                 }
 
@@ -80,6 +89,7 @@ class FilePickerModule(reactContext: ReactApplicationContext) :
             promise.reject("NO_ACTIVITY", "无法启动文件选择器")
             return
         }
+        if (pickPromise != null) { promise.reject("PICK_BUSY", "文件选择器已打开"); return }
         pickPromise = promise
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)

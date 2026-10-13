@@ -21,7 +21,8 @@ class AudioStreamClient {
   interface Listener {
     fun onStreamState(state: StreamState, message: String? = null)
     fun onStreamStats(stats: StreamStats)
-    fun onTranscription(text: String, isFinal: Boolean, source: String)
+    fun onTranscription(event: String)
+    fun onStopped()
     fun onLLMStart(questionText: String, mode: String, language: String, timestamp: Long)
     fun onLLMChunk(chunkIndex: Int, delta: String, timestamp: Long)
     fun onLLMDone(fullAnswer: String, mode: String, timestamp: Long, error: String?)
@@ -57,7 +58,7 @@ class AudioStreamClient {
 
   fun currentStats(): StreamStats = stats.copy(queuedBytes = queuedBytes)
 
-  fun connect(url: String, allowCleartext: Boolean, callback: (Result<Unit>) -> Unit) {
+  fun connect(url: String, token: String, allowCleartext: Boolean, callback: (Result<Unit>) -> Unit) {
     val validationError = validateUrl(url, allowCleartext)
     if (validationError != null) {
       callback(Result.failure(validationError))
@@ -74,7 +75,7 @@ class AudioStreamClient {
       acknowledgedBytesByTrack.clear()
       publishStats()
 
-      val request = Request.Builder().url(url).build()
+      val request = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
       socket = client.newWebSocket(request, object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
           executor.execute {
@@ -276,7 +277,6 @@ class AudioStreamClient {
   fun sendTextMessage(json: JSONObject) {
     executor.execute {
       val text = json.toString()
-      android.util.Log.d("AudioStreamClient", "发送文本消息: ${text.take(120)}")
       socket?.send(text)
     }
   }
@@ -296,7 +296,6 @@ class AudioStreamClient {
   private fun handleTextMessage(text: String) {
     val message = runCatching { JSONObject(text) }.getOrNull() ?: return
     val msgType = message.optString("type")
-    android.util.Log.d("AudioStreamClient", "收到消息 type=$msgType text=${text.take(100)}")
     when (msgType) {
       "ready" -> {
         connectTimeout?.cancel(false)
@@ -315,29 +314,20 @@ class AudioStreamClient {
           transition(StreamState.READY)
         }
       }
-      "error" -> transition(StreamState.DEGRADED, message.optString("message", "Server rejected audio data"))
-      "transcription" -> {
-        val t = message.optString("text", "")
-        val isFinal = message.optBoolean("is_final", false)
-        val src = message.optString("source", "mic")
-        android.util.Log.d("AudioStreamClient", "转录: text=$t isFinal=$isFinal source=$src")
-        if (t.isNotEmpty()) {
-          listener?.onTranscription(t, isFinal, src)
-        }
-      }
+      "error" -> transition(StreamState.ERROR, message.optString("message", "Server rejected audio data"))
+      "transcription" -> listener?.onTranscription(text)
+      "session_stopped" -> listener?.onStopped()
       "llm_start" -> {
         val questionText = message.optString("question_text", "")
         val mode = message.optString("mode", "normal")
         val language = message.optString("language", "zh")
         val timestamp = message.optLong("timestamp", 0L)
-        android.util.Log.d("AudioStreamClient", "LLM start: mode=$mode lang=$language qText=${questionText.take(60)}")
         listener?.onLLMStart(questionText, mode, language, timestamp)
       }
       "llm_chunk" -> {
         val chunkIndex = message.optInt("chunk_index", 0)
         val delta = message.optString("delta", "")
         val timestamp = message.optLong("timestamp", 0L)
-        android.util.Log.d("AudioStreamClient", "LLM chunk: idx=$chunkIndex delta=${delta.take(40)}")
         listener?.onLLMChunk(chunkIndex, delta, timestamp)
       }
       "llm_done" -> {
@@ -345,7 +335,6 @@ class AudioStreamClient {
         val mode = message.optString("mode", "normal")
         val timestamp = message.optLong("timestamp", 0L)
         val error = if (message.has("error")) message.optString("error") else null
-        android.util.Log.d("AudioStreamClient", "LLM done: mode=$mode len=${fullAnswer.length} error=$error")
         listener?.onLLMDone(fullAnswer, mode, timestamp, error)
       }
       else -> android.util.Log.w("AudioStreamClient", "未处理的消息类型: $msgType")

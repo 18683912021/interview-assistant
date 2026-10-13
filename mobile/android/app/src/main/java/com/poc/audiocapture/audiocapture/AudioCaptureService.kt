@@ -8,8 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
@@ -29,7 +27,6 @@ import java.util.concurrent.Executor
 import org.json.JSONObject
 
 class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamClient.Listener {
-  data class ProjectionConsent(val resultCode: Int, val data: Intent)
 
   data class StartInfo(
       val operationId: String,
@@ -45,7 +42,8 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
     fun onStreamState(state: StreamState, message: String?)
     fun onStreamStats(stats: StreamStats)
     fun onNativeError(error: CaptureException)
-    fun onTranscription(text: String, isFinal: Boolean, source: String)
+    fun onTranscription(event: String)
+    fun onStopped()
     fun onLLMStart(questionText: String, mode: String, language: String, timestamp: Long)
     fun onLLMChunk(chunkIndex: Int, delta: String, timestamp: Long)
     fun onLLMDone(fullAnswer: String, mode: String, timestamp: Long, error: String?)
@@ -88,9 +86,6 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
   @Volatile private var lastResult: CaptureResult? = null
   @Volatile private var pendingBackfill = false
 
-  private var mediaProjection: MediaProjection? = null
-  private var projectionCallback: MediaProjection.Callback? = null
-  private var projectionStopping = false
   private val lastSequences = ConcurrentHashMap<TrackSource, Long>()
 
   override fun onCreate() {
@@ -129,7 +124,6 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
 
   fun startCapture(
       request: CaptureRequest,
-      projectionConsent: ProjectionConsent?,
       callback: (Result<StartInfo>) -> Unit,
   ) {
     commandExecutor.execute {
@@ -145,7 +139,7 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
       transitionCapture(CaptureState.PREPARING)
       operationId = request.operationId
       source = request.source
-      val newSessionId = UUID.randomUUID()
+      val newSessionId = UUID.fromString(request.operationId)
       sessionId = newSessionId
       startedAtUtc = utcNow()
       lastResult = null
@@ -156,23 +150,8 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
 
       try {
         ensureForeground(request.source)
-        val projection = if (request.source.needsSystem) {
-          val consent = projectionConsent ?: throw CaptureException(
-              code = "E_PROJECTION_REQUIRED",
-              stage = "start",
-              source = TrackSource.SYSTEM,
-              message = "System audio capture requires fresh MediaProjection consent",
-          )
-          createProjection(consent)
-        } else {
-          null
-        }
-
-        val inputFormats = captureEngine.start(newSessionId, request.source, projection)
-        val tracks = inputFormats.keys
-        if (streamClient.currentState() == StreamState.READY) {
-          streamClient.startSession(newSessionId.toString(), request.source, tracks)
-        }
+        streamClient.startSession(newSessionId.toString(), request.source, listOf(TrackSource.MIC))
+        val inputFormats = captureEngine.start(newSessionId, request.source)
         transitionCapture(CaptureState.CAPTURING)
         callback(Result.success(StartInfo(
             operationId = request.operationId,
@@ -182,7 +161,6 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
             inputFormats = inputFormats,
         )))
       } catch (error: Throwable) {
-        cleanupProjection()
         stopForegroundCompat()
         val captureError = asCaptureException(error, "E_CAPTURE_START", "start")
         transitionCapture(CaptureState.ERROR)
@@ -225,7 +203,6 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
           )
         }
         streamClient.finishSession(activeSession.toString(), reason)
-        cleanupProjection()
 
         val result = CaptureResult(
             operationId = activeOperation,
@@ -243,14 +220,10 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
         stopForegroundCompat()
         callback?.invoke(Result.success(result))
 
-        if (streamClient.currentState() == StreamState.READY && tracks.isNotEmpty()) {
-          backfillTracks(activeSession, tracks, 0)
-        } else if (tracks.isNotEmpty()) {
-          pendingBackfill = true
-          notifyCaptureState()
-        }
+        // Realtime audio is already stored by the server. Do not retransmit or retain duplicate local recordings.
+        fileStore.sessionDirectory(activeSession.toString()).deleteRecursively()
+
       } catch (error: Throwable) {
-        cleanupProjection()
         stopForegroundCompat()
         val captureError = asCaptureException(error, "E_CAPTURE_STOP", "stop")
         transitionCapture(CaptureState.ERROR)
@@ -260,8 +233,8 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
     }
   }
 
-  fun connectStream(url: String, callback: (Result<Unit>) -> Unit) {
-    streamClient.connect(url, allowCleartext = BuildConfig.DEBUG) { result ->
+  fun connectStream(url: String, token: String, callback: (Result<Unit>) -> Unit) {
+    streamClient.connect(url, token, allowCleartext = BuildConfig.DEBUG) { result ->
       if (result.isFailure) {
         callback(result)
       } else {
@@ -271,7 +244,6 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
           if (captureState == CaptureState.CAPTURING && activeSession != null && activeSource != null) {
             val tracks = buildList {
               if (activeSource.needsMic) add(TrackSource.MIC)
-              if (activeSource.needsSystem) add(TrackSource.SYSTEM)
             }
             streamClient.startSession(activeSession.toString(), activeSource, tracks)
           }
@@ -363,6 +335,7 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
   }
 
   override fun onStreamState(state: StreamState, message: String?) {
+    if (state in setOf(StreamState.ERROR, StreamState.CLOSED) && captureState == CaptureState.CAPTURING) {stopCapture("stream_lost", null)}
     listeners.forEach { it.onStreamState(state, message) }
   }
 
@@ -370,10 +343,10 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
     listeners.forEach { it.onStreamStats(stats) }
   }
 
-  override fun onTranscription(text: String, isFinal: Boolean, source: String) {
-    android.util.Log.d("AudioCaptureService", "转发转录: text=$text isFinal=$isFinal source=$source listeners=${listeners.size}")
-    listeners.forEach { it.onTranscription(text, isFinal, source) }
+  override fun onTranscription(event: String) {
+    listeners.forEach { it.onTranscription(event) }
   }
+  override fun onStopped() { listeners.forEach { it.onStopped() } }
 
   override fun onLLMStart(questionText: String, mode: String, language: String, timestamp: Long) {
     listeners.forEach { it.onLLMStart(questionText, mode, language, timestamp) }
@@ -390,47 +363,9 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
   override fun onDestroy() {
     listeners.clear()
     runCatching { if (captureEngine.isRunning()) captureEngine.stop() }
-    cleanupProjection()
     streamClient.shutdown()
     commandThread.quitSafely()
     super.onDestroy()
-  }
-
-  private fun createProjection(consent: ProjectionConsent): MediaProjection {
-    val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-    val projection = manager.getMediaProjection(consent.resultCode, consent.data)
-        ?: throw CaptureException(
-            code = "E_PROJECTION_CREATE",
-            stage = "start",
-            source = TrackSource.SYSTEM,
-            message = "Unable to create MediaProjection",
-        )
-    val callback = object : MediaProjection.Callback() {
-      override fun onStop() {
-        if (projectionStopping) return
-        notifyError(CaptureException(
-            code = "E_PROJECTION_REVOKED",
-            stage = "capture",
-            source = TrackSource.SYSTEM,
-            message = "System audio permission was revoked",
-        ))
-        stopCapture("projection_revoked", null)
-      }
-    }
-    projection.registerCallback(callback, null)
-    mediaProjection = projection
-    projectionCallback = callback
-    return projection
-  }
-
-  private fun cleanupProjection() {
-    val projection = mediaProjection ?: return
-    projectionStopping = true
-    projectionCallback?.let { runCatching { projection.unregisterCallback(it) } }
-    runCatching { projection.stop() }
-    projectionCallback = null
-    mediaProjection = null
-    projectionStopping = false
   }
 
   private fun backfillTracks(
@@ -464,9 +399,6 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
     val notification = buildNotification(source)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       var type = 0
-      if (source.needsSystem) {
-        type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-      }
       if (source.needsMic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
       }
@@ -488,10 +420,10 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val channel = NotificationChannel(
         NOTIFICATION_CHANNEL_ID,
-        "Audio capture",
+        "面试麦克风",
         NotificationManager.IMPORTANCE_LOW,
     ).apply {
-      description = "Shows when microphone or system audio capture is active"
+      description = "显示麦克风采集状态，可随时暂停"
       setSound(null, null)
     }
     getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
@@ -512,12 +444,12 @@ class AudioCaptureService : Service(), AudioCaptureEngine.Callback, AudioStreamC
     )
     return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-        .setContentTitle("Audio Capture")
-        .setContentText("Capturing ${source.wireName} audio")
+        .setContentTitle("AI面试助手")
+        .setContentText("正在采集麦克风 · 点击返回面试")
         .setContentIntent(contentIntent)
         .setOngoing(true)
         .setOnlyAlertOnce(true)
-        .addAction(0, "Stop", stopIntent)
+        .addAction(0, "暂停采集", stopIntent)
         .build()
   }
 

@@ -3,19 +3,14 @@ package com.poc.audiocapture.audiocapture
 import java.io.File
 
 enum class CaptureSource(val wireName: String) {
-  MIC("mic"),
-  SYSTEM("system"),
-  BOTH("both");
+  MIC("mic");
 
   val needsMic: Boolean
-    get() = this == MIC || this == BOTH
-
-  val needsSystem: Boolean
-    get() = this == SYSTEM || this == BOTH
+    get() = true
 
   companion object {
     fun fromWireName(value: String): CaptureSource =
-        entries.firstOrNull { it.wireName == value }
+        entries.firstOrNull { it == MIC && it.wireName == value }
             ?: throw CaptureException(
                 code = "E_CAPTURE_SOURCE",
                 stage = "validate",

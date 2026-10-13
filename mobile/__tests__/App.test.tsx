@@ -1,73 +1,23 @@
 import React from 'react';
-import ReactTestRenderer from 'react-test-renderer';
-
-jest.mock('react-native-safe-area-context', () => {
-  const ReactLib = require('react');
-  return {
-    SafeAreaProvider: ({children}: {children: React.ReactNode}) =>
-      ReactLib.createElement(ReactLib.Fragment, null, children),
-    SafeAreaView: ({children}: {children: React.ReactNode}) =>
-      ReactLib.createElement(ReactLib.Fragment, null, children),
-  };
-});
-
-jest.mock(
-  '../src/hooks/useAudioCaptureController',
-  () => ({
-    useAudioCaptureController: () => ({
-      state: {
-        capabilities: {
-          apiLevel: 35,
-          microphone: true,
-          systemAudio: true,
-          outputSampleRate: 16000,
-          outputChannels: 1,
-          outputBitDepth: 16,
-          chunkDurationMs: 40,
-        },
-        captureState: 'idle',
-        streamState: 'idle',
-        source: 'mic',
-        projectionGranted: false,
-        levels: {mic: 0, system: 0},
-        streamStats: {
-          queuedBytes: 0,
-          transportBytes: 0,
-          acknowledgedBytes: 0,
-          realtimeFrames: 0,
-          droppedFrames: 0,
-          backfillBytes: 0,
-        },
-        startedAtUtc: null,
-        result: null,
-        pendingBackfill: false,
-        error: null,
-        streamMessage: null,
-      },
-      isBusy: false,
-      canUseSystem: true,
-      needsProjection: false,
-      setSource: jest.fn(),
-      authorizeSystemAudio: jest.fn(),
-      start: jest.fn(),
-      stop: jest.fn(),
-      connect: jest.fn(),
-      disconnect: jest.fn(),
-      retryBackfill: jest.fn(),
-      shareOutput: jest.fn(),
-      clearError: jest.fn(),
-    }),
-  }),
-);
-
+import Renderer, {act} from 'react-test-renderer';
 import App from '../App';
-
-test('renders the audio capture screen', () => {
-  let renderer: ReactTestRenderer.ReactTestRenderer;
-  ReactTestRenderer.act(() => {
-    renderer = ReactTestRenderer.create(<App />);
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaProvider: ({children}: {children: React.ReactNode}) => children,
+  SafeAreaView: ({children}: {children: React.ReactNode}) => children,
+}));
+jest.mock('../src/utils/token', () => ({
+  getToken: jest.fn(async () => null),
+  verifyToken: jest.fn(),
+  getProfile: jest.fn(async () => ({email: 'test@example.com'})),
+}));
+test('shows the mobile sign-in form, not the old capture lab', async () => {
+  let renderer: Renderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = Renderer.create(<App />);
   });
-
-  expect(JSON.stringify(renderer!.toJSON())).toContain('Audio Capture Lab');
-  ReactTestRenderer.act(() => renderer!.unmount());
+  const output = JSON.stringify(renderer!.toJSON());
+  expect(output).toContain('欢迎回来');
+  expect(output).toContain('验证码登录');
+  expect(output).not.toContain('Audio Capture Lab');
+  await act(async () => renderer!.unmount());
 });

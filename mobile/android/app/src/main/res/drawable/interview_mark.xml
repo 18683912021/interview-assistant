@@ -1,0 +1,8 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Same AudioLines geometry as desktop/assets/icon.svg; Lucide ISC attribution retained there. -->
+    <group android:translateX="28" android:translateY="28" android:scaleX="2.16667" android:scaleY="2.16667">
+        <path android:pathData="M2,10v3 M6,6v11 M10,3v18 M14,8v7 M18,5v13 M22,10v3"
+            android:strokeColor="#FFFFFF" android:strokeWidth="2" android:strokeLineCap="round" android:fillColor="@android:color/transparent" />
+    </group>
+</vector>

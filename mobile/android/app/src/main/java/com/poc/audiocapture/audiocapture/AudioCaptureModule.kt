@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
@@ -46,8 +45,6 @@ class AudioCaptureModule(
   private var bindingInProgress = false
   private val pendingActions = ArrayDeque<PendingServiceAction>()
 
-  private var pendingProjectionPromise: Promise? = null
-  private var projectionConsent: AudioCaptureService.ProjectionConsent? = null
   private var listenerCount = 0
 
   private val serviceConnection = object : ServiceConnection {
@@ -98,40 +95,13 @@ class AudioCaptureModule(
     val map = Arguments.createMap().apply {
       putInt("apiLevel", Build.VERSION.SDK_INT)
       putBoolean("microphone", true)
-      putBoolean("systemAudio", Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+      putBoolean("systemAudio", false)
       putInt("outputSampleRate", PcmNormalizer.OUTPUT_FORMAT.sampleRate)
       putInt("outputChannels", PcmNormalizer.OUTPUT_FORMAT.channelCount)
       putInt("outputBitDepth", PcmNormalizer.OUTPUT_FORMAT.bitsPerSample)
       putInt("chunkDurationMs", 40)
     }
     promise.resolve(map)
-  }
-
-  @ReactMethod
-  fun requestProjectionConsent(promise: Promise) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-      promise.reject("E_SYSTEM_AUDIO_UNSUPPORTED", "System audio capture requires Android 10 or newer")
-      return
-    }
-    if (pendingProjectionPromise != null) {
-      promise.reject("E_INVALID_STATE", "A MediaProjection request is already active")
-      return
-    }
-    val activity = currentActivity
-    if (activity == null) {
-      promise.reject("E_ACTIVITY", "No foreground Activity is available")
-      return
-    }
-
-    val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-    pendingProjectionPromise = promise
-    projectionConsent = null
-    try {
-      activity.startActivityForResult(manager.createScreenCaptureIntent(), PROJECTION_REQUEST_CODE)
-    } catch (error: Throwable) {
-      pendingProjectionPromise = null
-      promise.reject("E_PROJECTION_REQUEST", error.message, error)
-    }
   }
 
   @ReactMethod
@@ -150,14 +120,8 @@ class AudioCaptureModule(
       promise.reject("E_RECORD_PERMISSION", "RECORD_AUDIO permission has not been granted")
       return
     }
-    if (source.needsSystem && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-      promise.reject("E_SYSTEM_AUDIO_UNSUPPORTED", "System audio capture requires Android 10 or newer")
-      return
-    }
-
-    val consent = if (source.needsSystem) projectionConsent.also { projectionConsent = null } else null
-    if (source.needsSystem && consent == null) {
-      promise.reject("E_PROJECTION_REQUIRED", "Request fresh MediaProjection consent before starting")
+    if (source != CaptureSource.MIC) {
+      promise.reject("E_CAPTURE_SOURCE", "移动端仅支持麦克风采集")
       return
     }
 
@@ -170,7 +134,7 @@ class AudioCaptureModule(
 
     withService(
         onReady = { connected ->
-          connected.startCapture(CaptureRequest(operationId, source), consent) { result ->
+          connected.startCapture(CaptureRequest(operationId, source)) { result ->
             result.fold(
                 onSuccess = { promise.resolve(startInfoToMap(it)) },
                 onFailure = { reject(promise, it) },
@@ -205,10 +169,10 @@ class AudioCaptureModule(
   }
 
   @ReactMethod
-  fun connectStream(url: String, promise: Promise) {
+  fun connectStream(url: String, token: String, promise: Promise) {
     withService(
         onReady = { connected ->
-          connected.connectStream(url) { result ->
+          connected.connectStream(url, token) { result ->
             result.fold(
                 onSuccess = { promise.resolve(null) },
                 onFailure = { reject(promise, it) },
@@ -290,19 +254,7 @@ class AudioCaptureModule(
     listenerCount = (listenerCount - count).coerceAtLeast(0)
   }
 
-  override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
-    if (requestCode != PROJECTION_REQUEST_CODE) return
-    val promise = pendingProjectionPromise ?: return
-    pendingProjectionPromise = null
-
-    if (resultCode == Activity.RESULT_OK && data != null) {
-      projectionConsent = AudioCaptureService.ProjectionConsent(resultCode, Intent(data))
-      promise.resolve(true)
-    } else {
-      projectionConsent = null
-      promise.resolve(false)
-    }
-  }
+  override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) = Unit
 
   override fun onNewIntent(intent: Intent?) = Unit
 
@@ -311,16 +263,10 @@ class AudioCaptureModule(
   override fun onHostPause() = Unit
 
   override fun onHostDestroy() {
-    pendingProjectionPromise?.reject("E_ACTIVITY_DESTROYED", "Activity was destroyed during MediaProjection consent")
-    pendingProjectionPromise = null
-    projectionConsent = null
     unbindService()
   }
 
   override fun invalidate() {
-    pendingProjectionPromise?.reject("E_MODULE_INVALIDATED", "Audio capture module was invalidated")
-    pendingProjectionPromise = null
-    projectionConsent = null
     context.removeActivityEventListener(this)
     context.removeLifecycleEventListener(this)
     unbindService()
@@ -357,17 +303,13 @@ class AudioCaptureModule(
     emit(EVENT_NATIVE_ERROR, errorToMap(error))
   }
 
-  override fun onTranscription(text: String, isFinal: Boolean, source: String) {
-    android.util.Log.d("AudioCaptureModule", "发射转录事件: text=$text isFinal=$isFinal source=$source")
-    emit(EVENT_TRANSCRIPTION, Arguments.createMap().apply {
-      putString("text", text)
-      putBoolean("isFinal", isFinal)
-      putString("source", source)
-    })
+  override fun onTranscription(event: String) {
+    val json = org.json.JSONObject(event)
+    emit(EVENT_TRANSCRIPTION, Arguments.createMap().apply { putString("json", json.toString()) })
   }
+  override fun onStopped() { emit("AudioCaptureStopped", Arguments.createMap()) }
 
   override fun onLLMStart(questionText: String, mode: String, language: String, timestamp: Long) {
-    android.util.Log.d("AudioCaptureModule", "发射LLM start: mode=$mode lang=$language qText=${questionText.take(60)}")
     emit(EVENT_LLM_START, Arguments.createMap().apply {
       putString("question_text", questionText)
       putString("mode", mode)
@@ -385,7 +327,6 @@ class AudioCaptureModule(
   }
 
   override fun onLLMDone(fullAnswer: String, mode: String, timestamp: Long, error: String?) {
-    android.util.Log.d("AudioCaptureModule", "发射LLM done: mode=$mode len=${fullAnswer.length} error=$error")
     emit(EVENT_LLM_DONE, Arguments.createMap().apply {
       putString("full_answer", fullAnswer)
       putString("mode", mode)
@@ -529,6 +470,13 @@ class AudioCaptureModule(
   }
 
   @ReactMethod
+  fun copyText(text: String, promise: Promise) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("面试回答", text))
+    promise.resolve(null)
+  }
+
+  @ReactMethod
   fun storePreference(key: String, value: String, promise: Promise) {
     try {
       val prefs = reactApplicationContext.getSharedPreferences("ai_interview_prefs", Context.MODE_PRIVATE)
@@ -646,6 +594,5 @@ class AudioCaptureModule(
     const val EVENT_LLM_START = "AudioLLMStart"
     const val EVENT_LLM_CHUNK = "AudioLLMChunk"
     const val EVENT_LLM_DONE = "AudioLLMDone"
-    private const val PROJECTION_REQUEST_CODE = 9201
   }
 }

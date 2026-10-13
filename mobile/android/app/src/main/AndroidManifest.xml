@@ -5,9 +5,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:name=".MainApplication"
@@ -17,7 +15,7 @@
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:theme="@style/AppTheme"
         android:supportsRtl="true">
 
@@ -37,8 +35,8 @@
         <service
             android:name=".audiocapture.AudioCaptureService"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection|microphone|dataSync"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="true" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

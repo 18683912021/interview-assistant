@@ -1,147 +1,63 @@
-# Audio Capture — React Native CLI Android
+# AI 面试助手 · Android 1.1
 
-纯 React Native CLI Android 工程，用于在 Android Studio 中测试和打包麦克风、系统播放音频及双轨采集。
+React Native 0.78.3 / React 19 / Kotlin，和桌面端共用 `/api/workspace` 数据与认证。
+现有原生工程仅支持 Android；仓库没有 iOS 工程，不能生成 IPA。
 
-## 固定环境
+## 产品与权限
 
-- Node.js `22.23.1`
-- npm `10.9.8`
-- React Native `0.78.3`
-- React `19.0.0`
-- JDK `17`
-- Gradle `8.12`
-- AGP `8.8.0`
-- Kotlin `2.0.21`
-- Android SDK / target SDK `35`
-- NDK `27.1.12297006`
-- New Architecture：关闭
-- Hermes：开启
+- 手机采用五个入口：面试、资料、准备、记录、设置。
+- 现场面试：手机切换对话 / 答案，宽度达到 760pt 显示 40% / 60% 双栏。查看答案不阻塞逐句转写。
+- **只采集麦克风**，不使用 MediaProjection，不申请录屏、通话或系统播放音频权限。
+- Android 麦克风前台服务必须从可见页面启动；通知栏可暂停，移除任务后停止服务。
+- 单麦克风没有声纹分离：按当前「对方 / 我」标记，可长按修正；不要把默认标记当成声纹识别结果。
+- 同一手机的电话、会议应用可能独占麦克风。适合现场场景或用另一设备外放声音；不能承诺抓取私密通话。
+- 手动选句 / 合并提问；自然口述、结构化要点、标准书面；继续补例子与解释。结束面试后只能查看已有答案、生成复盘。
+- 资料分简历、个人经历、准备草稿；AI 草稿不当作真实经历，编辑后明确核实才保存为事实资料。
+- 四个准备工具：自我介绍、项目梳理、岗位分析、回答练习。移除旧文档转换和未接支付的订阅入口。
+- 历史分页、搜索、详情、复盘、分享文字及录音清理；列表标题和筛选固定。
+- 云端保存使用 revision 乐观锁，本机保留待同步快照；不会覆盖跨端冲突。登录过期或冲突时保留本机内容。
 
-完整环境说明见仓库根目录 `RN_ANDROID_STUDIO_SETUP.md`。
+## 开发
 
-## 安装
-
-```powershell
+```sh
 nvm use 22.23.1
 npm ci
 npm run verify:config
-```
-
-## Android Studio
-
-1. 使用 Android Studio 打开 `fe-app/audio-capture/android`。
-2. Gradle JDK 选择 JDK 17。
-3. 使用项目 Gradle Wrapper，不接受 AGP/Gradle 自动升级。
-4. 等待 Gradle Sync 完成。
-5. 启动 API 35 模拟器或连接 Android 真机。
-6. 项目根目录单独启动 Metro：
-
-```powershell
 npm start
+# 另一个终端
+npm run android
 ```
 
-7. Android Studio 选择 `app` 后点击 Run/Debug。
+JDK 17 或 Android Studio 自带 JBR，SDK 35，NDK 27.1.12297006，Gradle 8.12。
+本机 Android SDK 通过未提交的 `android/local.properties` 指定。
+项目内旧有 Gradle 代理设置保留；若代理未启动，可在构建命令添加
+`-Dhttp.proxyHost= -Dhttps.proxyHost=`，或在用户级 Gradle 设置配置可用代理。
 
-真机连接 Metro：
-
-```powershell
-adb reverse tcp:8081 tcp:8081
-```
-
-## 构建
-
-```powershell
-cd android
-.\gradlew.bat assembleDebug
-.\gradlew.bat assembleRelease
-.\gradlew.bat bundleRelease
-```
-
-产物：
-
-```text
-android/app/build/outputs/apk/debug/app-debug.apk
-android/app/build/outputs/apk/release/app-release-unsigned.apk
-android/app/build/outputs/bundle/release/app-release.aab
-```
-
-Release 不使用 debug keystore。正式签名通过用户级 Gradle properties 或环境变量提供：
-
-```text
-AUDIO_CAPTURE_UPLOAD_STORE_FILE
-AUDIO_CAPTURE_UPLOAD_STORE_PASSWORD
-AUDIO_CAPTURE_UPLOAD_KEY_ALIAS
-AUDIO_CAPTURE_UPLOAD_KEY_PASSWORD
-```
-
-密钥和口令不得提交到仓库。
-
-## 功能
-
-- MIC、SYSTEM、BOTH 三种采集模式
-- Android 10+ MediaProjection 系统音频授权
-- 前台采集服务和通知栏 Stop
-- 16kHz / PCM16LE / mono 原生规范化
-- 双轨实时电平和可视化
-- 每轨 PCM 文件及 WAV 文件
-- FileProvider 系统分享
-- Native OkHttp 实时 40ms WebSocket 推流
-- 慢网有界队列和 dropped 统计
-- 停止后完整 PCM backfill 与 SHA-256 校验
-
-## 后端
-
-后端目录：`agent_app/workspace/be/poc-audio-capture`
-
-```powershell
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8010
-```
-
-模拟器默认连接：
-
-```text
-ws://10.0.2.2:8010/api/ws/audio/stream
-```
-
-Release 只允许 `wss://`。
-
-协议见 `docs/AUDIO_PROTOCOL_V1.md`。
-
-## 验证
-
-```powershell
+```sh
 npm run typecheck
 npm run lint
 npm test -- --runInBand
-npm run verify:config
-
 cd android
-.\gradlew.bat testDebugUnitTest
-.\gradlew.bat lintDebug
-.\gradlew.bat assembleDebug
-.\gradlew.bat assembleRelease
-.\gradlew.bat bundleRelease
+bash gradlew testDebugUnitTest lintDebug assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
 
-## 采集文件
+Release 内嵌 JS 和 Hermes，无须 Metro。正式 release 签名继续通过外部变量提供：
+`AUDIO_CAPTURE_UPLOAD_STORE_FILE` / `AUDIO_CAPTURE_UPLOAD_STORE_PASSWORD` /
+`AUDIO_CAPTURE_UPLOAD_KEY_ALIAS` / `AUDIO_CAPTURE_UPLOAD_KEY_PASSWORD`。
+不要把密钥提交到仓库；使用测试签名的 APK 会单独注明，仅作安装联调。
 
-采集完成后文件保存在设备 `/data/data/com.poc.audiocapture/files/captures/{sessionId}/`，每条轨道一个 `.pcm` + 一个 `.wav`。
+## 技术约定
 
-**拉取到项目目录**（方便 Agent 读取）：
+- 语音 WebSocket 通过 `Authorization: Bearer` 认证；先保存所属账号面试，再用同一 UUID 启动 `audio.capture.v1` 会话。
+- 40ms / 16kHz / 单声道 PCM16LE。每次恢复建立新连接；保留 utterance_id / revision，更新同一句而不是重复插入。
+- 等服务端 `session_stopped` 确认（有界超时）再断开，保存末句；中断的句子标记待确认。
+- React Native 0.78 使用原生 XHR 增量事件读取 NDJSON，不依赖浏览器 ReadableStream。分包拼接、终止事件、取消及部分输出均显式处理。
+- 后端已记录实时音频，移动端不再重复 backfill；停止后删除本段本机 PCM/WAV 临时文件。
+- 本轮仅修改 mobile，桌面端和服务端协议保持不变。
 
-```powershell
-powershell -File scripts/pull-captures.ps1
-```
+## 验证边界
 
-文件会同步到 `captures/` 目录（已加入 .gitignore）。
+自动化覆盖断句修订、恢复后句子编号、用户编辑、流式传输边界、面试结束只读、同步失败保留、认证页面。
+模拟器不能替代真机：需用 Android 真机检查蓝牙耳机、来电抢占、锁屏、厂商省电策略和长时间录音。
 
-**其他方式**：App 内点「分享 WAV / 分享 PCM」按钮通过系统分享发送，或手动 `adb pull`。
-
-## Android 平台限制
-
-- SYSTEM/BOTH 仅 API 29+ 可用。
-- 被采集应用可以通过 Android capture policy 禁止系统音频回采。
-- DRM、通话、语音通信和受保护媒体可能返回静音，这是系统限制，不是 App 必然故障。
-- MediaProjection 以一次会话授权使用；Android 14/15 每次新会话都会重新请求。
-- 系统音频最终效果必须以真机验证，模拟器只适合 UI、MIC 和基础网络测试。
+参考：[RN Networking](https://reactnative.dev/docs/network)、[Android 麦克风前台服务限制](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)。

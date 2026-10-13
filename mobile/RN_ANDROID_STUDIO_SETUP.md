@@ -1,3 +1,5 @@
+> 此文为旧工程环境排障存档。当前产品仅采集麦克风；系统音频、MediaProjection 和旧路径说明不再适用。请以 [README](README.md) 的构建和权限要求为准。
+
 # React Native CLI Android Studio 稳定开发环境
 
 > 适用项目：React Native `0.78.3` + React `19.0.0` 的 Android RN CLI 工程  

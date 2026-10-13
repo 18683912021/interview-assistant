@@ -1,3 +1,5 @@
+> 共享协议规范包含桌面端和早期实验能力。Android 1.1 仅使用 MIC 实时轨道，通过 Authorization Bearer 认证；session_id 必须对应已保存的所属账号面试。停止时等待 session_stopped 确认，不再执行本文的文件 backfill 步骤。
+
 # audio.capture.v1
 
 ## 音频规范

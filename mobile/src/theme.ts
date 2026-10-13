@@ -11,21 +11,21 @@ import {useMemo} from 'react';
 const tokens = {
   light: {
     // Background
-    bg: '#F7F8FA',
+    bg: '#F3F4F7',
     bgSurface: '#FFFFFF',
     bgElevated: '#FFFFFF',
     bgHeader: 'rgba(255,255,255,0.85)',
 
     // Text
-    textPrimary: '#1A1D26',
+    textPrimary: '#292D3B',
     textSecondary: '#6B7280',
     textTertiary: '#9CA3AF',
     textInverse: '#FFFFFF',
 
     // Accent
-    accent: '#4F46E5',
-    accentLight: '#EEF2FF',
-    accentSoft: '#E0E7FF',
+    accent: '#5368A3',
+    accentLight: '#EBEEF7',
+    accentSoft: '#DEE4F3',
     danger: '#EF4444',
     dangerLight: '#FEF2F2',
     success: '#10B981',
@@ -84,8 +84,8 @@ const tokens = {
     textTertiary: '#64748B',
     textInverse: '#0F1117',
 
-    accent: '#818CF8',
-    accentLight: '#1E1B4B',
+    accent: '#9EAEE0',
+    accentLight: '#262F45',
     accentSoft: '#312E81',
     danger: '#F87171',
     dangerLight: '#451A1A',
@@ -97,7 +97,7 @@ const tokens = {
     bubbleInterviewer: '#1E293B',
     bubbleUser: '#14532D',
     bubbleUserBorder: '#166534',
-    bubbleAI: '#1E1B4B',
+    bubbleAI: '#262F45',
     bubbleAIBorder: '#3730A3',
 
     divider: '#272A36',

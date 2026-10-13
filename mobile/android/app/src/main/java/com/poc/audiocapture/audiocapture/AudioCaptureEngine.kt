@@ -1,14 +1,10 @@
 package com.poc.audiocapture.audiocapture
 
-import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.media.projection.MediaProjection
 import android.os.Build
 import android.os.Process
-import androidx.annotation.RequiresApi
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
@@ -59,7 +55,6 @@ class AudioCaptureEngine(
   fun start(
       sessionId: UUID,
       source: CaptureSource,
-      mediaProjection: MediaProjection?,
   ): Map<TrackSource, AudioFormatSpec> = synchronized(lock) {
     check(activeTracks.isEmpty()) { "Audio capture engine is already active" }
 
@@ -68,24 +63,6 @@ class AudioCaptureEngine(
       if (source.needsMic) {
         val prepared = prepareMicRecorder()
         preparedTracks += createRuntime(sessionId, TrackSource.MIC, prepared)
-      }
-      if (source.needsSystem) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-          throw CaptureException(
-              code = "E_SYSTEM_AUDIO_UNSUPPORTED",
-              stage = "prepare",
-              source = TrackSource.SYSTEM,
-              message = "System audio capture requires Android 10 or newer",
-          )
-        }
-        val projection = mediaProjection ?: throw CaptureException(
-            code = "E_PROJECTION_REQUIRED",
-            stage = "prepare",
-            source = TrackSource.SYSTEM,
-            message = "System audio capture requires MediaProjection consent",
-        )
-        val prepared = prepareSystemRecorder(projection)
-        preparedTracks += createRuntime(sessionId, TrackSource.SYSTEM, prepared)
       }
 
       preparedTracks.forEach { runtime ->
@@ -212,60 +189,6 @@ class AudioCaptureEngine(
         stage = "prepare",
         source = TrackSource.MIC,
         message = lastError?.message ?: "No supported microphone format was found",
-        cause = lastError,
-    )
-  }
-
-  @RequiresApi(Build.VERSION_CODES.Q)
-  private fun prepareSystemRecorder(mediaProjection: MediaProjection): PreparedRecorder {
-    val captureConfiguration = AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
-        .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-        .addMatchingUsage(AudioAttributes.USAGE_GAME)
-        .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
-        .build()
-
-    var lastError: Throwable? = null
-    for (sampleRate in SAMPLE_RATE_CANDIDATES) {
-      for (channelMask in listOf(AudioFormat.CHANNEL_IN_MONO, AudioFormat.CHANNEL_IN_STEREO)) {
-        try {
-          val channelCount = if (channelMask == AudioFormat.CHANNEL_IN_MONO) 1 else 2
-          val minBuffer = AudioRecord.getMinBufferSize(
-              sampleRate,
-              channelMask,
-              AudioFormat.ENCODING_PCM_16BIT,
-          )
-          check(minBuffer > 0) { "Unsupported system audio format" }
-          val target40Ms = sampleRate * channelCount * 2 / 25
-          val bufferSize = max(minBuffer, target40Ms)
-          val format = AudioFormat.Builder()
-              .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-              .setSampleRate(sampleRate)
-              .setChannelMask(channelMask)
-              .build()
-          val recorder = AudioRecord.Builder()
-              .setAudioPlaybackCaptureConfig(captureConfiguration)
-              .setAudioFormat(format)
-              .setBufferSizeInBytes(bufferSize)
-              .build()
-          if (recorder.state != AudioRecord.STATE_INITIALIZED) {
-            recorder.release()
-            error("System AudioRecord initialization failed")
-          }
-          return PreparedRecorder(
-              recorder = recorder,
-              format = AudioFormatSpec(sampleRate, channelCount),
-              bufferSize = bufferSize,
-          )
-        } catch (error: Throwable) {
-          lastError = error
-        }
-      }
-    }
-    throw CaptureException(
-        code = "E_SYSTEM_INITIALIZE",
-        stage = "prepare",
-        source = TrackSource.SYSTEM,
-        message = lastError?.message ?: "No supported system audio format was found",
         cause = lastError,
     )
   }
