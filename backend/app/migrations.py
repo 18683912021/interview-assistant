@@ -155,8 +155,18 @@ async def _workspace_details(conn: AsyncConnection) -> None:
                 await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
     await conn.execute(update(WorkspaceResume).where(WorkspaceResume.filename.startswith("准备草稿 · "))
                        .values(kind="draft"))
-    rows = await conn.stream(select(WorkspaceInterview.id, WorkspaceInterview.snapshot_json))
-    async for identifier, snapshot in rows:
-        await conn.execute(update(WorkspaceInterview).where(WorkspaceInterview.id == identifier)
-                           .values(**summary_values(json.loads(snapshot))))
+    # Keyset batches bound memory without an asyncpg server-side portal. A portal
+    # can keep the relation in use until transaction end, even after result.close().
+    last_id = None
+    while True:
+        query = select(WorkspaceInterview.id, WorkspaceInterview.snapshot_json).order_by(WorkspaceInterview.id).limit(20)
+        if last_id is not None:
+            query = query.where(WorkspaceInterview.id > last_id)
+        rows = (await conn.execute(query)).all()
+        if not rows:
+            break
+        for identifier, snapshot in rows:
+            await conn.execute(update(WorkspaceInterview).where(WorkspaceInterview.id == identifier)
+                               .values(**summary_values(json.loads(snapshot))))
+        last_id = rows[-1][0]
     await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_workspace_history_owner_status ON workspace_interviews (owner_email, status, updated_at)"))
