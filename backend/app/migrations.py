@@ -167,6 +167,6 @@ async def _workspace_details(conn: AsyncConnection) -> None:
             break
         for identifier, snapshot in rows:
             await conn.execute(update(WorkspaceInterview).where(WorkspaceInterview.id == identifier)
-                               .values(**summary_values(json.loads(snapshot))))
+                               .values(updated_at=WorkspaceInterview.updated_at, **summary_values(json.loads(snapshot))))
         last_id = rows[-1][0]
     await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_workspace_history_owner_status ON workspace_interviews (owner_email, status, updated_at)"))
