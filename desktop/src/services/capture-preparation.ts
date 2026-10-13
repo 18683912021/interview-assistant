@@ -80,14 +80,14 @@ export async function prepareAudioStreams(
     if (source === 'both' && isMac && !settings.system_device_id) {
       await prepareMic();
       current = 'system';
-      progress({source: current, status: 'checking', message: '请允许系统音频录制；可播放一段声音帮助检查，不会读取屏幕。'});
+      progress({source: current, status: 'checking', message: '请允许系统音频录制；随后会自动播放一声短测试音，仅在本机检查。'});
       const api = typeof window !== 'undefined' ? window.electronAPI?.audio : undefined;
       if (!api?.checkSystemAudio) throw new Error('纯系统音频需要最新版桌面客户端。');
       const result = await api.checkSystemAudio();
       if (cancelled()) throw new Error('启动已取消');
       progress({source: current, status: result.signal ? 'ready' : 'quiet', message: result.signal
-        ? '已检测到电脑播放的声音'
-        : '音频组件已启动，当前没有检测到播放声音。可继续开始；如播放声音后仍无信号，请检查系统音频权限。'});
+        ? '系统音频自检通过'
+        : '设备已响应，但未检测到测试音。可以继续；若电脑未静音，请重新检查或打开音频权限设置。'});
     }
     if (source === 'both' && isMac && settings.system_device_id) {
       current = 'system';

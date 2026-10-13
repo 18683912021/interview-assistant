@@ -38,16 +38,16 @@ export function AudioPermissions({onlyBlocked = false, systemRequired = true, sc
   return (
     <div className="audio-permissions" aria-label="macOS 音频权限">
       {systemRequired && !screenFallback && <div className="setting-row">
-        <span>仅系统音频<small>macOS 14.2+ · 不读取屏幕画面</small></span>
+        <span>仅系统音频<small>自动播放一声短测试音 · 仅在本机检查，不读取屏幕</small></span>
         <div>
           <button className="btn" type="button" disabled={requesting !== null} onClick={async () => {
             setError(''); setSystemMessage(''); setRequesting('system'); ownsCheck.current = true;
             try {
               const result = await api?.checkSystemAudio();
-              setSystemMessage(result?.signal ? '已检测到系统播放声音，音频链路可用。' : '组件已启动，但未检测到声音。请播放音频后再检测；若仍无信号，请在下方音频权限设置中重新允许当前版本并重启。');
+              setSystemMessage(result?.signal ? '系统音频自检通过。' : '设备已响应，但未检测到测试音。请确认电脑未静音；可重新检查或在下方音频权限设置中允许当前版本。');
             } catch (error) { setError(messageOf(error)); }
             finally {ownsCheck.current = false; setRequesting(null);}
-          }}>{requesting === 'system' ? '正在检测…' : '检测并申请权限'}</button>
+          }}>{requesting === 'system' ? '正在检测…' : '自检并申请权限'}</button>
           <button className="btn btn-quiet" type="button" onClick={() => void api?.openPrivacySettings('screen').catch(() => setError('系统设置未能打开，请重试。'))}>打开音频权限设置</button>
         </div>
       </div>}

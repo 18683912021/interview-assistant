@@ -31,7 +31,7 @@ it('permits cancelling a pending permission check while preventing source change
   expect(p.onCancel).toHaveBeenCalledOnce();
 });
 it('does not label quiet system audio as granted or failed', () => {
-  render(<AudioReadiness {...props()} steps={{system: {source: 'system', status: 'quiet', message: '请播放声音后检测'}}} />);
-  expect(screen.getByText('待播放声音')).toBeTruthy();
+  render(<AudioReadiness {...props()} steps={{system: {source: 'system', status: 'quiet', message: '设备已响应，但未检测到测试音'}}} />);
+  expect(screen.getByText('设备已响应')).toBeTruthy();
   expect(screen.queryByRole('alert')).toBeNull();
 });

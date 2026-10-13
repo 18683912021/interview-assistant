@@ -330,3 +330,19 @@ describe('Mac native system audio ownership', () => {
     expect(fixture.connects).toBe(0);
   });
 });
+
+it('Mac readiness control event neither becomes audio nor aborts live capture', async () => {
+  vi.unstubAllGlobals();
+  vi.stubGlobal('process', new Proxy(process, {get: (target, key, receiver) => key === 'platform' ? 'darwin' : Reflect.get(target, key, receiver)}));
+  const native = nativeDevice();
+  fixture.createNative.mockReturnValue(native);
+  const capture = manager();
+  const error = vi.fn(); capture.on('error', error);
+  await start(capture);
+  native.deliver(null);
+  expect(error).not.toHaveBeenCalled();
+  expect(native.stop).not.toHaveBeenCalled();
+  expect(fixture.frames).toHaveLength(0);
+  native.deliver(null, Buffer.alloc(1282));
+  expect(error).not.toHaveBeenCalled();
+});

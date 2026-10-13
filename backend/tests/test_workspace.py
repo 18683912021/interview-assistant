@@ -601,7 +601,7 @@ async def test_additive_migration_keeps_legacy_data():
         await migrate(conn)
         assert await conn.scalar(select(User.remaining_seconds)) == 123
         assert set((await conn.scalars(select(versions.c.version))).all()) == {
-            "001_workspace_v2", "003_legacy_interview_history", "004_deleted_workspace_interviews", "005_material_kinds_and_history_summaries",
+            "001_workspace_v2", "003_legacy_interview_history", "004_deleted_workspace_interviews", "005_material_kinds_and_history_summaries", "006_deleted_material_versions",
         }
     await engine.dispose()
 
@@ -842,3 +842,43 @@ async def test_stream_disconnect_cancels_review_provider():
     await asyncio.gather(pending, return_exceptions=True)
     await stream.aclose()
     assert cancelled.is_set()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["resume", "experience", "draft"])
+async def test_material_delete_is_owned_idempotent_and_preserves_version_numbers(environment, kind):
+    client, sessions = environment
+    from app.models.db_models import WorkspaceResume, WorkspaceResumeDeletion
+    from uuid import UUID
+    item = (await client.post("/api/workspace/resumes", json={"filename": "私人资料", "text": "真实经历", "kind": kind})).json()
+    path = f"/api/workspace/resumes/{item['id']}"
+    assert (await client.delete(path, headers={"Authorization": "Bearer other-token"})).status_code == 404
+    assert (await client.delete(path)).status_code == 200
+    assert (await client.delete(path)).status_code == 200
+    assert (await client.get("/api/workspace/resumes?include_drafts=true")).json() == []
+    async with sessions() as db:
+        assert await db.get(WorkspaceResume, UUID(item["id"])) is None
+        marker = await db.get(WorkspaceResumeDeletion, UUID(item["id"]))
+        assert marker.version == item["version"]
+    next_item = (await client.post("/api/workspace/resumes", json={"filename": "新资料", "text": "新经历"})).json()
+    assert next_item["version"] == item["version"] + 1
+
+
+@pytest.mark.asyncio
+async def test_deleted_material_keeps_exact_existing_snapshot_but_cannot_be_selected_again(environment):
+    client, _ = environment
+    item = (await client.post("/api/workspace/resumes", json={"filename": "简历", "text": "我的经历"})).json()
+    saved_resume = {key: item[key] for key in ("id", "filename", "version", "text")}
+    data = snapshot(resume_id=item["id"], resume_snapshot=saved_resume)
+    path = f"/api/workspace/interviews/{data['id']}"
+    assert (await client.put(path, json=data)).status_code == 200
+    assert (await client.delete(f"/api/workspace/resumes/{item['id']}")).status_code == 200
+    data.update(revision=2, expected_revision=1, duration_seconds=30)
+    assert (await client.put(path, json=data)).status_code == 200
+    assert (await client.get(path)).json()["resume_snapshot"] == saved_resume
+    forged = {**data, "revision": 3, "expected_revision": 2, "resume_snapshot": {**saved_resume, "text": "篡改的经历"}}
+    assert (await client.put(path, json=forged)).status_code == 404
+    new = snapshot(resume_id=item["id"], resume_snapshot=saved_resume)
+    assert (await client.put(f"/api/workspace/interviews/{new['id']}", json=new)).status_code == 404
+    data.update(revision=3, expected_revision=2, status="completed", ended_at=1780000030000)
+    assert (await client.put(path, json=data)).status_code == 200

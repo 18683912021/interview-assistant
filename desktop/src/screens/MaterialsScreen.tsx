@@ -19,6 +19,7 @@ import {
   createJob,
   createResume,
   deleteJob,
+  deleteResumeVersion,
   getJobs,
   getResumes,
   updateJob,
@@ -176,6 +177,16 @@ export default function MaterialsScreen() {
       if (input.current) input.current.value = '';
     }
   }
+  const removeResume = (item: ResumeVersion) =>
+    confirm('删除资料版本？', `删除“${item.filename} · v${item.version}”。其他版本不受影响；面试记录中已保存的资料快照仍会保留。此操作不可撤销。`, async () => {
+      setDeletingId(item.id);
+      try {
+        await deleteResumeVersion(item.id);
+        setResumes(old => old.filter(value => value.id !== item.id));
+        setView(old => old?.id === item.id ? null : old);
+        toast('资料版本已删除', 'success');
+      } finally { setDeletingId(null); }
+    });
   const removeJob = (item: Job) =>
     confirm('删除岗位？', `删除“${item.title}”。历史面试中已保存的岗位信息仍会保留。`, () => {
       setDeletingId(item.id);
@@ -304,17 +315,23 @@ export default function MaterialsScreen() {
                       <Pencil />
                       修改为新版本
                     </button>
+                    <button className="btn btn-quiet danger" disabled={deletingId === resume.id} onClick={() => removeResume(resume)}>
+                      <Trash2 size={16} />删除
+                    </button>
                   </footer>
                   {!!older.length && (
                     <details className="material-versions">
                       <summary>查看 {older.length} 个同名旧版本</summary>
                       <div>
                         {older.map(version => (
-                          <button key={version.id} onClick={() => setView(version)}>
+                          <div className="material-version-row" key={version.id}>
+                          <button onClick={() => setView(version)}>
                             <span>v{version.version}</span>
                             <span>{dateLabel(version.created_at)} 保存</span>
                             <span>查看</span>
                           </button>
+                          <IconButton className="icon-btn danger" aria-label={`删除 ${version.filename} v${version.version}`} disabled={deletingId === version.id} onClick={() => removeResume(version)}><Trash2 size={16} /></IconButton>
+                          </div>
                         ))}
                       </div>
                     </details>
@@ -491,6 +508,7 @@ export default function MaterialsScreen() {
         <Modal title={`${view.filename} · v${view.version}`} onClose={() => setView(null)}>
           <p className="text-document">{view.text}</p>
           <div className="form-actions">
+            <button className="btn btn-quiet danger" disabled={deletingId === view.id} onClick={() => removeResume(view)}><Trash2 size={16} />删除此版本</button>
             <button
               className="btn"
               onClick={() => {

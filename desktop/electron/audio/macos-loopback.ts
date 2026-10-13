@@ -1,3 +1,4 @@
+import {playMacTestTone} from './audio-self-test.js';
 import {release} from 'node:os';
 import type {WasapiCapture} from './windows-loopback.js';
 
@@ -27,32 +28,47 @@ let checking: Promise<{sampleRate: number; channels: number; signal: boolean}> |
 export function checkMacAudio() {
   if (checking) return checking;
   const capture = createMacLoopback();
-  checking = new Promise<{sampleRate: number; channels: number; signal: boolean}>((resolve, reject) => {
-    let received = false, signal = false, settled = false;
-    let sampleTimer: NodeJS.Timeout | null = null;
+  const probe = probeMacAudio(capture, playMacTestTone);
+  cancelCheck = probe.cancel;
+  checking = probe.result.finally(() => { checking = null; cancelCheck = null; });
+  return checking;
+}
+
+/** Exported boundary for hardware-free lifecycle tests. */
+export function probeMacAudio(capture: WasapiCapture, playTone: () => () => void) {
+  let cancel = () => {};
+  const result = new Promise<{sampleRate: number; channels: number; signal: boolean}>((resolve, reject) => {
+    let received = false, signal = false, settled = false, started = false;
+    let stopTone: (() => void) | undefined;
+    let sampleTimer: NodeJS.Timeout | undefined;
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer); if (sampleTimer) clearTimeout(sampleTimer);
-      capture.stop();
+      clearTimeout(timer); clearTimeout(sampleTimer);
+      stopTone?.(); capture.stop();
       if (error) reject(error);
       else if (received) resolve({sampleRate: capture.sampleRate, channels: capture.channels, signal});
-      else reject(new Error('没有收到系统音频数据。请检查系统音频录制权限，退出并重新打开应用后重试。'));
+      else reject(new Error('系统音频自检未通过。请点击重新检查；若仍失败，请在音频权限设置中允许当前版本，再重启应用。无需自行播放声音。'));
     };
-    // First use may wait for the user's OS permission prompt; keep UI responsive.
+    // Permission may take time. Only play after HAL has finished starting.
     const timer = setTimeout(() => finish(), 30000);
-    cancelCheck = () => finish(new Error('音频检测已取消'));
+    cancel = () => finish(new Error('音频检测已取消'));
     try {
       capture.start((error, buffer) => {
         if (settled) return;
         if (error) { finish(error); return; }
+        if (!started) {
+          started = true;
+          try { stopTone = playTone(); }
+          catch { finish(new Error('无法播放本机测试音，请重新检查系统音频。')); return; }
+          sampleTimer = setTimeout(() => finish(), 3000);
+        }
         if (!buffer?.length) return;
-        if (!received) sampleTimer = setTimeout(() => finish(), 1200);
         received = true;
         for (let offset = 0; offset + 4 <= buffer.length; offset += 4)
           if (Math.abs(buffer.readFloatLE(offset)) > 0.0001) { signal = true; break; }
       });
     } catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
-  }).finally(() => { checking = null; cancelCheck = null; });
-  return checking;
+  });
+  return {result, cancel: () => cancel()};
 }

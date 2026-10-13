@@ -210,6 +210,8 @@ export class AudioCaptureManager extends EventEmitter {
             return;
           }
           try {
+            // Core Audio emits a control-only readiness event before PCM.
+            if (!buf && process.platform === 'darwin') return;
             if (!buf) throw new Error('系统音频组件返回了空音频数据');
             const pcm16 = this.toInt16(Buffer.from(buf), isFloat, bits);
             const norm = normalizer.push(pcm16);

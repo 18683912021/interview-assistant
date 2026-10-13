@@ -638,6 +638,11 @@ export default function InterviewScreen() {
                 <button className="btn" onClick={() => restore(value)}>
                   恢复查看
                 </button>
+                <button className="btn btn-quiet danger" onClick={() => confirm('删除本机副本？', `删除“${value.title}”的本机副本，未同步的内容将无法恢复。云端已保存的面试记录不受影响。`, async () => {
+                  await removeDraft(email, value.id);
+                  setDrafts(old => old.filter(item => item.id !== value.id));
+                  toast('本机副本已删除', 'success');
+                })}>删除副本</button>
               </div>
             ))}
           </div>

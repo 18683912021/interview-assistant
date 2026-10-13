@@ -120,6 +120,14 @@ static void startComplete(napi_env env, napi_status status, void* data) {
     napi_create_error(env, nullptr, message, &args[0]); napi_get_null(env, &args[1]);
     napi_call_function(env, receiver, fn, 2, args, &ignored);
   }
+  if (c->active && !report) {
+    // Explicit readiness notification, independent of whether any app is playing.
+    // A null payload is control-only: consumers must not treat it as PCM.
+    napi_value fn, receiver, args[2], ignored;
+    napi_get_reference_value(env, w->callback, &fn); napi_get_undefined(env, &receiver);
+    napi_get_null(env, &args[0]); napi_get_null(env, &args[1]);
+    napi_call_function(env, receiver, fn, 2, args, &ignored);
+  }
   napi_delete_reference(env, w->callback); napi_delete_reference(env, w->self);
   napi_delete_async_work(env, w->work); delete w;
 }

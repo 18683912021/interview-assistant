@@ -152,3 +152,5 @@ export const getInterviewPage = (page: number, query: string, status: string) =>
   api.get<{items: SessionSummary[]; total: number; page: number; size: number}>(`/api/workspace/interviews/page?${new URLSearchParams({page: String(page), q: query, status})}`, true);
 export const getInterviewRevisions = () => api.get<Record<string, number>>('/api/workspace/interviews/revisions', true);
 export const clearInterviewAudio = (id: string) => api.del<{ok: boolean}>(`/api/workspace/interviews/${encodeURIComponent(id)}/audio`, true);
+
+export const deleteResumeVersion = (id: string) => api.del<{ok: boolean}>(`/api/workspace/resumes/${encodeURIComponent(id)}`, true);

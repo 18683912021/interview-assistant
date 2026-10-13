@@ -107,6 +107,15 @@ class WorkspaceResume(Base):
     __table_args__ = (UniqueConstraint("owner_email", "version", name="uq_workspace_resume_version"),)
 
 
+class WorkspaceResumeDeletion(Base):
+    """Reserve deleted version numbers without retaining the material's content."""
+    __tablename__ = "workspace_resume_deletions"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    owner_email: Mapped[str] = mapped_column(ForeignKey("users.email"), index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    deleted_at: Mapped[datetime] = mapped_column(default=_utcnow)
+
+
 class WorkspaceJob(Base):
     __tablename__ = "workspace_jobs"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

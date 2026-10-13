@@ -20,7 +20,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.services.workspace_summary import summary_values
 from app.db import get_db
-from app.models.db_models import User, WorkspaceInterview, WorkspaceInterviewDeletion, WorkspaceJob, WorkspaceResume, WorkspaceSettings
+from app.models.db_models import User, WorkspaceInterview, WorkspaceInterviewDeletion, WorkspaceJob, WorkspaceResume, WorkspaceResumeDeletion, WorkspaceSettings
 from app.routers.auth import get_current_user
 from app.services.resume_service import parse_pdf
 from app.services.workspace_llm import complete_text
@@ -213,22 +213,31 @@ async def save_interview(interview_id: UUID, body: InterviewSnapshot,
                          email: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     if interview_id != body.id:
         raise HTTPException(422, "路径与会话 ID 不一致")
-    if body.resume_id:
-        await owned(db, WorkspaceResume, body.resume_id, email)
-        if body.resume_snapshot is None:
-            raise HTTPException(422, "请选择简历版本并保存其完整快照")
+    # Use the same owner lock as deletion, so a selected version cannot disappear
+    # between validating it and persisting the interview's independent snapshot.
+    await db.scalar(select(User).where(User.email == email).with_for_update())
+    if body.resume_id and body.resume_snapshot is None:
+        raise HTTPException(422, "请选择简历版本并保存其完整快照")
     if body.resume_snapshot:
-        resume = await owned(db, WorkspaceResume, body.resume_snapshot.id, email)
-        if resume.kind == "draft":
-            # Permit saving old historical snapshots, but never select an AI draft for a new interview.
-            existing = await db.get(WorkspaceInterview, interview_id)
-            if not existing or existing.owner_email != email or json.loads(existing.snapshot_json).get("resume_id") != str(resume.id):
-                raise HTTPException(422, "准备草稿不能作为真实简历，请先核实并保存为个人经历")
-        if body.resume_id != resume.id:
+        if body.resume_id != body.resume_snapshot.id:
             raise HTTPException(422, "简历快照与选中版本不一致")
-        if (body.resume_snapshot.version != resume.version or body.resume_snapshot.text != resume.text
-                or body.resume_snapshot.filename != resume.filename):
-            raise HTTPException(422, "简历快照与已保存版本不一致")
+        existing = await db.get(WorkspaceInterview, interview_id)
+        previous = json.loads(existing.snapshot_json) if existing and existing.owner_email == email else {}
+        resume = await db.get(WorkspaceResume, body.resume_snapshot.id)
+        if resume is None:
+            # Deleting a library item must not break ongoing/history sync. Only
+            # the exact snapshot already owned by this interview can be reused.
+            if (previous.get("resume_id") != str(body.resume_id) or
+                    previous.get("resume_snapshot") != body.resume_snapshot.model_dump(mode="json")):
+                raise HTTPException(404, "资料版本已删除，请重新选择资料")
+        else:
+            if resume.owner_email != email:
+                raise HTTPException(404, "内容不存在或无权访问")
+            if resume.kind == "draft" and previous.get("resume_id") != str(resume.id):
+                raise HTTPException(422, "准备草稿不能作为真实简历，请先核实并保存为个人经历")
+            if (body.resume_snapshot.version != resume.version or body.resume_snapshot.text != resume.text
+                    or body.resume_snapshot.filename != resume.filename):
+                raise HTTPException(422, "简历快照与已保存版本不一致")
     snapshot = json.dumps(body.model_dump(mode="json", exclude={"expected_revision"}), ensure_ascii=False, sort_keys=True)
     if len(snapshot.encode("utf-8")) > 8 * 1024 * 1024:
         raise HTTPException(413, "面试记录过大")
@@ -380,8 +389,9 @@ async def new_resume(body: ResumeInput, email: str, db: AsyncSession) -> dict:
         # PostgreSQL serializes version allocation per owner. The unique key is
         # also authoritative on SQLite and when two callers race on first upload.
         await db.scalar(select(User).where(User.email == email).with_for_update())
-        version = (await db.scalar(select(func.max(WorkspaceResume.version))
-                                  .where(WorkspaceResume.owner_email == email)) or 0) + 1
+        active_version = await db.scalar(select(func.max(WorkspaceResume.version)).where(WorkspaceResume.owner_email == email))
+        deleted_version = await db.scalar(select(func.max(WorkspaceResumeDeletion.version)).where(WorkspaceResumeDeletion.owner_email == email))
+        version = max(active_version or 0, deleted_version or 0) + 1
         row = WorkspaceResume(owner_email=email, version=version, filename=body.filename, text=body.text, kind=body.kind)
         db.add(row)
         try:
@@ -405,6 +415,21 @@ async def list_resumes(include_drafts: bool = False, email: str = Depends(get_cu
 @router.post("/resumes")
 async def create_resume(body: ResumeInput, email: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return await new_resume(body, email, db)
+
+
+@router.delete("/resumes/{resume_id}")
+async def delete_resume(resume_id: UUID, email: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await db.scalar(select(User).where(User.email == email).with_for_update())
+    deleted = await db.get(WorkspaceResumeDeletion, resume_id)
+    if deleted:
+        if deleted.owner_email != email:
+            raise HTTPException(404, "内容不存在或无权访问")
+        return {"ok": True}
+    row = await owned(db, WorkspaceResume, resume_id, email)
+    db.add(WorkspaceResumeDeletion(id=row.id, owner_email=email, version=row.version))
+    await db.delete(row)
+    await db.commit()
+    return {"ok": True}
 
 
 def parse_resume_file(content: bytes, suffix: str) -> str:

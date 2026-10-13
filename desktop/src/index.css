@@ -2189,3 +2189,10 @@ fieldset:disabled .select-trigger { opacity: .55; cursor: default; }
 .is-compact .answer-question {margin-bottom: 12px;}
 .is-compact .panel-footer, .is-compact .session-status {padding-inline: 12px;}
 .is-compact .chat-scroll {padding: 14px;}
+
+/* Shared-screen cursor remains an arrow over controls, fields and portal menus.
+   Selection and drag behavior remain available; native OS window borders are separate. */
+html, body, body *, body *::before, body *::after { cursor: default !important; }
+.material-version-row { display: flex; align-items: center; gap: 8px; }
+.material-versions .material-version-row > button:first-child { flex: 1; min-width: 0; }
+.material-versions .material-version-row > .icon-btn { width: 32px; flex: 0 0 32px; padding: 6px; }

@@ -13,7 +13,7 @@ from uuid import NAMESPACE_URL, uuid5
 from sqlalchemy import Column, DateTime, MetaData, String, Table, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.models.db_models import Interview, User, WorkspaceInterview, WorkspaceInterviewDeletion, WorkspaceJob, WorkspaceResume, WorkspaceSettings, _utcnow
+from app.models.db_models import Interview, User, WorkspaceInterview, WorkspaceInterviewDeletion, WorkspaceJob, WorkspaceResume, WorkspaceResumeDeletion, WorkspaceSettings, _utcnow
 
 _metadata = MetaData()
 versions = Table("app_schema_migrations", _metadata,
@@ -130,7 +130,8 @@ async def migrate(conn: AsyncConnection) -> None:
     for version, operation in (("001_workspace_v2", _workspace_tables),
                                ("003_legacy_interview_history", _legacy_interviews),
                                ("004_deleted_workspace_interviews", _deletion_table),
-                               ("005_material_kinds_and_history_summaries", _workspace_details)):
+                               ("005_material_kinds_and_history_summaries", _workspace_details),
+                               ("006_deleted_material_versions", _resume_deletion_table)):
         if await conn.scalar(select(versions.c.version).where(versions.c.version == version)):
             continue
         await operation(conn)
@@ -170,3 +171,7 @@ async def _workspace_details(conn: AsyncConnection) -> None:
                                .values(updated_at=WorkspaceInterview.updated_at, **summary_values(json.loads(snapshot))))
         last_id = rows[-1][0]
     await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_workspace_history_owner_status ON workspace_interviews (owner_email, status, updated_at)"))
+
+
+async def _resume_deletion_table(conn: AsyncConnection) -> None:
+    await conn.run_sync(lambda sync: WorkspaceResumeDeletion.__table__.create(sync, checkfirst=True))

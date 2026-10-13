@@ -25,7 +25,7 @@ export function AudioReadiness({source, steps, busy, sectionRef, onSource, onChe
       const enabled = kind === 'mic' || source === 'both';
       const step = enabled ? steps[kind] : undefined;
       const status = step?.status || 'idle';
-      const label = {idle: '待检查', checking: '正在检查', ready: '已就绪', quiet: '待播放声音', error: '需要处理'}[status];
+      const label = {idle: '待检查', checking: '正在检查', ready: '已就绪', quiet: '设备已响应', error: '需要处理'}[status];
       const Icon = kind === 'mic' ? Mic : Monitor;
       return <div className={`audio-readiness-row is-${status}${enabled ? '' : ' is-off'}`} key={kind}>
         <div className="audio-readiness-heading">
@@ -41,7 +41,7 @@ export function AudioReadiness({source, steps, busy, sectionRef, onSource, onChe
           <span>{enabled ? label : '未启用'}</span>
         </div>
         <p>{!enabled ? '仅记录麦克风声音；适合练习或手动输入问题。' : step?.message ||
-          (kind === 'mic' ? '用于记录你的回答，首次检查时请在系统弹框中点“允许”。' : '用于记录电脑播放的面试官声音；开关只控制是否采集，不代表已获得系统授权。')}</p>
+          (kind === 'mic' ? '用于记录你的回答，首次检查时请在系统弹框中点“允许”。' : '用于记录电脑播放的面试官声音。Mac 自检会自动播放一声短测试音，无需手动播放；仅在本机检查。')}</p>
         {status === 'error' && <div className="audio-readiness-actions">
           <button type="button" className="link-button" disabled={busy} onClick={() => onSettings(kind)}>{isMac ? '打开系统权限设置' : '检查音频设备'}</button>
           {kind === 'system' && <button type="button" className="link-button" disabled={busy} onClick={() => onSource('mic')}>先用麦克风</button>}
