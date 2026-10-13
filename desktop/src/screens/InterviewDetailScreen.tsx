@@ -6,7 +6,7 @@ import AnswerBody from '../components/AnswerBody';
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {ArrowLeft, Copy, Download, FileText, LocateFixed, Play, Search, X} from 'lucide-react';
-import {generateReview, getWorkspaceInterview, type WorkspaceSession} from '../api/workspace';
+import {clearInterviewAudio, generateReview, getWorkspaceInterview, type WorkspaceSession} from '../api/workspace';
 import {messageOf} from '../api/client';
 import {
   dateLabel,
@@ -22,7 +22,10 @@ import './interview.css';
 export default function InterviewDetailScreen() {
   const {id} = useParams(),
     navigate = useNavigate(),
-    {toast} = useToast();
+    {toast, confirm} = useToast();
+  const reviewRequest = useRef<AbortController | null>(null);
+  const [reviewError, setReviewError] = useState('');
+  const [clearingAudio, setClearingAudio] = useState(false);
   const [session, setSession] = useState<WorkspaceSession | null>(null),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true),
@@ -65,6 +68,7 @@ export default function InterviewDetailScreen() {
     void load();
     return () => {
       loadEpoch.current++;
+      reviewRequest.current?.abort();
     };
   }, [load]);
   const answer = session?.answers.find(value => value.id === selected);
@@ -107,14 +111,16 @@ export default function InterviewDetailScreen() {
     }
   };
   async function makeReview() {
-    if (!id) return;
+    if (!id || reviewing) return;
     const epoch = loadEpoch.current;
+    const controller = new AbortController();
+    reviewRequest.current = controller;
+    setReviewError('');
     setReviewing(true);
     try {
-      const result = await generateReview(id);
-      if (epoch === loadEpoch.current) setReview(result.text);
+      await generateReview(id, text => {if (epoch === loadEpoch.current && !controller.signal.aborted) setReview(text);}, controller.signal);
     } catch (e) {
-      if (epoch === loadEpoch.current) toast(messageOf(e), 'error');
+      if (epoch === loadEpoch.current) setReviewError(controller.signal.aborted ? '已停止。部分内容仅供预览，未保存为正式复盘。' : messageOf(e));
     } finally {
       if (epoch === loadEpoch.current) setReviewing(false);
     }
@@ -186,6 +192,12 @@ export default function InterviewDetailScreen() {
         <IconButton className="icon-btn" aria-label="导出文本" onClick={exportText}>
           <Download />
         </IconButton>
+        {session.status === 'completed' && <button className="btn btn-quiet" disabled={clearingAudio} onClick={() => confirm(
+          '清理本场录音？', '只删除服务器上的原始录音，保留对话文字、回答、复盘与资料。清理后无法恢复录音。', async () => {
+            setClearingAudio(true);
+            try {await clearInterviewAudio(session.id); toast('录音已清理，文字记录已保留', 'success');}
+            finally {setClearingAudio(false);}
+          })}>{clearingAudio ? '正在清理…' : '清理录音'}</button>}
         {session.status !== 'completed' && (
           <button
             className="btn btn-primary"
@@ -380,16 +392,34 @@ export default function InterviewDetailScreen() {
               <p className="notice">
                 根据本场已记录的对话整理。缺少本人发言时，仅整理问题与准备方向。
               </p>
+              {reviewError && <ErrorState message={reviewError} retry={() => void makeReview()} />}
+              {session.status !== 'completed' && <p className="notice">请先结束面试，再生成本场复盘。</p>}
+              {reviewing && <button className="btn btn-quiet" onClick={() => reviewRequest.current?.abort()}>停止生成</button>}
               {!review && !reviewing && (
                 <button
                   className="btn"
-                  disabled={reviewing || session.conversation.length === 0}
+                  disabled={reviewing || session.conversation.length === 0 || session.status !== 'completed'}
                   onClick={() => void makeReview()}>
                   生成本场复盘
                 </button>
               )}
               {!review && reviewing && <Loading text="正在生成本场复盘…" />}
               {review && <AnswerBody text={review} />}
+              <details className="review-practice">
+                <summary>从本场问题开始练习</summary>
+                <p className="muted small">先写出自己的回答，再前往准备工具整理表达。练习不会改动这场面试的答案。</p>
+                {messages.filter(message => message.role === 'interviewer' && message.text.trim()).map((message, index) => (
+                  <div className="practice-question" key={message.id}>
+                    <span>{index + 1}. {message.text}</span>
+                    <button className="btn btn-quiet" onClick={() => {
+                      setQuery(''); setAnsweredOnly(false); setPane('chat');
+                      requestAnimationFrame(() => Array.from(chatScroll.current?.querySelectorAll<HTMLElement>('[data-message]') || [])
+                        .find(element => element.dataset.message === message.id)?.scrollIntoView({block: 'center'}));
+                    }}>查看原句</button>
+                    <button className="btn" onClick={() => navigate(`/tools?tool=answer&input=${encodeURIComponent(`练习问题：${message.text}\n\n我的回答：`)}${session.resume_id ? `&resume=${encodeURIComponent(session.resume_id)}` : ''}`)}>练习表达</button>
+                  </div>
+                ))}
+              </details>
             </div>
           )}
           <footer className="panel-footer">

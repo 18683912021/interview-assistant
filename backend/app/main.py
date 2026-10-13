@@ -61,11 +61,21 @@ app.add_middleware(
 @app.on_event("startup")
 async def _startup():
     await init_db()
+    import asyncio
+    from app.services.audio_retention import retention_loop
+    app.state.audio_retention = asyncio.create_task(retention_loop())
     logger.info("数据库 + Redis 已就绪")
 
 
 @app.on_event("shutdown")
 async def _shutdown():
+    import asyncio
+    task = getattr(app.state, "audio_retention", None)
+    if task:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    from app.services.llm_service import close_workspace_answers
+    await close_workspace_answers()
     await close_db()
     await close_redis()
     logger.info("数据库 + Redis 已关闭")

@@ -32,7 +32,7 @@ describe('answer selection', () => {
     const written = {...answer, id: 'written', context_snapshot: {...preferences}};
     expect(findReusableAnswer([spoken], messages, 'one', preferences)).toBeUndefined();
     expect(findReusableAnswer([written, spoken], messages, 'one', preferences)).toBe(written);
-    expect(findReusableAnswer([written], messages, 'one', {...preferences, answer_length: 'detailed'})).toBeUndefined();
+    expect(findReusableAnswer([written], messages, 'one', {...preferences, answer_length: 'detailed'})).toBe(written);
     expect(findReusableAnswer([written], messages, 'one', {...preferences, language: 'en'})).toBeUndefined();
   });
 });

@@ -1,4 +1,5 @@
-import {Fragment, type ReactNode} from 'react';
+import './AnswerBody.css';
+import {Fragment, useId, useState, type ReactNode} from 'react';
 
 /** A deliberately small Markdown renderer. Content is always React text, never HTML. */
 function inline(text: string): ReactNode[] {
@@ -22,7 +23,35 @@ function inline(text: string): ReactNode[] {
   return nodes;
 }
 
+function CodeBlock({language, text}: {language: string; text: string}) {
+  const [feedback, setFeedback] = useState('');
+  return <div className="answer-code">
+    <div className="answer-code-toolbar"><span>{language || '代码'}</span>
+      <button type="button" onClick={() => {void navigator.clipboard.writeText(text)
+        .then(() => setFeedback('已复制代码')).catch(() => setFeedback('复制失败，请选中代码复制'));}}>复制代码</button>
+      <span role="status">{feedback}</span>
+    </div>
+    <pre><code>{text}</code></pre>
+  </div>;
+}
+function tableCells(line: string) {
+  const cells: string[] = [];
+  let cell = '', quoted = false;
+  for (let index = 0; index < line.length; index++) {
+    const char = line[index];
+    if (char === '\\' && line[index + 1] === '|') {cell += '|'; index++;}
+    else if (char === '`') {quoted = !quoted; cell += char;}
+    else if (char === '|' && !quoted) {cells.push(cell.trim()); cell = '';}
+    else cell += char;
+  }
+  cells.push(cell.trim());
+  if (!cells[0]) cells.shift();
+  if (!cells[cells.length - 1]) cells.pop();
+  return cells;
+}
 export default function AnswerBody({text, className = ''}: {text: string; className?: string}) {
+  const documentId = useId();
+  const headings: {id: string; text: string}[] = [];
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   const blocks: ReactNode[] = [];
   let index = 0;
@@ -52,24 +81,34 @@ export default function AnswerBody({text, className = ''}: {text: string; classN
       while (index < lines.length && !closing.test(lines[index]!)) code.push(lines[index++]!);
       if (index < lines.length) index++;
       blocks.push(
-        <div className="answer-code" key={start}>
-          {language && <span className="answer-code-language">{language}</span>}
-          <pre>
-            <code>{code.join('\n')}</code>
-          </pre>
-        </div>,
+        <CodeBlock key={start} language={language} text={code.join('\n')} />,
       );
       continue;
     }
     const heading = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*$/);
     if (heading) {
-      blocks.push(<h3 key={start}>{inline(heading[1]!)}</h3>);
+      const id = `${documentId}-${start}`;
+      headings.push({id, text: heading[1]!});
+      blocks.push(<h3 id={id} key={start}>{inline(heading[1]!)}</h3>);
       index++;
       continue;
     }
     if (/^\s*(?:---+|\*\*\*+|___+)\s*$/.test(line)) {
       blocks.push(<hr key={start} />);
       index++;
+      continue;
+    }
+    const columns = tableCells(line);
+    const separators = tableCells(lines[index + 1] || '');
+    if (line.includes('|') && columns.length > 1 && separators.length === columns.length && separators.every(cell => /^:?-{3,}:?$/.test(cell))) {
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && lines[index]!.includes('|') && lines[index]!.trim()) rows.push(tableCells(lines[index++]!));
+      const alignment = (column: number): 'left' | 'center' | 'right' => separators[column]?.endsWith(':') ? separators[column]?.startsWith(':') ? 'center' : 'right' : 'left';
+      blocks.push(<div className="answer-table-scroll" role="region" aria-label="回答中的表格" tabIndex={0} key={start}>
+        <table><thead><tr>{columns.map((cell, column) => <th scope="col" style={{textAlign: alignment(column)}} key={column}>{inline(cell)}</th>)}</tr></thead>
+        <tbody>{rows.map((row, number) => <tr key={number}>{columns.map((_, column) => <td key={column} style={{textAlign: alignment(column)}}>{inline(row[column] || '')}</td>)}</tr>)}</tbody></table>
+      </div>);
       continue;
     }
     const item = line.match(listPattern);
@@ -102,9 +141,14 @@ export default function AnswerBody({text, className = ''}: {text: string; classN
     }
     const paragraph = [line];
     index++;
-    while (index < lines.length && !startsBlock(lines[index]!)) paragraph.push(lines[index++]!);
+    while (index < lines.length && !startsBlock(lines[index]!) && !(lines[index]!.includes('|') && tableCells(lines[index + 1] || '').every(cell => /^:?-{3,}:?$/.test(cell)) && tableCells(lines[index + 1] || '').length > 1)) paragraph.push(lines[index++]!);
     blocks.push(<p key={start}>{inline(paragraph.join('\n'))}</p>);
   }
-  return <div className={`answer-body ${className}`.trim()}>{blocks}</div>;
+  return <div className={`answer-body ${className}`.trim()}>
+    {headings.length >= 4 && <details className="answer-outline"><summary>快速定位 · {headings.length} 个要点</summary>
+      <nav aria-label="回答目录">{headings.map(heading => <button key={heading.id} type="button" onClick={() => document.getElementById(heading.id)?.scrollIntoView({block: 'start', behavior: 'smooth'})}>{heading.text}</button>)}</nav>
+    </details>}
+    {blocks}
+  </div>;
 }
 export {AnswerBody};

@@ -608,9 +608,13 @@ export default function SettingsScreen() {
                     </div>
                     <div className="setting-row">
                       <div>
-                        音频采集文件<small>用于音频传输与恢复，删除面试记录时一并清理</small>
+                        服务器录音保留时间<small>仅清理已结束面试的原始录音，文字与答案保留。修改后也适用于已有录音。</small>
                       </div>
-                      <span className="muted small">随面试记录管理</span>
+                      <Select aria-label="录音保留时间" value={String(settings.audio_retention_days || 0)} onValueChange={value => change('audio_retention_days', Number(value) as 0 | 7 | 30)}>
+                        <SelectOption value="0">手动清理</SelectOption>
+                        <SelectOption value="7">结束后 7 天</SelectOption>
+                        <SelectOption value="30">结束后 30 天</SelectOption>
+                      </Select>
                     </div>
                     <div className="setting-row">
                       <div>
@@ -621,7 +625,7 @@ export default function SettingsScreen() {
                       </button>
                     </div>
                     <p className="notice">
-                      在面试详情中可以导出文本，在记录列表中可以删除单场记录。
+                      面试详情可导出文本或单独清理录音；自动清理每小时检查一次。未结束的面试不会被清理。
                     </p>
                   </>
                 )}

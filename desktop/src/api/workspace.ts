@@ -1,6 +1,8 @@
+import {streamJSON} from './stream';
 import {api} from './client';
 
 export interface ResumeVersion {
+  kind?: 'resume' | 'experience' | 'draft';
   id: string;
   version: number;
   filename: string;
@@ -16,6 +18,7 @@ export interface Job {
   created_at: string;
 }
 export interface Settings {
+  audio_retention_days?: 0 | 7 | 30;
   theme: 'system' | 'light' | 'dark';
   font_size: 14 | 16 | 18;
   language: 'zh' | 'en' | 'auto';
@@ -33,6 +36,7 @@ export const ANSWER_STYLES = [
 export const answerStyleLabel = (style: unknown) =>
   ANSWER_STYLES.find(option => option.value === style)?.label || '自然口述';
 export const DEFAULT_SETTINGS: Settings = {
+  audio_retention_days: 0,
   theme: 'system',
   font_size: 16,
   language: 'auto',
@@ -108,16 +112,15 @@ export const saveWorkspaceInterview = (
 };
 export const deleteWorkspaceInterview = (id: string) =>
   api.del<{ok: boolean}>(`/api/workspace/interviews/${encodeURIComponent(id)}`, true);
-export const generateReview = (id: string) =>
-  api.post<{text: string; created_at: string}>(
-    `/api/workspace/interviews/${encodeURIComponent(id)}/review`,
-    {},
-    true,
-    120_000,
-  );
-export const getResumes = () => api.get<ResumeVersion[]>('/api/workspace/resumes', true);
-export const createResume = (text: string, filename?: string) =>
-  api.post<ResumeVersion>('/api/workspace/resumes', {text, filename}, true);
+export const generateReview = (id: string, onText: (text: string) => void, signal: AbortSignal) => {
+  let text = '';
+  return streamJSON(`/api/workspace/interviews/${encodeURIComponent(id)}/review/stream`, {}, event => {
+    if (event.type === 'delta') {text += event.text; onText(text);}
+  }, signal);
+};
+export const getResumes = (includeDrafts = false) => api.get<ResumeVersion[]>(`/api/workspace/resumes?include_drafts=${includeDrafts}`, true);
+export const createResume = (text: string, filename?: string, kind: NonNullable<ResumeVersion['kind']> = 'resume') =>
+  api.post<ResumeVersion>('/api/workspace/resumes', {text, filename, kind}, true);
 export const uploadResumeVersion = (file: File) => {
   const form = new FormData();
   form.append('file', file);
@@ -137,4 +140,15 @@ export type ToolKind = 'intro' | 'project' | 'jd' | 'answer';
 export const runTool = (
   kind: ToolKind,
   input: {input: string; role: string; job_description: string; resume_text: string},
-) => api.post<{text: string}>(`/api/workspace/tools/${kind}`, input, true, 120_000);
+  onText: (text: string) => void,
+  signal: AbortSignal,
+) => {
+  let text = '';
+  return streamJSON(`/api/workspace/tools/${kind}?stream=true`, input, event => {
+    if (event.type === 'delta') {text += event.text; onText(text);}
+  }, signal).then(() => ({text}));
+};
+export const getInterviewPage = (page: number, query: string, status: string) =>
+  api.get<{items: SessionSummary[]; total: number; page: number; size: number}>(`/api/workspace/interviews/page?${new URLSearchParams({page: String(page), q: query, status})}`, true);
+export const getInterviewRevisions = () => api.get<Record<string, number>>('/api/workspace/interviews/revisions', true);
+export const clearInterviewAudio = (id: string) => api.del<{ok: boolean}>(`/api/workspace/interviews/${encodeURIComponent(id)}/audio`, true);

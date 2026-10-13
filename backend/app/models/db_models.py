@@ -79,6 +79,9 @@ class WorkspaceInterview(Base):
     owner_email: Mapped[str] = mapped_column(ForeignKey("users.email"), index=True)
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     review_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)
@@ -94,6 +97,7 @@ class WorkspaceInterviewDeletion(Base):
 
 class WorkspaceResume(Base):
     __tablename__ = "workspace_resumes"
+    kind: Mapped[str] = mapped_column(String(20), default="resume", server_default="resume", nullable=False)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     owner_email: Mapped[str] = mapped_column(ForeignKey("users.email"), index=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False)

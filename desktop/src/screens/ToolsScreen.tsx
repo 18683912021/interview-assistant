@@ -87,11 +87,17 @@ const initialDrafts = (): Record<ToolKind, ToolDraft> => ({
 });
 const initialKind = () => null as ToolKind | null;
 export default function ToolsScreen() {
+  const requests = useRef(new Map<ToolKind, AbortController>());
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [inputError, setInputError] = useState('');
   const [params, setParams] = useSearchParams();
   const [kind, setKind] = useWorkspaceDraft<ToolKind | null>('tools:kind', initialKind);
   const [drafts, setDrafts] = useWorkspaceDraft('tools:drafts', initialDrafts);
+  useEffect(() => {
+    const active = requests.current;
+    setDrafts(old => Object.fromEntries(Object.entries(old).map(([key, value]) => [key, {...value, busy: false, saving: false}])) as typeof old);
+    return () => {active.forEach(controller => controller.abort()); active.clear();};
+  }, [setDrafts]);
   const [jobs, setJobs] = useState<Job[]>([]),
     [resumes, setResumes] = useState<ResumeVersion[]>([]),
     [sourceError, setSourceError] = useState(''),
@@ -132,6 +138,7 @@ export default function ToolsScreen() {
         ...old[requested],
         ...(requestedJob !== null ? {jobId: requestedJob} : {}),
         ...(requestedResume !== null ? {resumeId: requestedResume} : {}),
+        ...(params.get('input') ? {input: params.get('input')!.slice(0, 100000)} : {}),
       },
     }));
     // Consume the entry link once: returning to this tool keeps subsequent edits.
@@ -162,6 +169,8 @@ export default function ToolsScreen() {
     }
     setInputError('');
     const requestKind = kind;
+    const controller = new AbortController();
+    requests.current.set(requestKind, controller);
     update({busy: true, error: ''}, requestKind);
     setEditingResult(false);
     try {
@@ -170,7 +179,9 @@ export default function ToolsScreen() {
         role: selectedJob?.title || '',
         job_description: selectedJob?.description || '',
         resume_text: selectedResume?.text || '',
-      });
+      }, text => {
+        if (!controller.signal.aborted) update({result: text, saved: false, generatedFrom: contextKey}, requestKind);
+      }, controller.signal);
       if (!value.text.trim()) throw new Error('未收到有效内容，请重试');
       update(
         {
@@ -187,9 +198,12 @@ export default function ToolsScreen() {
         requestKind,
       );
     } catch (e) {
-      update({error: messageOf(e)}, requestKind);
+      if (requests.current.get(requestKind) === controller) update({error: controller.signal.aborted ? '已停止生成，显示的是已收到的部分内容。' : messageOf(e)}, requestKind);
     } finally {
-      update({busy: false}, requestKind);
+      if (requests.current.get(requestKind) === controller) {
+        requests.current.delete(requestKind);
+        update({busy: false}, requestKind);
+      }
     }
   };
   const save = async () => {
@@ -197,10 +211,10 @@ export default function ToolsScreen() {
     const requestKind = kind;
     update({saving: true, error: ''}, requestKind);
     try {
-      const value = await createResume(result, `准备草稿 · ${tool.name}`);
-      setResumes(old => [value, ...old]);
+      const value = await createResume(result, `准备草稿 · ${tool.name}`, 'draft');
+      void value;
       update({saved: true}, requestKind);
-      toast('已保存为独立文本资料版本', 'success');
+      toast('已保存到准备草稿，不会混入个人简历', 'success');
     } catch (e) {
       update({error: messageOf(e)}, requestKind);
     } finally {
@@ -352,9 +366,10 @@ export default function ToolsScreen() {
               {busy ? <LoaderCircle className="spin" /> : <ArrowRight />}
               {busy ? '正在整理…' : result ? '重新生成' : '生成内容'}
             </button>
+            {busy && <button className="btn btn-quiet" onClick={() => kind && requests.current.get(kind)?.abort()}>停止生成</button>}
             {busy && (
               <p className="muted small tool-busy-note" role="status">
-                可以先处理其他内容，生成结果会保留在这里。
+                内容正在逐步显示。离开此页会停止生成，已收到的内容会保留。
               </p>
             )}
           </div>
@@ -382,7 +397,7 @@ export default function ToolsScreen() {
                 )}
                 {busy && (
                   <p className="notice" role="status">
-                    正在生成新内容，完成后替换下方准备稿。
+                    正在生成，内容持续更新…
                   </p>
                 )}
                 {editingResult ? (

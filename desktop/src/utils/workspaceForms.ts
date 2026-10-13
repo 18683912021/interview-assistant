@@ -33,7 +33,7 @@ export function changedSettings(settings: Settings, baseline: Settings): Partial
 export function groupResumeVersions(resumes: ResumeVersion[]) {
   const groups = new Map<string, ResumeVersion[]>();
   for (const resume of [...resumes].sort((a, b) => b.version - a.version)) {
-    const key = resume.filename.trim().toLocaleLowerCase();
+    const key = `${resume.kind || 'resume'}:${resume.filename.trim().toLocaleLowerCase()}`;
     const versions = groups.get(key) || [];
     versions.push(resume);
     groups.set(key, versions);

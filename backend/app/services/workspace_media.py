@@ -7,7 +7,10 @@ from app.services.audio_service import storage_root
 
 
 def delete_session_media(email: str, session_id: UUID) -> None:
-    owner_directory = storage_root() / hashlib.sha256(email.encode("utf-8")).hexdigest()
+    root = storage_root()
+    owner_directory = root / hashlib.sha256(email.encode("utf-8")).hexdigest()
+    if owner_directory.is_symlink() or owner_directory.resolve().parent != root.resolve():
+        raise OSError("invalid owner media path")
     session_directory = owner_directory / str(session_id)
     if not session_directory.exists():
         return

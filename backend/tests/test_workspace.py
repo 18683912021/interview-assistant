@@ -601,7 +601,7 @@ async def test_additive_migration_keeps_legacy_data():
         await migrate(conn)
         assert await conn.scalar(select(User.remaining_seconds)) == 123
         assert set((await conn.scalars(select(versions.c.version))).all()) == {
-            "001_workspace_v2", "003_legacy_interview_history", "004_deleted_workspace_interviews",
+            "001_workspace_v2", "003_legacy_interview_history", "004_deleted_workspace_interviews", "005_material_kinds_and_history_summaries",
         }
     await engine.dispose()
 
@@ -685,3 +685,160 @@ async def test_preparation_completion_has_a_separate_standard_message_contract(m
     assert await workspace_llm.complete_text("准备任务", "原始简历") == "真实材料生成的结果"
     assert requests[0]["stream"] is False
     assert requests[0]["messages"] == [{"role": "system", "content": "准备任务"}, {"role": "user", "content": "原始简历"}]
+
+
+@pytest.mark.asyncio
+async def test_typed_materials_and_ended_session_guard(environment):
+    client, _ = environment
+    draft = (await client.post('/api/workspace/resumes', json={'text': 'AI 假设示例', 'filename': '准备稿', 'kind': 'draft'})).json()
+    assert (await client.get('/api/workspace/resumes')).json() == []
+    assert (await client.get('/api/workspace/resumes?include_drafts=true')).json()[0]['kind'] == 'draft'
+    data = snapshot(resume_id=draft['id'], resume_snapshot={key: draft[key] for key in ('id', 'version', 'filename', 'text')})
+    path = f"/api/workspace/interviews/{data['id']}"
+    assert (await client.put(path, json=data)).status_code == 422
+    data.update(resume_id=None, resume_snapshot=None, status='completed', ended_at=1780000001000)
+    assert (await client.put(path, json=data)).status_code == 200
+    payload = {'request_id': 'test', 'question_text': '为何这样做', 'context': {}}
+    assert (await client.post(path + '/answer', json=payload)).status_code == 409
+    assert (await client.post(path + '/answer', json=payload, headers={'Authorization': 'Bearer other-token'})).status_code == 404
+    assert (await client.put(path, json={**data, 'status': 'active', 'revision': 2, 'expected_revision': 1})).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_paused_answers_stream_without_audio_and_ground_resume(environment, monkeypatch):
+    from app.services.llm_service import LLMService
+    captured = []
+    async def stream(self, question, **kwargs):
+        captured.append(kwargs)
+        yield '第一句。', False
+        yield '补充细节。', False
+        kwargs['result_metadata']['finish_reason'] = 'stop'
+    monkeypatch.setattr(LLMService, 'stream_answer', stream)
+    client, _ = environment
+    data = snapshot(status='interrupted')
+    path = f"/api/workspace/interviews/{data['id']}"
+    await client.put(path, json=data)
+    result = await client.post(path + '/answer', json={'request_id': 'paused', 'question_text': '请解释',
+        'context': {'resume_text': '客户端试图伪造经历', 'answer_style': 'written'}})
+    events = [json.loads(line) for line in result.text.splitlines()]
+    assert [event['type'] for event in events] == ['delta', 'delta', 'done']
+    assert captured[0]['context']['resume_text'] == ''
+    assert captured[0]['max_tokens'] == 5000
+    assert result.headers['x-accel-buffering'] == 'no'
+
+
+@pytest.mark.asyncio
+async def test_history_pagination_search_and_revision_lookup(environment):
+    client, _ = environment
+    for index in range(33):
+        data = snapshot(title=f'Interview {index}', company='100%公司', job_description='long private body')
+        await client.put(f"/api/workspace/interviews/{data['id']}", json=data)
+    page = (await client.get('/api/workspace/interviews/page?page=2&size=30&q=100%25')).json()
+    assert page['total'] == 33 and len(page['items']) == 3
+    assert all(item['job_description'] == '' and 'conversation' not in item for item in page['items'])
+    assert len((await client.get('/api/workspace/interviews/revisions')).json()) == 33
+    assert (await client.get('/api/workspace/interviews/page?q=_')).json()['total'] == 0  # literal wildcard
+    other = {'Authorization': 'Bearer other-token'}
+    assert (await client.get('/api/workspace/interviews/page', headers=other)).json()['total'] == 0
+    assert (await client.get('/api/workspace/interviews/revisions', headers=other)).json() == {}
+
+
+@pytest.mark.asyncio
+async def test_tool_review_stream_and_partial_review_not_cached(environment, monkeypatch):
+    from app.services import workspace_llm
+    async def chunks(*args):
+        yield '结论。'
+        yield '具体依据。'
+    monkeypatch.setattr(workspace_llm, 'stream_text', chunks)
+    client, _ = environment
+    response = await client.post('/api/workspace/tools/answer?stream=true', json={'input': '为什么'})
+    assert [json.loads(line)['type'] for line in response.text.splitlines()] == ['delta', 'delta', 'done']
+    data = snapshot(status='completed', ended_at=1780000001000,
+        conversation=[{'id': 'q', 'role': 'interviewer', 'text': '为什么', 'status': 'done', 'timestamp': 1780000000100}])
+    path = f"/api/workspace/interviews/{data['id']}"
+    await client.put(path, json=data)
+    response = await client.post(path + '/review/stream')
+    assert json.loads(response.text.splitlines()[-1])['type'] == 'done'
+    assert (await client.get(path)).json()['review']['text'] == '结论。具体依据。'
+    other = snapshot(status='completed', ended_at=1780000001000, conversation=data['conversation'])
+    path = f"/api/workspace/interviews/{other['id']}"
+    await client.put(path, json=other)
+    async def broken(*args):
+        from fastapi import HTTPException
+        yield '不完整'
+        raise HTTPException(502, '中断')
+    monkeypatch.setattr(workspace_llm, 'stream_text', broken)
+    response = await client.post(path + '/review/stream')
+    assert json.loads(response.text.splitlines()[-1])['type'] == 'error'
+    assert (await client.get(path)).json()['review'] is None
+
+
+@pytest.mark.asyncio
+async def test_audio_cleanup_preserves_transcript_and_respects_opt_in(environment, monkeypatch, tmp_path):
+    from app.services import workspace_media
+    from app.services.audio_retention import cleanup_once
+    monkeypatch.setattr(workspace_media, 'storage_root', lambda: tmp_path)
+    client, sessions = environment
+    data = snapshot(status='completed', ended_at=1780000001000)
+    path = f"/api/workspace/interviews/{data['id']}"
+    await client.put(path, json=data)
+    directory = tmp_path / hashlib.sha256(b'owner@example.test').hexdigest() / data['id']
+    directory.mkdir(parents=True); (directory / 'mic.pcm').write_bytes(b'audio')
+    await cleanup_once(sessions, now=1790000000)
+    assert directory.exists()  # default does not silently erase old recordings
+    await client.put('/api/workspace/settings', json={'audio_retention_days': 7})
+    await cleanup_once(sessions, now=1790000000)
+    assert not directory.exists()
+    assert (await client.get(path)).status_code == 200
+    paused = snapshot(status='interrupted')
+    pause_path = f"/api/workspace/interviews/{paused['id']}"
+    await client.put(pause_path, json=paused)
+    assert (await client.delete(pause_path + '/audio')).status_code == 409
+    assert (await client.delete(path + '/audio', headers={'Authorization': 'Bearer other-token'})).status_code == 404
+    assert (await client.delete(path + '/audio')).status_code == 200
+
+
+def test_resume_excerpt_preserves_relevant_late_project():
+    from app.services.answer_context import resume_excerpt
+    resume = '基础资料\n' + ('早期常规工作经历。' * 300 + '\n') * 7 + 'NimbusQueue：负责幂等请求和事务去重。'
+    excerpt = resume_excerpt(resume, '介绍 NimbusQueue 的幂等请求设计')
+    assert len(excerpt) <= 12000 and 'NimbusQueue' in excerpt and '基础资料' in excerpt
+
+
+@pytest.mark.asyncio
+async def test_ten_concurrent_paused_answers_are_isolated(environment, monkeypatch):
+    from app.services.llm_service import LLMService
+    async def stream(self, question, **kwargs):
+        yield question + ':', False
+        await asyncio.sleep(0.01)
+        yield '独立回答', False
+        kwargs['result_metadata']['finish_reason'] = 'stop'
+    monkeypatch.setattr(LLMService, 'stream_answer', stream)
+    client, _ = environment
+    data = snapshot(status='interrupted')
+    path = f"/api/workspace/interviews/{data['id']}"
+    await client.put(path, json=data)
+    results = await asyncio.gather(*(client.post(path + '/answer', json={
+        'request_id': str(index), 'question_text': f'问题{index}', 'context': {}}) for index in range(10)))
+    for index, result in enumerate(results):
+        events = [json.loads(line) for line in result.text.splitlines()]
+        assert ''.join(event['text'] for event in events if event['type'] == 'delta') == f'问题{index}:独立回答'
+        assert events[-1]['type'] == 'done'
+
+
+@pytest.mark.asyncio
+async def test_stream_disconnect_cancels_review_provider():
+    from app.services.workspace_stream import completion_events
+    cancelled = asyncio.Event()
+    async def operation(completion):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+    stream = completion_events(operation)
+    pending = asyncio.create_task(anext(stream))
+    await asyncio.sleep(0)
+    pending.cancel()
+    await asyncio.gather(pending, return_exceptions=True)
+    await stream.aclose()
+    assert cancelled.is_set()

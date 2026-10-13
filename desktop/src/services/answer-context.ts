@@ -43,3 +43,27 @@ export function resumeExcerpt(text: string, question: string, limit = 12000): st
     .join('\n\n')
     .slice(0, limit);
 }
+
+/** A retrospective click must never borrow dialogue that happened afterwards. */
+export function questionContext<T extends {id: string; role: string; text: string}>(
+  conversation: T[], selectedIds: string[],
+): {role: string; text: string}[] {
+  const indices = conversation.flatMap((message, index) => selectedIds.includes(message.id) ? [index] : []);
+  if (!indices.length) return [];
+  const first = Math.min(...indices);
+  return conversation.slice(Math.max(0, first - 8), first)
+    .map(({role, text}) => ({role, text: text.slice(0, 1500)}));
+}
+
+/** Prior AI text is reference material, never evidence of what the candidate said. */
+export function previousReference(
+  conversation: {id: string; timestamp: number; revision?: number}[],
+  answers: {text: string; timestamp: number; source_message_ids: string[]; source_revisions: number[]; status: string}[],
+  selectedIds: string[],
+): string {
+  const index = conversation.findIndex(message => selectedIds.includes(message.id));
+  if (index < 1) return '';
+  const neighbours = conversation.slice(Math.max(0, index - 8), index);
+  return [...answers].reverse().find(answer => answer.status === 'done' && answer.timestamp <= conversation[index]!.timestamp &&
+    answer.source_message_ids.some((id, offset) => neighbours.some(message => message.id === id && (message.revision ?? 0) === answer.source_revisions[offset])))?.text.slice(0, 6000) || '';
+}

@@ -16,7 +16,8 @@ describe('safe answer documents', () => {
     const html = renderToStaticMarkup(
       <AnswerBody text={'```java\nif (count < 5) {\n  return true;'} />,
     );
-    expect(html).toContain('answer-code-language');
+    expect(html).toContain('java</span>');
+    expect(html).toContain('复制代码');
     expect(html).toContain('if (count &lt; 5)');
     expect(html).toContain('<pre><code>');
     expect(html).not.toContain('```');
@@ -35,4 +36,12 @@ describe('safe answer documents', () => {
     expect(html).not.toContain('<a ');
     expect(html).not.toContain('src=');
   });
+});
+
+it('renders accessible tables, escaped pipes, and heading navigation without fetching HTML', () => {
+  const html = renderToStaticMarkup(<AnswerBody text={'方案 | 条件\n--- | ---\nA | `a|b`\nB | c\\|d\n\n## 一\n内容\n## 二\n内容\n## 三\n内容\n## 四\n内容'} />);
+  expect(html).toContain('<table>');
+  expect(html).toContain('<code>a|b</code>');
+  expect(html).toContain('c|d');
+  expect(html).toContain('回答目录');
 });

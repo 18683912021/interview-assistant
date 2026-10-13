@@ -47,7 +47,10 @@ export default function MaterialsScreen() {
     [originalJob, setOriginalJob] = useState<JobInput | null>(null),
     [query, setQuery] = useState(''),
     [deletingId, setDeletingId] = useState<string | null>(null);
+  const [materialKind, setMaterialKind] = useState<NonNullable<ResumeVersion['kind']>>('resume');
+  const [filterKind, setFilterKind] = useState('all');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const verifiedPromotion = useRef(false);
   const editorForm = useRef<HTMLFormElement>(null);
   const [saving, setSaving] = useState(false),
     [formError, setFormError] = useState(''),
@@ -59,7 +62,7 @@ export default function MaterialsScreen() {
     setLoading(true);
     setError('');
     try {
-      const [r, j] = await Promise.all([getResumes(), getJobs()]);
+      const [r, j] = await Promise.all([getResumes(true), getJobs()]);
       setResumes(r);
       setJobs(j);
     } catch (e) {
@@ -72,7 +75,9 @@ export default function MaterialsScreen() {
     void load();
   }, [load]);
   const editResume = (resume?: ResumeVersion) => {
+    verifiedPromotion.current = false;
     setOriginalResume(resume || null);
+    setMaterialKind(resume?.kind || 'resume');
     setResumeText(resume?.text || '');
     setFilename(resume?.filename || '个人简历');
     setFormError('');
@@ -111,13 +116,21 @@ export default function MaterialsScreen() {
       return;
     }
     if (unchanged) return;
+    if (modal === 'resume' && originalResume?.kind === 'draft' && materialKind !== 'draft' && !verifiedPromotion.current) {
+      confirm('确认这些经历真实？', '请确认正文中的任职、职责、技术选型和指标均有事实依据。原准备草稿会保留，另存为核实后的新版本。', () => {
+        verifiedPromotion.current = true;
+        editorForm.current?.requestSubmit();
+      });
+      return;
+    }
+    verifiedPromotion.current = false;
     setSaving(true);
     setFormError('');
     try {
       if (modal === 'resume') {
-        const resume = await createResume(resumeText.trim(), filename.trim());
+        const resume = await createResume(resumeText.trim(), filename.trim(), materialKind);
         setResumes(old => [resume, ...old]);
-        toast('已保存为新的简历版本', 'success');
+        toast('已保存为新的资料版本', 'success');
       } else {
         const normalized = normalizeJob(job);
         const result = editingId
@@ -175,7 +188,7 @@ export default function MaterialsScreen() {
     });
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const filteredResumes = resumes.filter(value =>
-    `${value.filename} ${value.text}`.toLocaleLowerCase().includes(normalizedQuery),
+    (filterKind === 'all' || (value.kind || 'resume') === filterKind) && `${value.filename} ${value.text}`.toLocaleLowerCase().includes(normalizedQuery),
   );
   const filteredJobs = jobs.filter(value =>
     `${value.title} ${value.company} ${value.description}`
@@ -184,7 +197,7 @@ export default function MaterialsScreen() {
   );
   const unchanged =
     modal === 'resume'
-      ? sameResumeContent(originalResume, filename, resumeText)
+      ? sameResumeContent(originalResume, filename, resumeText) && materialKind === (originalResume?.kind || 'resume')
       : !!originalJob && JSON.stringify(normalizeJob(job)) === JSON.stringify(originalJob);
   const formChanged =
     modal === 'resume'
@@ -239,7 +252,10 @@ export default function MaterialsScreen() {
             </IconButton>
           )}
         </label>
-        <span className="muted small">同名资料按版本收起，面试记录仍保留原版本</span>
+        <Select aria-label="资料类型" value={filterKind} onValueChange={setFilterKind}>
+          <SelectOption value="all">全部资料</SelectOption><SelectOption value="resume">个人简历</SelectOption>
+          <SelectOption value="experience">已核实经历</SelectOption><SelectOption value="draft">准备草稿</SelectOption>
+        </Select>
       </div>
       {error && <ErrorState message={error} retry={() => void load()} />}{' '}
       <div className="collection-scroll">
@@ -249,7 +265,7 @@ export default function MaterialsScreen() {
         <div className="materials-grid">
           <div>
             <div className="section-heading">
-              <h2>简历版本</h2>
+              <h2>个人资料与准备稿</h2>
               <span>{resumes.length} 个版本</span>
             </div>
             {!resumes.length ? (
@@ -267,7 +283,7 @@ export default function MaterialsScreen() {
                     <FileText size={21} />
                     <div>
                       <h3>{resume.filename}</h3>
-                      <small>{dateLabel(resume.created_at)} 保存</small>
+                      <small>{resume.kind === 'draft' ? '准备草稿 · 不作为简历事实' : resume.kind === 'experience' ? '已核实经历' : '个人简历'} · {dateLabel(resume.created_at)} 保存</small>
                     </div>
                     <span className="material-version">v{resume.version}</span>
                   </div>
@@ -279,7 +295,7 @@ export default function MaterialsScreen() {
                     <button
                       className="btn btn-quiet"
                       onClick={() =>
-                        navigate(`/tools?tool=intro&resume=${encodeURIComponent(resume.id)}`)
+                        navigate(resume.kind === 'draft' ? `/tools?tool=answer&input=${encodeURIComponent(resume.text.slice(0, 8000))}` : `/tools?tool=intro&resume=${encodeURIComponent(resume.id)}`)
                       }>
                       <ArrowUpRight />
                       用于准备
@@ -367,13 +383,19 @@ export default function MaterialsScreen() {
       </div>
       {modal && (
         <Modal
-          title={modal === 'resume' ? '保存简历版本' : editingId ? '编辑岗位' : '添加岗位'}
+          title={modal === 'resume' ? '保存资料版本' : editingId ? '编辑岗位' : '添加岗位'}
           busy={saving}
           onClose={closeEditor}>
           <form ref={editorForm} onSubmit={save} noValidate>
             <fieldset disabled={saving} className="form-fields">
               {modal === 'resume' ? (
                 <>
+                  <label className="field">资料类型
+                    <Select value={materialKind} onValueChange={value => setMaterialKind(value as typeof materialKind)}>
+                      <SelectOption value="resume">个人简历</SelectOption><SelectOption value="experience">已核实经历</SelectOption><SelectOption value="draft">准备草稿</SelectOption>
+                    </Select>
+                    <small>{materialKind === 'draft' ? 'AI 准备内容单独保存，不会作为面试中的真实经历。' : '仅保存你确认真实的经历。请删除 AI 推测的职责、指标和结果。'}</small>
+                  </label>
                   <label className="field">
                     资料名称
                     <input

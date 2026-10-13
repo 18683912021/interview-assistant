@@ -496,3 +496,11 @@ button.bubble-answer-count:hover {
     flex-wrap: wrap;
   }
 }
+
+.answer-supplements {display:flex; flex-wrap:wrap; gap:8px; margin:20px 0; padding-top:16px; border-top:1px solid var(--line);}
+.history-pagination {display:flex; align-items:center; justify-content:flex-end; gap:12px; flex-shrink:0; padding-top:12px; border-top:1px solid var(--line);}
+.history-pagination > span {margin-right:auto;}
+.review-practice {margin-top:24px; border-top:1px solid var(--line); padding-top:16px;}
+.review-practice summary {cursor:pointer; font-weight:600;}
+.practice-question {display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:14px 0; border-bottom:1px solid var(--line);}
+.practice-question > span {flex:1 1 100%; line-height:1.6; white-space:pre-wrap;}

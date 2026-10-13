@@ -343,22 +343,22 @@ export default function InterviewScreen() {
   };
   const live = state.captureState === 'capturing';
   const generating = answer?.status === 'loading' || answer?.status === 'streaming';
-  const request = (ids: string[]) => {
-    if (!session) return;
-    const id = sendLLMQuery(ids, {
+  const canAnswer = !!session && session.status !== 'completed' && state.captureState !== 'completed' && !busy;
+  const request = (ids: string[], instruction?: string) => {
+    if (!session || !canAnswer) return;
+    const id = sendLLMQuery(session.id, ids, {
       role: session.role,
       job_description: session.job_description,
       resume_text: session.resume_snapshot?.text || '',
       ...session.preferences,
       context_version: 1,
       resume_version: session.resume_snapshot?.version,
-    });
+    }, instruction && answer ? {text: answer.text, instruction} : undefined);
     if (id) {
       setAnswerId(id);
       setSelected(ids);
       setPane('answer');
-    } else if (state.streamState !== 'ready')
-      toast('请先恢复采集，连接成功后再生成回答', 'warning');
+    }
   };
   const clickMessage = (id: string) => {
     if (multi) {
@@ -371,7 +371,7 @@ export default function InterviewScreen() {
       );
       return;
     }
-    const saved = findReusableAnswer(state.answers, state.conversation, id, session?.preferences);
+    const saved = findReusableAnswer(state.answers, state.conversation, id, session?.status === 'completed' ? undefined : session?.preferences);
     if (saved) {
       chooseAnswer(saved.id);
       return;
@@ -903,7 +903,7 @@ export default function InterviewScreen() {
               }}>
               {multi ? '退出多选' : '合并提问'}
             </button>
-            <IconButton className="icon-btn" aria-label="手动添加问题" onClick={() => setManual(true)}>
+            <IconButton className="icon-btn" aria-label="手动添加问题" disabled={!canAnswer} onClick={() => setManual(true)}>
               <Plus />
             </IconButton>
           </header>
@@ -992,7 +992,7 @@ export default function InterviewScreen() {
                 <span>已选 {selected.length} 句</span>
                 <button
                   className="btn btn-primary"
-                  disabled={!selected.length || !live || state.streamState !== 'ready'}
+                  disabled={!selected.length || !canAnswer}
                   onClick={() => request(selected)}>
                   合并回答
                 </button>
@@ -1066,7 +1066,7 @@ export default function InterviewScreen() {
                 className={`answer-document${generating && !answer.text ? ' answer-document-waiting' : ''}`}>
                 <div className="answer-question">{answer.question_text}</div>
                 <div className="answer-format-label">
-                  {answerStyleLabel(answer.context_snapshot?.answer_style)}
+                  {answer.context_snapshot?.supplement_instruction ? '深入补充 · ' : ''}{answerStyleLabel(answer.context_snapshot?.answer_style)}
                 </div>
                 {hasRevisedSources(answer, state.conversation) && (
                   <p className="notice">
@@ -1080,6 +1080,12 @@ export default function InterviewScreen() {
                 )}
                 {answer.status === 'error' && (
                   <ErrorState message={answer.error || '生成失败，请重试。'} />
+                )}
+                {!!answer.text && !generating && canAnswer && (
+                  <div className="answer-supplements" aria-label="深入补充">
+                    <button className="btn btn-quiet" onClick={() => request(answer.source_message_ids, '补充一个具体例子，串起关键步骤，并解释结果和适用边界。')}>补充一个例子</button>
+                    <button className="btn btn-quiet" onClick={() => request(answer.source_message_ids, '补充原回答未充分解释的原理、取舍和异常场景，提供能直接使用的解释。')}>深入解释与取舍</button>
+                  </div>
                 )}
                 <details>
                   <summary>本次回答依据</summary>
@@ -1132,7 +1138,7 @@ export default function InterviewScreen() {
               ) : (
                 <button
                   className="link-button"
-                  disabled={!live || state.streamState !== 'ready'}
+                  disabled={!canAnswer}
                   onClick={() => request(answer.source_message_ids)}>
                   {answer.context_snapshot?.answer_style !== session.preferences.answer_style
                     ? `按${answerStyleLabel(session.preferences.answer_style)}回答` : '重新回答'}
@@ -1329,7 +1335,7 @@ export default function InterviewScreen() {
             </button>
             <button
               className="btn btn-primary"
-              disabled={!manualText.trim()}
+              disabled={!manualText.trim() || !canAnswer}
               onClick={() => {
                 dispatch({
                   type: 'add_message',

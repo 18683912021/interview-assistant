@@ -29,15 +29,17 @@ export function findReusableAnswer<T extends Answer>(
     .find(
       answer =>
         answer.source_message_ids.includes(messageId) &&
+        !answer.context_snapshot?.supplement_instruction &&
         (!preferences || Object.entries(preferences).every(([key, value]) =>
-          answer.context_snapshot?.[key] === value)) &&
+          key === 'answer_length' || answer.context_snapshot?.[key] === value)) &&
         !hasRevisedSources(answer, messages) &&
         (answer.status === 'loading' || answer.status === 'streaming' || !!answer.text),
     );
 }
 
 export function sentenceLabel(status: string, edited = false) {
-  if (status === 'streaming' || status === 'interrupted') return '待确认';
+  if (status === 'streaming') return '正在转写';
+  if (status === 'interrupted') return '待确认';
   if (status === 'error') return '识别异常';
   return edited ? '已修正' : '';
 }

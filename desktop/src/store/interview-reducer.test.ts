@@ -194,3 +194,12 @@ describe('answer request isolation', () => {
     expect(state.answers[0]).toMatchObject({status: 'cancelled', text: '可恢复的部分'});
   });
 });
+
+it('pausing only settles ASR while finishing cancels an in-flight answer', () => {
+  let state = interviewReducer(INITIAL_STATE, utterance());
+  state = interviewReducer(state, {type: 'answer_requested', answer});
+  const paused = interviewReducer(state, {type: 'settle', keepAnswers: true});
+  expect(paused.conversation[0]?.status).toBe('interrupted');
+  expect(paused.answers[0]?.status).toBe('loading');
+  expect(interviewReducer(state, {type: 'settle'}).answers[0]?.status).toBe('cancelled');
+});

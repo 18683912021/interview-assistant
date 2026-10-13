@@ -7,7 +7,8 @@ import {
   type PreparedStreams,
 } from '../services/capture-preparation';
 import {getToken} from '../utils/token';
-import {resumeExcerpt} from '../services/answer-context';
+import {streamJSON} from '../api/stream';
+import {resumeExcerpt, questionContext, previousReference} from '../services/answer-context';
 import type {Settings} from '../api/workspace';
 import type {ConversationAnswer} from '../store/types';
 import {microphoneEchoMode, type MicrophoneEchoMode} from '../services/microphone-capture';
@@ -60,6 +61,7 @@ function closeAudio(handle: AudioHandle | null) {
 export function useAudioCapture() {
   const [state, dispatch] = useReducer(interviewReducer, INITIAL_STATE);
   const api = window.electronAPI?.audio;
+  const answerRequests = useRef(new Map<string, AbortController>());
   const stateRef = useRef(state);
   stateRef.current = state;
   const micRef = useRef<AudioHandle | null>(null);
@@ -99,8 +101,10 @@ export function useAudioCapture() {
       if (stoppingRef.current) return;
       stoppingRef.current = true;
       startEpoch.current++;
+      answerRequests.current.forEach(controller => controller.abort());
+      answerRequests.current.clear();
       stopLocal();
-      dispatch({type: 'settle'});
+      dispatch({type: 'settle', keepAnswers: true});
       dispatch({type: 'captureState', value: 'paused'});
       dispatch({
         type: 'error',
@@ -373,6 +377,8 @@ export function useAudioCapture() {
 
   const cancelAnswer = useCallback(
     (requestId: string) => {
+      answerRequests.current.get(requestId)?.abort();
+      answerRequests.current.delete(requestId);
       dispatch({type: 'cancel_answer', requestId});
       void api?.sendControl({type: 'llm_cancel', request_id: requestId}).catch(() => {});
     },
@@ -382,7 +388,7 @@ export function useAudioCapture() {
     async (pause = false) => {
       startEpoch.current++;
       stoppingRef.current = true;
-      stateRef.current.answers
+      if (!pause) stateRef.current.answers
         .filter(answer => answer.status === 'loading' || answer.status === 'streaming')
         .forEach(answer => cancelAnswer(answer.request_id));
       const flushed = await Promise.all([flushAudio(micRef.current), flushAudio(sysRef.current)]);
@@ -392,7 +398,7 @@ export function useAudioCapture() {
       try {
         await stopNative();
       } finally {
-        dispatch({type: 'settle'});
+        dispatch({type: 'settle', keepAnswers: pause});
         dispatch({type: 'captureState', value: pause ? 'paused' : 'completed'});
         dispatch({type: 'streamState', value: 'idle'});
       }
@@ -402,6 +408,8 @@ export function useAudioCapture() {
   useEffect(
     () => () => {
       startEpoch.current++;
+      answerRequests.current.forEach(controller => controller.abort());
+      answerRequests.current.clear();
       stopLocal();
       void stopNative().catch(() => {});
     },
@@ -409,8 +417,8 @@ export function useAudioCapture() {
   );
 
   const sendLLMQuery = useCallback(
-    (messageIds: string[], context: AnswerContext): string | null => {
-      if (!api || stateRef.current.streamState !== 'ready') return null;
+    (sessionId: string, messageIds: string[], context: AnswerContext, supplement?: {text: string; instruction: string}): string | null => {
+      if (stateRef.current.captureState === 'completed') return null;
       const selected = stateRef.current.conversation.filter(message =>
         messageIds.includes(message.id),
       );
@@ -437,9 +445,9 @@ export function useAudioCapture() {
         role: context.role.slice(0, 300),
         job_description: context.job_description.slice(0, 5000),
         resume_text: resumeExcerpt(context.resume_text, question),
-        recent_messages: stateRef.current.conversation
-          .slice(-8)
-          .map(({role, text}) => ({role, text: text.slice(0, 1500)})),
+        recent_messages: questionContext(stateRef.current.conversation, messageIds),
+        previous_reference_answer: previousReference(stateRef.current.conversation, stateRef.current.answers, messageIds),
+        ...(supplement ? {previous_answer: supplement.text.slice(0, 12000), supplement_instruction: supplement.instruction} : {}),
       };
       const answer: ConversationAnswer = {
         id: genId('answer'),
@@ -454,30 +462,30 @@ export function useAudioCapture() {
         context_snapshot: snapshot,
       };
       dispatch({type: 'answer_requested', answer});
-      void api
-        .sendControl({
-          type: 'llm_query',
-          request_id: requestId,
-          question_text: answer.question_text,
-          source_message_ids: answer.source_message_ids,
-          source_revisions: answer.source_revisions,
-          context: snapshot,
-          context_version: context.context_version,
-          language: context.language,
-        })
-        .catch(error => {
-          dispatch({
-            type: 'llm_done',
-            requestId,
-            full_answer: '',
-            error: messageOf(error),
-            status: 'failed',
-            timestamp: Date.now(),
-          });
-        });
+      const controller = new AbortController();
+      answerRequests.current.set(requestId, controller);
+      let text = '';
+      dispatch({type: 'llm_start', requestId, timestamp: Date.now()});
+      void streamJSON(`/api/workspace/interviews/${encodeURIComponent(sessionId)}/answer`, {
+        request_id: requestId, question_text: question,
+        source_message_ids: answer.source_message_ids, source_revisions: answer.source_revisions,
+        context: snapshot, context_version: context.context_version, language: context.language,
+      }, event => {
+        if (controller.signal.aborted) return;
+        if (event.type === 'delta') {
+          text += event.text;
+          dispatch({type: 'llm_chunk', requestId, delta: event.text, timestamp: Date.now()});
+        } else if (event.type === 'done') {
+          dispatch({type: 'llm_done', requestId, full_answer: text,
+            status: event.status || 'completed', timestamp: Date.now()});
+        }
+      }, controller.signal).catch(error => {
+        if (!controller.signal.aborted) dispatch({type: 'llm_done', requestId,
+          full_answer: text, error: messageOf(error), status: 'failed', timestamp: Date.now()});
+      }).finally(() => answerRequests.current.delete(requestId));
       return answer.id;
     },
-    [api, cancelAnswer],
+    [cancelAnswer],
   );
   return {
     state,

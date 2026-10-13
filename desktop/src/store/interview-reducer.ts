@@ -46,7 +46,7 @@ export type Action =
     }
   | {type: 'cancel_answer'; requestId: string}
   | {type: 'hydrate'; conversation: ConversationMessage[]; answers: ConversationAnswer[]}
-  | {type: 'settle'}
+  | {type: 'settle'; keepAnswers?: boolean}
   | {type: 'reset'};
 
 export const INITIAL_STATE: ControllerState = {
@@ -118,7 +118,7 @@ export function interviewReducer(state: ControllerState, action: Action): Contro
         conversation: state.conversation.map(message =>
           message.status === 'streaming' ? {...message, status: 'interrupted'} : message,
         ),
-        answers: state.answers.map(answer =>
+        answers: action.keepAnswers ? state.answers : state.answers.map(answer =>
           generating(answer) ? {...answer, status: 'cancelled'} : answer,
         ),
       };

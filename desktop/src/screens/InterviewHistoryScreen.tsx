@@ -6,7 +6,8 @@ import {useNavigate} from 'react-router-dom';
 import {FileClock, History, Plus, RefreshCw, Search, Trash2, X, LoaderCircle} from 'lucide-react';
 import {
   deleteWorkspaceInterview,
-  getWorkspaceInterviews,
+  getInterviewPage,
+  getInterviewRevisions,
   type SessionSummary,
   type WorkspaceSession,
 } from '../api/workspace';
@@ -20,6 +21,9 @@ export default function InterviewHistoryScreen() {
   const [records, setRecords] = useState<SessionSummary[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState('');
+  const [page, setPage] = useState(1), [total, setTotal] = useState(0);
+  const [revisions, setRevisions] = useState<Record<string, number>>({});
+  const loadEpoch = useRef(0);
   const [query, setQuery] = useWorkspaceDraft('history:query', () => '');
   const [status, setStatus] = useWorkspaceDraft('history:status', () => 'all');
   const [scroll, setScroll] = useWorkspaceDraft('history:scroll', () => 0);
@@ -38,44 +42,43 @@ export default function InterviewHistoryScreen() {
     {confirm, toast} = useToast(),
     {profile} = useContext(AuthContext);
   const load = useCallback(async () => {
+    const epoch = ++loadEpoch.current;
     setLoading(true);
     setError('');
     setLocalError('');
     try {
-      const [remote, local] = await Promise.allSettled([
-        getWorkspaceInterviews(),
+      const [remote, local, versions] = await Promise.allSettled([
+        getInterviewPage(page, query, status),
         profile?.email
           ? loadDrafts(profile.email, count =>
               setLocalError(`${count} 份本机副本无法读取，原文件已保留。`),
             )
           : Promise.resolve([]),
+        getInterviewRevisions(),
       ]);
-      if (remote.status === 'fulfilled') setRecords(remote.value);
+      if (epoch !== loadEpoch.current) return;
+      if (versions.status === 'fulfilled') setRevisions(versions.value);
+      if (remote.status === 'fulfilled') {
+        setRecords(remote.value.items); setTotal(remote.value.total);
+        if (page > 1 && !remote.value.items.length) setPage(Math.max(1, Math.ceil(remote.value.total / 30)));
+      }
       else {
         setError(messageOf(remote.reason));
       }
       if (local.status === 'fulfilled') setDrafts(local.value);
       else setLocalError(messageOf(local.reason));
     } catch (e) {
-      setError(messageOf(e));
+      if (epoch === loadEpoch.current) setError(messageOf(e));
     } finally {
-      setLoading(false);
+      if (epoch === loadEpoch.current) setLoading(false);
     }
-  }, [profile?.email]);
+  }, [profile?.email, page, query, status]);
   useEffect(() => {
-    void load();
+    const timer = setTimeout(() => void load(), 200);
+    return () => {clearTimeout(timer); loadEpoch.current++;};
   }, [load]);
-  const filtered = records.filter(
-    record =>
-      (status === 'all' || record.status === status) &&
-      `${record.title} ${record.company} ${record.role}`
-        .toLowerCase()
-        .includes(query.trim().toLowerCase()),
-  );
-  const recoverable = drafts.filter(draft => {
-    const remote = records.find(value => value.id === draft.id);
-    return !remote || draft.revision > remote.revision;
-  });
+  const filtered = records;
+  const recoverable = drafts.filter(draft => !(draft.id in revisions) || draft.revision > (revisions[draft.id] || 0));
   const labels = {active: '待继续', completed: '已结束', interrupted: '待继续'};
   const remove = (record: SessionSummary) =>
     confirm('删除这场面试？', `“${record.title}”的对话与回答将删除，此操作无法撤销。`, () => {
@@ -87,6 +90,7 @@ export default function InterviewHistoryScreen() {
             if (profile?.email) await removeDraft(profile.email, record.id);
             setDrafts(values => values.filter(value => value.id !== record.id));
             toast('面试记录已删除', 'success');
+            void load();
           } catch {
             toast('服务器记录已删除，本机恢复副本清理失败，请重试清理', 'warning');
           }
@@ -112,13 +116,13 @@ export default function InterviewHistoryScreen() {
             aria-label="搜索面试记录"
             placeholder="搜索面试名称、公司或岗位"
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            maxLength={200} onChange={e => {setQuery(e.target.value); setPage(1);}}
           />
           {query && <IconButton className="icon-btn search-clear" aria-label="清空搜索" onClick={() => setQuery('')}><X size={14} /></IconButton>}
         </label>
         <span className="spacer" />
-        <span className="muted small record-count" role="status">{loading ? '正在刷新…' : query || status !== 'all' ? `${filtered.length} / ${records.length} 场` : `${records.length} 场`}</span>
-        <Select aria-label="按状态筛选" value={status} onValueChange={selectedValue => setStatus(selectedValue)}>
+        <span className="muted small record-count" role="status">{loading ? '正在刷新…' : `${total} 场`}</span>
+        <Select aria-label="按状态筛选" value={status} onValueChange={selectedValue => {setStatus(selectedValue); setPage(1);}}>
           <SelectOption value="all">全部状态</SelectOption>
           <SelectOption value="active">未结束</SelectOption>
           <SelectOption value="completed">已结束</SelectOption>
@@ -218,11 +222,11 @@ export default function InterviewHistoryScreen() {
       ) : (
         <EmptyState
           icon={<History size={24} />}
-          title={records.length ? '没有匹配的面试' : '你的第一场面试，从这里开始'}
-          text={records.length ? '试试其他关键词或状态。' : '选择岗位与简历，开始记录对话和回答。'}
+          title={query || status !== 'all' ? '没有匹配的面试' : '你的第一场面试，从这里开始'}
+          text={query || status !== 'all' ? '试试其他关键词或状态。' : '选择岗位与简历，开始记录对话和回答。'}
           action={
-            records.length ? (
-              <button className="btn" onClick={() => {setQuery(''); setStatus('all');}}>清除筛选</button>
+            query || status !== 'all' ? (
+              <button className="btn" onClick={() => {setQuery(''); setStatus('all'); setPage(1);}}>清除筛选</button>
             ) : (
               <button className="btn" onClick={() => navigate('/interview')}>
                 准备一场面试
@@ -232,6 +236,11 @@ export default function InterviewHistoryScreen() {
         />
       )}
       </div>
+      <nav className="history-pagination" aria-label="面试记录分页">
+        <span className="muted small">第 {page} / {Math.max(1, Math.ceil(total / 30))} 页 · 每页 30 场</span>
+        <button className="btn" disabled={loading || page <= 1} onClick={() => {setPage(value => value - 1); viewport.current?.scrollTo({top: 0});}}>上一页</button>
+        <button className="btn" disabled={loading || page * 30 >= total} onClick={() => {setPage(value => value + 1); viewport.current?.scrollTo({top: 0});}}>下一页</button>
+      </nav>
     </section>
   );
 }

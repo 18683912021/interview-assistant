@@ -92,10 +92,12 @@ async def authorize_audio_session(session_id: str, email: str) -> None:
     from app.db import async_session
     from app.models.db_models import WorkspaceInterview
     async with async_session() as db:
-        row = await db.scalar(select(WorkspaceInterview.id).where(
+        row = await db.scalar(select(WorkspaceInterview.snapshot_json).where(
             WorkspaceInterview.id == uuid.UUID(session_id), WorkspaceInterview.owner_email == email))
     if row is None:
         raise ProtocolError("E_SESSION_ACCESS", "请先保存本场面试，再开始采集")
+    if json.loads(row).get("status") == "completed":
+        raise ProtocolError("E_SESSION_STATE", "本场面试已结束，不能继续采集或生成答案")
 
 
 def normalize_query(payload: dict[str, Any]) -> dict[str, Any]:
@@ -282,6 +284,7 @@ async def audio_stream(ws: WebSocket):
                         request_id = query["request_id"]
                         if v1_session is None:
                             raise ProtocolError("E_SESSION_STATE", "session_start is required before llm_query")
+                        await authorize_audio_session(str(v1_session.session_id), email)
                         if llm_config.get("enabled") is False:
                             raise ProtocolError("E_LLM_DISABLED", "回答已暂停")
                         if request_id in llm_workers:

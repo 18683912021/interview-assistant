@@ -129,7 +129,8 @@ async def migrate(conn: AsyncConnection) -> None:
     await conn.run_sync(lambda sync: versions.create(sync, checkfirst=True))
     for version, operation in (("001_workspace_v2", _workspace_tables),
                                ("003_legacy_interview_history", _legacy_interviews),
-                               ("004_deleted_workspace_interviews", _deletion_table)):
+                               ("004_deleted_workspace_interviews", _deletion_table),
+                               ("005_material_kinds_and_history_summaries", _workspace_details)):
         if await conn.scalar(select(versions.c.version).where(versions.c.version == version)):
             continue
         await operation(conn)
@@ -138,3 +139,24 @@ async def migrate(conn: AsyncConnection) -> None:
 
 async def _deletion_table(conn: AsyncConnection) -> None:
     await conn.run_sync(lambda sync: WorkspaceInterviewDeletion.__table__.create(sync, checkfirst=True))
+
+
+async def _workspace_details(conn: AsyncConnection) -> None:
+    from sqlalchemy import inspect, update
+    from app.services.workspace_summary import summary_values
+    additions = {
+        "workspace_resumes": {"kind": "VARCHAR(20) NOT NULL DEFAULT 'resume'"},
+        "workspace_interviews": {"summary_json": "TEXT", "search_text": "TEXT", "status": "VARCHAR(20)"},
+    }
+    for table, fields in additions.items():
+        columns = await conn.run_sync(lambda sync: {c["name"] for c in inspect(sync).get_columns(table)})
+        for name, definition in fields.items():
+            if name not in columns:
+                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+    await conn.execute(update(WorkspaceResume).where(WorkspaceResume.filename.startswith("准备草稿 · "))
+                       .values(kind="draft"))
+    rows = await conn.stream(select(WorkspaceInterview.id, WorkspaceInterview.snapshot_json))
+    async for identifier, snapshot in rows:
+        await conn.execute(update(WorkspaceInterview).where(WorkspaceInterview.id == identifier)
+                           .values(**summary_values(json.loads(snapshot))))
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_workspace_history_owner_status ON workspace_interviews (owner_email, status, updated_at)"))

@@ -13,7 +13,7 @@ export const MAIN_STREAM_URL: string =
 export const STREAM_DIRECT_ADDRESS: string | undefined = import.meta.env.VITE_STREAM_DIRECT_IP || undefined;
 export const STREAM_URL: string =
   import.meta.env.VITE_STREAM_URL ||
-  (import.meta.env.DEV && !API_BASE
+  (import.meta.env.DEV && !API_BASE && typeof window !== 'undefined'
     ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/ws/audio/stream`
     : MAIN_STREAM_URL);
 
