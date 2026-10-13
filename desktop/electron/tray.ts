@@ -1,4 +1,5 @@
 import { Tray, Menu, nativeImage, app } from 'electron';
+import {hideWindows} from './windows/window-privacy.js';
 
 let tray: Tray | null = null;
 
@@ -31,6 +32,7 @@ export function createTray(showMainWindow: () => void): Tray {
   tray.setToolTip('AI 面试助手');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开主窗口', click: showMainWindow },
+    { label: '隐藏所有窗口', click: hideWindows },
     { type: 'separator' },
     { label: '退出面试助手', click: () => app.quit() },
   ]));

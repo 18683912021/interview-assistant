@@ -12,6 +12,7 @@ import fs from 'fs';
 import net from 'node:net';
 import { app } from 'electron';
 import { mainWindow, restartApplication } from './main.js';
+import {getWindowPrivacy, hideWindows} from './windows/window-privacy.js';
 
 const storage = new DesktopStorage(app.getPath('userData'));
 
@@ -80,6 +81,9 @@ export function registerIpcHandlers(): void {
 
   // ── 窗口管理 ──
   ipcMain.handle('window:restart-app', () => restartApplication());
+  ipcMain.handle('window:quit-app', () => { app.quit(); });
+  ipcMain.handle('window:hide-all', () => hideWindows());
+  ipcMain.handle('window:get-privacy', () => getWindowPrivacy());
   ipcMain.handle('audio:repair-screen-permission', () => {
     if (audioCapture.getSnapshot().captureState === 'capturing') throw new Error('请先暂停面试，再重新申请权限。');
     return repairScreenPermission();
@@ -108,20 +112,6 @@ export function registerIpcHandlers(): void {
     if (win) {
       win.setAlwaysOnTop(on);
     }
-  });
-
-  // ── ContentProtection 开关 ──
-  let contentProtectionOn = false;
-
-  ipcMain.handle('window:toggle-content-protection', () => {
-    contentProtectionOn = !contentProtectionOn;
-    // 应用到所有窗口
-    BrowserWindow.getAllWindows().forEach(w => w.setContentProtection(contentProtectionOn));
-    return contentProtectionOn;
-  });
-
-  ipcMain.handle('window:get-content-protection', () => {
-    return contentProtectionOn;
   });
 
   // 打开外部链接（macOS BlackHole 安装指引等）

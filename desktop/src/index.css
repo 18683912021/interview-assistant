@@ -145,6 +145,25 @@ textarea::placeholder {
 ::backdrop {
   background: #20283855;
 }
+.desktop-frame {height: 100%; display: flex; flex-direction: column; overflow: hidden;}
+.desktop-window-bar {
+  flex: 0 0 auto; min-height: 36px; padding: 4px 12px; display: flex;
+  align-items: center; justify-content: space-between; gap: 8px;
+  border-bottom: 1px solid var(--line); background: var(--bg); font-size: 12px;
+}
+.desktop-window-bar button {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 5px;
+  padding: 5px 7px; background: transparent; white-space: nowrap;
+}
+.desktop-window-bar button:hover:not(:disabled) {background: var(--hover);}
+.desktop-window-bar .desktop-privacy {color: var(--muted);}
+.desktop-window-actions {display: flex; gap: 4px;}
+.desktop-window-actions kbd {font-size: 10px; color: var(--muted); margin-left: 3px;}
+.desktop-content {flex: 1; min-height: 0; overflow: hidden;}
+.privacy-explanation {line-height: 1.8; color: var(--muted);}
+@media (max-width: 600px) {
+  .desktop-window-bar .desktop-privacy span, .desktop-window-actions kbd {display: none;}
+}
 .app-shell {
   height: 100%;
   display: flex;

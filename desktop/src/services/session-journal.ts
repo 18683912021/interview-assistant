@@ -61,7 +61,7 @@ export class SessionJournal {
   snapshot() {
     return this.latest;
   }
-  private async flushLocal(): Promise<void> {
+  async flushLocal(): Promise<void> {
     if (this.localTimer) {
       clearTimeout(this.localTimer);
       this.localTimer = null;

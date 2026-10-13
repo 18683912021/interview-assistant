@@ -19,13 +19,14 @@ import InterviewDetailScreen from './screens/InterviewDetailScreen';
 import MaterialsScreen from './screens/MaterialsScreen';
 import ToolsScreen from './screens/ToolsScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import {DesktopFrame} from './components/DesktopFrame';
 
 export default function App() {
   useDarkMode();
   return (
     <ToastProvider>
       <HashRouter>
-        <SessionApp />
+        <DesktopFrame><SessionApp /></DesktopFrame>
       </HashRouter>
     </ToastProvider>
   );

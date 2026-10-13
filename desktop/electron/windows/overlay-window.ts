@@ -5,6 +5,7 @@
  */
 import {BrowserWindow, app} from 'electron';
 import path from 'path';
+import {protectWindow, showPrivateWindow} from './window-privacy.js';
 
 const isDev = !app.isPackaged;
 
@@ -24,6 +25,7 @@ export function createOverlayWindow(): BrowserWindow {
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
+    show: false,
     resizable: true,
     backgroundColor: process.platform === 'win32' ? '#F7F8FA' : '#00000000',
     webPreferences: {
@@ -36,16 +38,15 @@ export function createOverlayWindow(): BrowserWindow {
     },
   });
 
-  // ContentProtection 默认关闭，用户手动开关
-  // Never let an auxiliary window hide the whole application's Dock/menu bar.
+  protectWindow(overlayWindow);
+  const window = overlayWindow;
+  window.once('ready-to-show', () => showPrivateWindow(window));
   overlayWindow.setVisibleOnAllWorkspaces(true, {
     visibleOnFullScreen: true,
     skipTransformProcessType: true,
   });
   // The answer scroll area and close button must receive normal pointer input.
   overlayWindow.setIgnoreMouseEvents(false);
-
-  // ContentProtection 状态由 IPC handler 管理
 
   if (isDev) {
     overlayWindow.loadURL(

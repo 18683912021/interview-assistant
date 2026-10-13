@@ -46,6 +46,7 @@ import {useAudioCapture} from '../hooks/useAudioCapture';
 import {useToast} from '../components/Toast';
 import {EmptyState, ErrorState, Loading, Modal} from '../components/WorkspaceUI';
 import {SessionJournal} from '../services/session-journal';
+import {registerShutdownHandler} from '../services/app-shutdown';
 import {loadDrafts, removeDraft, storeDraft} from '../services/drafts';
 import {genId, interviewReducer} from '../store/interview-reducer';
 import type {ConversationMessage} from '../store/types';
@@ -134,6 +135,26 @@ export default function InterviewScreen() {
   const [newMessages, setNewMessages] = useState(false);
   const journal = useRef<SessionJournal | null>(null);
   const lastContent = useRef('');
+
+  useEffect(() => registerShutdownHandler(async () => {
+    if (!session || !journal.current) return;
+    if (session.status === 'completed') {await journal.current.flushLocal(); return;}
+    // Main has drained ASR. Cancel HTTP answers too, then preserve the final view
+    // locally without making quitting depend on network availability.
+    stateRef.current.answers.filter(answer => ['loading', 'streaming'].includes(answer.status))
+      .forEach(answer => cancelAnswer(answer.request_id));
+    const settled = interviewReducer(stateRef.current, {type: 'settle'});
+    const value: WorkspaceSession = {
+      ...session,
+      status: 'interrupted',
+      duration_seconds: duration,
+      conversation: settled.conversation,
+      answers: settled.answers,
+    };
+    lastContent.current = signature(value);
+    journal.current.push(value);
+    await journal.current.flushLocal();
+  }), [session, duration, cancelAnswer]);
 
   useEffect(() => {
     if (!deviceModal) return;

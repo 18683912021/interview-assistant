@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   register: vi.fn(), permissions: vi.fn(), createTray: vi.fn(), destroyTray: vi.fn(),
   destroyOverlay: vi.fn(), stop: vi.fn(), flushStorage: vi.fn(), quit: vi.fn(),
   relaunch: vi.fn(), activation: vi.fn(), menu: vi.fn(), snapshot: vi.fn(),
+  registerShortcut: vi.fn(), unregisterShortcut: vi.fn(), restoreWindows: vi.fn(), drain: vi.fn(),
+  dialog: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -15,6 +17,7 @@ vi.mock('electron', () => ({
     on: (name: string, fn: (...args: any[]) => void) => mocks.handlers.set(name, fn),
   },
   BrowserWindow: {},
+  dialog: {showMessageBox: mocks.dialog},
 }));
 vi.mock('../ipc-handlers.js', () => ({ registerIpcHandlers: mocks.register, flushStorage: mocks.flushStorage }));
 vi.mock('../audio/audio-capture.js', () => ({ audioCapture: { stop: mocks.stop, getSnapshot: mocks.snapshot } }));
@@ -22,17 +25,28 @@ vi.mock('../menu.js', () => ({ createApplicationMenu: mocks.menu }));
 vi.mock('../audio/media-permissions.js', () => ({ configureSystemAudioCapture: vi.fn() }));
 vi.mock('../tray.js', () => ({ createTray: mocks.createTray, destroyTray: mocks.destroyTray }));
 vi.mock('../windows/overlay-window.js', () => ({ destroyOverlayWindow: mocks.destroyOverlay }));
+vi.mock('../windows/window-privacy.js', () => ({
+  registerPrivacyShortcut: mocks.registerShortcut, unregisterPrivacyShortcut: mocks.unregisterShortcut,
+  restorePrivateWindows: mocks.restoreWindows,
+}));
+vi.mock('../renderer-shutdown.js', () => ({drainRenderer: mocks.drain}));
 vi.mock('../windows/main-window.js', () => ({
   allowMediaPermissions: mocks.permissions,
   createMainWindow: () => {
-    const handlers = new Map<string, () => void>();
+    const handlers = new Map<string, (...args: any[]) => void>();
     const win = {
       destroyed: false,
       isDestroyed: () => win.destroyed,
       isMinimized: () => false,
       show: vi.fn(), focus: vi.fn(), restore: vi.fn(),
+      webContents: {send: vi.fn()},
       once: (name: string, fn: () => void) => handlers.set(name, fn),
-      close: () => { win.destroyed = true; handlers.get('closed')?.(); },
+      on: (name: string, fn: () => void) => handlers.set(name, fn),
+      close: () => {
+        const event = {preventDefault: vi.fn()};
+        handlers.get('close')?.(event);
+        if (!event.preventDefault.mock.calls.length) {win.destroyed = true; handlers.get('closed')?.();}
+      },
     };
     mocks.windows.push(win);
     return win;
@@ -49,34 +63,52 @@ beforeEach(() => {
   mocks.stop.mockResolvedValue(undefined);
   mocks.flushStorage.mockResolvedValue(undefined);
   mocks.snapshot.mockReturnValue({ captureState: 'idle' });
+  mocks.drain.mockResolvedValue(true);
 });
 
 describe('native app lifecycle', () => {
-  it('stops capture on close and recreates only the window on activation', async () => {
+  it('lets users return to their draft if renderer saving fails', async () => {
+    mocks.drain.mockResolvedValue(false);
+    mocks.dialog.mockResolvedValue({response: 0});
+    await import('../main.js');
+    await flush();
+    mocks.handlers.get('before-quit')?.({preventDefault: vi.fn()});
+    await flush();
+    expect(mocks.dialog).toHaveBeenCalledOnce();
+    expect(mocks.quit).not.toHaveBeenCalled();
+    expect(mocks.destroyTray).not.toHaveBeenCalled();
+    expect(mocks.windows[0].webContents.send).toHaveBeenCalledWith('window:quit-cancelled');
+    expect(mocks.windows[0].focus).toHaveBeenCalledOnce();
+  });
+  it('quits on main-window close but keeps the renderer alive until drafts are drained', async () => {
     await import('../main.js');
     await flush();
     expect(mocks.windows).toHaveLength(1);
     mocks.windows[0].close();
-    expect(mocks.stop).toHaveBeenCalledWith('main_window_closed');
-    expect(mocks.destroyOverlay).toHaveBeenCalledOnce();
-    expect(mocks.destroyTray).not.toHaveBeenCalled();
+    expect(mocks.quit).toHaveBeenCalledOnce();
+    expect(mocks.windows[0].destroyed).toBe(false);
+    mocks.handlers.get('before-quit')?.({preventDefault: vi.fn()});
+    await flush();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(mocks.drain).toHaveBeenCalledWith(mocks.windows[0]);
+    expect(mocks.flushStorage).toHaveBeenCalledOnce();
+    expect(mocks.destroyTray).toHaveBeenCalledOnce();
+    expect(mocks.unregisterShortcut).toHaveBeenCalledOnce();
+    mocks.windows[0].close();
+    expect(mocks.windows[0].destroyed).toBe(true);
     mocks.handlers.get('activate')?.();
-    expect(mocks.windows).toHaveLength(2);
-    expect(mocks.register).toHaveBeenCalledOnce();
-    expect(mocks.permissions).toHaveBeenCalledOnce();
-    expect(mocks.createTray).toHaveBeenCalledOnce();
-    mocks.handlers.get('activate')?.();
-    expect(mocks.windows).toHaveLength(2);
-    expect(mocks.windows[1].focus).toHaveBeenCalledOnce();
+    expect(mocks.windows).toHaveLength(1);
   });
 
-  it('reopens the real main window from the persistent tray after close', async () => {
+  it('restores the hidden main window from the tray without creating another instance', async () => {
     await import('../main.js');
     await flush();
-    mocks.windows[0].close();
     const reopen = mocks.createTray.mock.calls[0]![0];
     reopen();
-    expect(mocks.windows).toHaveLength(2);
+    expect(mocks.windows).toHaveLength(1);
+    expect(mocks.windows[0].focus).toHaveBeenCalledOnce();
+    expect(mocks.restoreWindows).toHaveBeenCalledTimes(2);
+    expect(mocks.registerShortcut).toHaveBeenCalledWith(reopen);
     expect(mocks.createTray).toHaveBeenCalledOnce();
     expect(mocks.menu).toHaveBeenCalledOnce();
     expect(mocks.menu.mock.calls[0]![0]).toBe(reopen);

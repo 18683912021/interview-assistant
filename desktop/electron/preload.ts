@@ -68,13 +68,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 窗口管理
   window: {
+    quitApp: () => ipcRenderer.invoke('window:quit-app'),
+    hideAll: () => ipcRenderer.invoke('window:hide-all'),
+    getPrivacy: () => ipcRenderer.invoke('window:get-privacy'),
+    onPrepareQuit: (callback: () => Promise<void>) => {
+      const listener = (_event: unknown, request: string) => {
+        void callback().then(() => ipcRenderer.send('window:quit-ready', request, true))
+          .catch(() => ipcRenderer.send('window:quit-ready', request, false));
+      };
+      ipcRenderer.on('window:prepare-quit', listener);
+      return () => ipcRenderer.removeListener('window:prepare-quit', listener);
+    },
+    onQuitCancelled: (callback: () => void) => {
+      ipcRenderer.on('window:quit-cancelled', callback);
+      return () => ipcRenderer.removeListener('window:quit-cancelled', callback);
+    },
     restartApp: () => ipcRenderer.invoke('window:restart-app'),
     openOverlay: () => ipcRenderer.invoke('window:open-overlay'),
     closeOverlay: () => ipcRenderer.invoke('window:close-overlay'),
     toggleOverlay: () => ipcRenderer.invoke('window:toggle-overlay'),
     setAlwaysOnTop: (on: boolean) => ipcRenderer.invoke('window:set-always-on-top', on),
-    toggleContentProtection: () => ipcRenderer.invoke('window:toggle-content-protection'),
-    getContentProtection: () => ipcRenderer.invoke('window:get-content-protection'),
     openExternal: (url: string) => ipcRenderer.invoke('window:open-external', url),
   },
 

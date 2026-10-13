@@ -11,12 +11,16 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'interview-lifecycle-test-'));
 app.setPath('userData', path.join(tmp, 'profile'));
 Object.defineProperty(app, 'isPackaged', {get: () => true});
 const fixture = path.join(tmp, 'index.html');
-fs.writeFileSync(fixture, '<!doctype html><title>Lifecycle regression</title><p>Local lifecycle fixture. No capture.</p>');
+fs.writeFileSync(fixture, `<!doctype html><title>Lifecycle regression</title><p>Local lifecycle fixture. No capture.</p>
+<script>window.electronAPI.window.onPrepareQuit(async () => {
+  await window.electronAPI.storage.set('shutdown-test', 'last-draft');
+});</script>`);
 const originalLoadFile = BrowserWindow.prototype.loadFile;
 BrowserWindow.prototype.loadFile = function () { return originalLoadFile.call(this, fixture); };
 const main = require(path.join(root, 'dist-electron/main.js'));
 const trays = require(path.join(root, 'dist-electron/tray.js'));
 const overlays = require(path.join(root, 'dist-electron/windows/overlay-window.js'));
+const privacy = require(path.join(root, 'dist-electron/windows/window-privacy.js'));
 const turn = () => new Promise(resolve => setImmediate(resolve));
 let passed = false;
 app.whenReady().then(async () => {
@@ -24,37 +28,50 @@ app.whenReady().then(async () => {
   let win = main.mainWindow;
   assert.ok(win);
   if (win.webContents.isLoading()) await once(win.webContents, 'did-finish-load');
+  if (!win.isVisible()) await once(win, 'ready-to-show');
   const icon = trays.createTrayIcon();
   assert.equal(icon.isEmpty(), false);
   assert.ok(icon.toBitmap().some((value, index) => index % 4 === 3 && value > 0));
   if (process.platform === 'darwin') {
     assert.equal(icon.isTemplateImage(), true);
-    assert.equal(app.dock.isVisible(), true, 'main window must not hide Dock');
+    assert.equal(app.dock.isVisible(), false, 'main window must hide Dock');
   }
   const tray = trays.createTray(() => { throw new Error('existing tray must be reused'); });
-  overlays.createOverlayWindow();
-  if (process.platform === 'darwin') assert.equal(app.dock.isVisible(), true, 'overlay must not hide Dock');
-  overlays.destroyOverlayWindow();
+  const overlay = overlays.createOverlayWindow();
+  const overlayReady = once(overlay, 'ready-to-show');
+  if (overlay.webContents.isLoading()) await once(overlay.webContents, 'did-finish-load');
+  await overlayReady;
+  await turn();
+  assert.equal(win.isContentProtected(), true);
+  assert.equal(overlay.isContentProtected(), true);
+  privacy.hideWindows();
+  assert.equal(win.isVisible(), false);
+  assert.equal(overlay.isVisible(), false);
+  const protection = privacy.getWindowPrivacy();
   if (process.platform === 'darwin') {
-    const closed = once(win, 'closed');
-    win.close(); await closed; await turn();
-    assert.equal(main.mainWindow, null);
-    assert.equal(tray.isDestroyed(), false, 'tray must survive last window close');
-    assert.equal(app.dock.isVisible(), true);
+    assert.equal(app.dock.isVisible(), false, 'overlay must not reveal Dock');
     Menu.getApplicationMenu().items[0].submenu.items[0].click();
-    win = main.mainWindow;
-    assert.ok(win && !win.isDestroyed(), 'menu must recreate the main window');
-  }
+  } else {privacy.restorePrivateWindows(); win.show();}
+  assert.equal(win.isVisible(), true);
+  assert.equal(overlay.isVisible(), true);
+  overlays.destroyOverlayWindow();
+  assert.equal(win.isDestroyed(), false, 'closing the overlay must not close the main window');
   assert.equal(trays.createTray(() => {}), tray);
   console.log(JSON.stringify({electron:process.versions.electron, platform:process.platform,
     visibleTrayIcon:true, dockVisible:process.platform === 'darwin' ? app.dock.isVisible() : null,
-    reopenedAfterClose:process.platform === 'darwin', capture:false}));
+    protectionRequested:protection.protectionRequested, hideRestore:true, capture:false}));
+  win.once('closed', () => {
+    const stored = JSON.parse(fs.readFileSync(path.join(tmp, 'profile', 'preferences.json'), 'utf8'));
+    assert.equal(stored['shutdown-test'], 'last-draft', 'renderer draft must be saved before main-window destruction');
+    assert.equal(tray.isDestroyed(), true);
+  });
   passed = true;
-  app.quit();
+  win.close();
 }).catch(error => { console.error(error); process.exitCode = 1; app.quit(); });
 app.on('will-quit', () => {
-  if (!passed) process.exitCode = 1;
   fs.rmSync(tmp, {recursive:true,force:true});
+  if (!passed) app.exit(1);
 });
 setTimeout(() => {console.error('lifecycle timeout');app.exit(1);}, 25000).unref();
 process.on('unhandledRejection', error => { console.error(error); app.exit(1); });
+process.on('uncaughtException', error => { console.error(error); app.exit(1); });

@@ -37,6 +37,7 @@ mac:
   category: public.app-category.productivity
   # macOS 14.2+ system audio also requires a CoreAudio usage description.
   extendInfo:
+    LSUIElement: true
     NSMicrophoneUsageDescription: 需要访问麦克风以采集您的声音用于实时转写
     NSAudioCaptureUsageDescription: 需要采集您选择的系统音频用于实时转写
 nsis:

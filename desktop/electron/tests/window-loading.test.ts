@@ -3,11 +3,12 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 const electron = vi.hoisted(() => ({
   app: {isPackaged: true},
-  options: [] as Array<{transparent?: boolean; resizable?: boolean; webPreferences?: {backgroundThrottling?: boolean}}>,
+  options: [] as Array<{show?: boolean; skipTaskbar?: boolean; transparent?: boolean; resizable?: boolean; webPreferences?: {backgroundThrottling?: boolean}}>,
   windows: [] as Array<{
     loadURL: ReturnType<typeof vi.fn>;
     loadFile: ReturnType<typeof vi.fn>;
     setVisibleOnAllWorkspaces: ReturnType<typeof vi.fn>;
+    setContentProtection: ReturnType<typeof vi.fn>;
     webContents: {openDevTools: ReturnType<typeof vi.fn>};
   }>,
 }));
@@ -23,6 +24,7 @@ vi.mock('electron', () => ({
     }
     once() {}
     setVisibleOnAllWorkspaces = vi.fn();
+    setContentProtection = vi.fn();
     setIgnoreMouseEvents() {}
     isDestroyed() {
       return false;
@@ -51,6 +53,8 @@ describe('desktop page loading', () => {
     expect(window.webContents.openDevTools).not.toHaveBeenCalled();
     expect(window.setVisibleOnAllWorkspaces).not.toHaveBeenCalled();
     expect(electron.options[0]!.webPreferences?.backgroundThrottling).toBe(false);
+    expect(electron.options[0]).toMatchObject({show: false, skipTaskbar: true});
+    expect(window.setContentProtection).toHaveBeenCalledWith(true);
   });
 
   it('keeps the overlay route separate from the packaged file path', async () => {
@@ -65,6 +69,8 @@ describe('desktop page loading', () => {
       visibleOnFullScreen: true, skipTransformProcessType: true,
     });
     expect(electron.options[0]!.webPreferences?.backgroundThrottling).toBe(false);
+    expect(electron.options[0]).toMatchObject({show: false, skipTaskbar: true});
+    expect(window.setContentProtection).toHaveBeenCalledWith(true);
   });
 
   it('preserves the existing macOS/dev server workflow', async () => {

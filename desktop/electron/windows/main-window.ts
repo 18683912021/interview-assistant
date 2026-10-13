@@ -5,6 +5,7 @@
  */
 import {BrowserWindow, app} from 'electron';
 import path from 'path';
+import {protectWindow, showPrivateWindow} from './window-privacy.js';
 export {allowMediaPermissions} from '../audio/media-permissions.js';
 
 const isDev = !app.isPackaged;
@@ -22,6 +23,7 @@ export function createMainWindow(): BrowserWindow {
     title: 'AI 面试助手',
     backgroundColor: '#F7F8FA',
     show: false,
+    skipTaskbar: true,
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
@@ -32,15 +34,10 @@ export function createMainWindow(): BrowserWindow {
     },
   });
 
-  // A normal workspace window must retain the Dock/menu bar. In Electron 43,
-  // visibleOnFullScreen:true transforms the whole app into a Dock-hidden agent.
-
+  protectWindow(win);
   win.once('ready-to-show', () => {
-    win.show();
+    showPrivateWindow(win);
   });
-
-  // show 后按当前状态重新应用
-  // ContentProtection 状态由 IPC handler 管理，show 时不需要重设
 
   if (isDev) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL || 'http://127.0.0.1:5173');

@@ -35,13 +35,16 @@ interface ElectronAPI {
     saveFile(data: Uint8Array, defaultName: string): Promise<string | null>;
   };
   window: {
+    quitApp(): Promise<void>;
+    hideAll(): Promise<void>;
+    getPrivacy(): Promise<{platform: string; protectionRequested: boolean; shortcut: string | null}>;
+    onPrepareQuit(callback: () => Promise<void>): () => void;
+    onQuitCancelled(callback: () => void): () => void;
     restartApp(): Promise<void>;
     openOverlay(): Promise<void>;
     closeOverlay(): Promise<void>;
     toggleOverlay(): Promise<void>;
     setAlwaysOnTop(on: boolean): Promise<void>;
-    toggleContentProtection(): Promise<boolean>;
-    getContentProtection(): Promise<boolean>;
     openExternal(url: string): Promise<{ ok: boolean; error?: string }>;
   };
   storage: {

@@ -19,6 +19,15 @@ const session: WorkspaceSession = {
   revision: 1,
 };
 describe('continuous interview journal', () => {
+  it('persists the last shutdown draft without waiting for network access', async () => {
+    const local = vi.fn().mockResolvedValue(undefined), remote = vi.fn();
+    const journal = new SessionJournal(1, local, remote, () => {}, 60000);
+    journal.push({...session, status: 'interrupted', duration_seconds: 75});
+    await journal.flushLocal();
+    expect(local).toHaveBeenCalledWith(expect.objectContaining({status: 'interrupted', duration_seconds: 75, revision: 2}));
+    expect(remote).not.toHaveBeenCalled();
+    journal.dispose();
+  });
   it('uploads unchanged recovered content before newer edits without changing the lost-response revision', async () => {
     const remote = vi.fn().mockResolvedValue({});
     const journal = new SessionJournal(
