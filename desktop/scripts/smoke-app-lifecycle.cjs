@@ -20,6 +20,7 @@ BrowserWindow.prototype.loadFile = function () { return originalLoadFile.call(th
 const main = require(path.join(root, 'dist-electron/main.js'));
 const trays = require(path.join(root, 'dist-electron/tray.js'));
 const overlays = require(path.join(root, 'dist-electron/windows/overlay-window.js'));
+const modes = require(path.join(root, 'dist-electron/windows/window-mode.js'));
 const privacy = require(path.join(root, 'dist-electron/windows/window-privacy.js'));
 const turn = () => new Promise(resolve => setImmediate(resolve));
 let passed = false;
@@ -57,9 +58,44 @@ app.whenReady().then(async () => {
   overlays.destroyOverlayWindow();
   assert.equal(win.isDestroyed(), false, 'closing the overlay must not close the main window');
   assert.equal(trays.createTray(() => {}), tray);
+  const original = win.getNormalBounds();
+  await modes.setWindowPinned(win, true);
+  await modes.setWindowCompact(win, true);
+  assert.equal(win.isAlwaysOnTop(), true);
+  assert.equal(win.getBounds().width, 420);
+  assert.equal(win.isMaximizable(), false);
+  if (process.platform === 'darwin') {
+    assert.equal(win.isVisibleOnAllWorkspaces(), true);
+    assert.equal(app.dock.isVisible(), false);
+  }
+  privacy.hideWindows();
+  privacy.restorePrivateWindows();
+  assert.equal(win.isAlwaysOnTop(), true);
+  assert.equal(modes.getWindowMode(win).compact, true);
+  await modes.setWindowCompact(win, false);
+  assert.deepEqual(win.getNormalBounds(), original);
+  assert.equal(win.isAlwaysOnTop(), true);
+  await modes.setWindowPinned(win, false);
+  assert.equal(win.isAlwaysOnTop(), false);
+  if (process.platform === 'darwin') {
+    assert.equal(win.isVisibleOnAllWorkspaces(), false);
+    const entered = once(win, 'enter-full-screen');
+    win.setFullScreen(true);
+    await entered;
+    await modes.setWindowCompact(win, true);
+    assert.equal(win.isFullScreen(), false);
+    assert.equal(win.isAlwaysOnTop(), true);
+    const restored = once(win, 'enter-full-screen');
+    await modes.setWindowCompact(win, false);
+    await restored;
+    assert.equal(win.isFullScreen(), true);
+    const left = once(win, 'leave-full-screen');
+    win.setFullScreen(false);
+    await left;
+  }
   console.log(JSON.stringify({electron:process.versions.electron, platform:process.platform,
     visibleTrayIcon:true, dockVisible:process.platform === 'darwin' ? app.dock.isVisible() : null,
-    protectionRequested:protection.protectionRequested, hideRestore:true, capture:false}));
+    protectionRequested:protection.protectionRequested, hideRestore:true, compactAndPin:true, capture:false}));
   win.once('closed', () => {
     const stored = JSON.parse(fs.readFileSync(path.join(tmp, 'profile', 'preferences.json'), 'utf8'));
     assert.equal(stored['shutdown-test'], 'last-draft', 'renderer draft must be saved before main-window destruction');

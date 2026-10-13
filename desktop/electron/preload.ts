@@ -68,6 +68,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 窗口管理
   window: {
+    getMode: () => ipcRenderer.invoke('window:get-mode'),
+    setCompact: (on: boolean) => ipcRenderer.invoke('window:set-compact', on),
+    onModeChanged: (callback: (mode: {compact: boolean; pinned: boolean; alwaysOnTop: boolean}) => void) => {
+      const listener = (_event: unknown, mode: Parameters<typeof callback>[0]) => callback(mode);
+      ipcRenderer.on('window:mode-changed', listener);
+      return () => ipcRenderer.removeListener('window:mode-changed', listener);
+    },
     quitApp: () => ipcRenderer.invoke('window:quit-app'),
     hideAll: () => ipcRenderer.invoke('window:hide-all'),
     getPrivacy: () => ipcRenderer.invoke('window:get-privacy'),

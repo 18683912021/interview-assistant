@@ -1,3 +1,4 @@
+import {getWindowMode, setWindowCompact, setWindowPinned} from './windows/window-mode.js';
 /**
  * IPC 路由注册 —— 连接 preload 暴露的 channel 和主进程实现
  */
@@ -89,6 +90,7 @@ export function registerIpcHandlers(): void {
     return repairScreenPermission();
   });
   ipcMain.handle('window:open-overlay', () => {
+    if (mainWindow && getWindowMode(mainWindow).compact) return;
     createOverlayWindow();
   });
 
@@ -98,6 +100,7 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('window:toggle-overlay', () => {
+    if (mainWindow && getWindowMode(mainWindow).compact) return;
     const overlay = getOverlayWindow();
     if (overlay) {
       destroyOverlayWindow();
@@ -107,12 +110,17 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle('window:set-always-on-top', (_e, on: boolean) => {
-    const win = BrowserWindow.getFocusedWindow();
-    if (win) {
-      win.setAlwaysOnTop(on);
-    }
+  const requireMainWindow = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error('主窗口不可用');
+    return mainWindow;
+  };
+  ipcMain.handle('window:get-mode', () => getWindowMode(requireMainWindow()));
+  ipcMain.handle('window:set-compact', async (_e, compact: boolean) => {
+    const result = await setWindowCompact(requireMainWindow(), compact);
+    if (result.compact) destroyOverlayWindow();
+    return result;
   });
+  ipcMain.handle('window:set-always-on-top', (_e, on: boolean) => setWindowPinned(requireMainWindow(), on));
 
   // 打开外部链接（macOS BlackHole 安装指引等）
   ipcMain.handle('window:open-external', (_e, url: string) => {

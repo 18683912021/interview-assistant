@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState, type FormEvent} from 'react';
+import {useEffect, useLayoutEffect, useRef, useState, type FormEvent} from 'react';
 import {
   AudioLines,
   ArrowRight,
@@ -23,6 +23,8 @@ const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 type Mode = 'login' | 'register' | 'reset';
 export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<void>}) {
+  const scrollContainer = useRef<HTMLDivElement>(null);
+  const previousMode = useRef<Mode>('login');
   const emailInput = useRef<HTMLInputElement>(null);
   const codeInput = useRef<HTMLInputElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
@@ -52,6 +54,12 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
     remaining = Math.max(0, Math.ceil(((deadlines[cooldownKey] || 0) - now) / 1000));
   const needCode = mode !== 'login' || method === 'code',
     needPassword = mode !== 'login' || method === 'password';
+  useLayoutEffect(() => {
+    if (previousMode.current === mode) return;
+    previousMode.current = mode;
+    if (scrollContainer.current) scrollContainer.current.scrollTop = 0;
+    emailInput.current?.focus({preventScroll: true});
+  }, [mode]);
   function changeMode(next: Mode) {
     setMode(next);
     setFieldErrors({});
@@ -138,7 +146,7 @@ export default function AuthScreen({onLogin}: {onLogin: () => void | Promise<voi
     }
   }
   return (
-    <div className="auth-screen">
+    <div className="auth-screen" ref={scrollContainer}>
       <aside className="auth-art">
         <div className="app-brand">
           <span className="brand-mark">

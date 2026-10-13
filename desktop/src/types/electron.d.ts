@@ -35,6 +35,9 @@ interface ElectronAPI {
     saveFile(data: Uint8Array, defaultName: string): Promise<string | null>;
   };
   window: {
+    getMode(): Promise<{compact: boolean; pinned: boolean; alwaysOnTop: boolean}>;
+    setCompact(on: boolean): ReturnType<ElectronAPI['window']['getMode']>;
+    onModeChanged(callback: (mode: Awaited<ReturnType<ElectronAPI['window']['getMode']>>) => void): () => void;
     quitApp(): Promise<void>;
     hideAll(): Promise<void>;
     getPrivacy(): Promise<{platform: string; protectionRequested: boolean; shortcut: string | null}>;
@@ -44,7 +47,7 @@ interface ElectronAPI {
     openOverlay(): Promise<void>;
     closeOverlay(): Promise<void>;
     toggleOverlay(): Promise<void>;
-    setAlwaysOnTop(on: boolean): Promise<void>;
+    setAlwaysOnTop(on: boolean): ReturnType<ElectronAPI['window']['getMode']>;
     openExternal(url: string): Promise<{ ok: boolean; error?: string }>;
   };
   storage: {
