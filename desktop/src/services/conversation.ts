@@ -30,6 +30,7 @@ export function findReusableAnswer<T extends Answer>(
       answer =>
         answer.source_message_ids.includes(messageId) &&
         !answer.context_snapshot?.supplement_instruction &&
+        !answer.context_snapshot?.question_edited &&
         (!preferences || Object.entries(preferences).every(([key, value]) =>
           key === 'answer_length' || answer.context_snapshot?.[key] === value)) &&
         !hasRevisedSources(answer, messages) &&

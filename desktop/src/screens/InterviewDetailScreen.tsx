@@ -334,7 +334,7 @@ export default function InterviewDetailScreen() {
               }}>
               {answer ? (
                 <article className="answer-document">
-                  <div className="answer-question">{answer.question_text}</div>
+                  <div className="answer-question">{answer.context_snapshot?.question_edited ? <span className="answer-edited-label">已编辑的问题<br /></span> : null}{answer.question_text}</div>
                   <div className="answer-source-line">
                     <span>{answer.source_message_ids.length} 句来源 · 当时选择的问题</span>
                     <button className="link-button" onClick={locate}>

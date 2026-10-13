@@ -36,3 +36,9 @@ describe('answer selection', () => {
     expect(findReusableAnswer([written], messages, 'one', {...preferences, language: 'en'})).toBeUndefined();
   });
 });
+
+it('an edited question does not replace the answer associated with the original conversation bubble', () => {
+  const original = {id: 'original', source_message_ids: ['one'], source_revisions: [1], status: 'done', text: '原答案'};
+  const edited = {...original, id: 'edited', context_snapshot: {question_edited: true}};
+  expect(findReusableAnswer([original, edited], [{id: 'one', revision: 1}], 'one')).toBe(original);
+});

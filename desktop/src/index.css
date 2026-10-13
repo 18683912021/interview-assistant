@@ -2196,3 +2196,12 @@ html, body, body *, body *::before, body *::after { cursor: default !important; 
 .material-version-row { display: flex; align-items: center; gap: 8px; }
 .material-versions .material-version-row > button:first-child { flex: 1; min-width: 0; }
 .material-versions .material-version-row > .icon-btn { width: 32px; flex: 0 0 32px; padding: 6px; }
+
+.answer-question-block { margin-bottom: 24px; }
+.answer-question-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; color: var(--muted); font-size: 11px; }
+.answer-question-heading .btn { min-height: 28px; padding: 4px 8px; font-size: 11px; }
+.answer-question-block .answer-question { margin-bottom: 0; overflow-wrap: anywhere; }
+.answer-question-editor textarea { width: 100%; min-height: 100px; max-height: 260px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.7; }
+.answer-question-editor p { margin: 8px 0; line-height: 1.6; }
+.answer-question-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.answer-edited-label { font-size: 11px; }

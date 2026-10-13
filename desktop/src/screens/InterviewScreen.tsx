@@ -52,6 +52,7 @@ import {registerShutdownHandler} from '../services/app-shutdown';
 import {loadDrafts, removeDraft, storeDraft} from '../services/drafts';
 import {genId, interviewReducer} from '../store/interview-reducer';
 import type {ConversationMessage} from '../store/types';
+import {AnswerQuestion} from '../components/AnswerQuestion';
 import {AnswerBody} from '../components/AnswerBody';
 import {AudioPermissions} from '../components/AudioPermissions';
 import {findReusableAnswer, hasRevisedSources} from '../services/conversation';
@@ -369,8 +370,8 @@ export default function InterviewScreen() {
   const live = state.captureState === 'capturing';
   const generating = answer?.status === 'loading' || answer?.status === 'streaming';
   const canAnswer = !!session && session.status !== 'completed' && state.captureState !== 'completed' && !busy;
-  const request = (ids: string[], instruction?: string) => {
-    if (!session || !canAnswer) return;
+  const request = (ids: string[], instruction?: string, questionOverride?: string) => {
+    if (!session || !canAnswer) return null;
     const id = sendLLMQuery(session.id, ids, {
       role: session.role,
       job_description: session.job_description,
@@ -378,13 +379,15 @@ export default function InterviewScreen() {
       ...session.preferences,
       context_version: 1,
       resume_version: session.resume_snapshot?.version,
-    }, instruction && answer ? {text: answer.text, instruction} : undefined);
+    }, instruction && answer ? {text: answer.text, instruction} : undefined, questionOverride);
     if (id) {
       setAnswerId(id);
       setSelected(ids);
       setPane('answer');
     }
+    return id;
   };
+  const answerQuestionOverride = answer?.context_snapshot?.question_edited ? answer.question_text : undefined;
   const clickMessage = (id: string) => {
     if (multi) {
       if (!selected.includes(id) && selected.length >= 30) {
@@ -1103,7 +1106,9 @@ export default function InterviewScreen() {
             ) : (
               <div
                 className={`answer-document${generating && !answer.text ? ' answer-document-waiting' : ''}`}>
-                <div className="answer-question">{answer.question_text}</div>
+                <AnswerQuestion key={answer.id} question={answer.question_text}
+                  edited={!!answer.context_snapshot?.question_edited} editable={canAnswer} busy={generating}
+                  onGenerate={question => !!request(answer.source_message_ids, undefined, question)} />
                 <div className="answer-format-label">
                   {answer.context_snapshot?.supplement_instruction ? '深入补充 · ' : ''}{answerStyleLabel(answer.context_snapshot?.answer_style)}
                 </div>
@@ -1122,8 +1127,8 @@ export default function InterviewScreen() {
                 )}
                 {!!answer.text && !generating && canAnswer && (
                   <div className="answer-supplements" aria-label="深入补充">
-                    <button className="btn btn-quiet" onClick={() => request(answer.source_message_ids, '补充一个具体例子，串起关键步骤，并解释结果和适用边界。')}>补充一个例子</button>
-                    <button className="btn btn-quiet" onClick={() => request(answer.source_message_ids, '补充原回答未充分解释的原理、取舍和异常场景，提供能直接使用的解释。')}>深入解释与取舍</button>
+                    <button className="btn btn-quiet" onClick={() => request(answer.source_message_ids, '补充一个具体例子，串起关键步骤，并解释结果和适用边界。', answerQuestionOverride)}>补充一个例子</button>
+                    <button className="btn btn-quiet" onClick={() => request(answer.source_message_ids, '补充原回答未充分解释的原理、取舍和异常场景，提供能直接使用的解释。', answerQuestionOverride)}>深入解释与取舍</button>
                   </div>
                 )}
                 <details>
@@ -1178,7 +1183,7 @@ export default function InterviewScreen() {
                 <button
                   className="link-button"
                   disabled={!canAnswer}
-                  onClick={() => request(answer.source_message_ids)}>
+                  onClick={() => request(answer.source_message_ids, undefined, answerQuestionOverride)}>
                   {answer.context_snapshot?.answer_style !== session.preferences.answer_style
                     ? `按${answerStyleLabel(session.preferences.answer_style)}回答` : '重新回答'}
                 </button>

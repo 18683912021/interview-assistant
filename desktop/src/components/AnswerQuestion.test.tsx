@@ -1,0 +1,61 @@
+// @vitest-environment jsdom
+import {cleanup, fireEvent, render, screen} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import {afterEach, expect, it, vi} from 'vitest';
+import {AnswerQuestion} from './AnswerQuestion';
+afterEach(cleanup);
+it('edits inline, cancels without changing the displayed question, and generates the trimmed draft', async () => {
+  const generate = vi.fn(() => true);
+  render(<AnswerQuestion question="原始问题" editable busy={false} onGenerate={generate} />);
+  await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
+  const field = screen.getByRole('textbox', {name: '编辑本次问题'});
+  expect(document.activeElement).toBe(field);
+  fireEvent.change(field, {target: {value: '取消的修改'}});
+  await userEvent.click(screen.getByRole('button', {name: '取消'}));
+  expect(generate).not.toHaveBeenCalled();
+  expect(screen.getByText('原始问题')).toBeTruthy();
+  await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
+  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('原始问题');
+  fireEvent.change(screen.getByRole('textbox'), {target: {value: '  请解释 Redis 的持久化取舍  '}});
+  await userEvent.click(screen.getByRole('button', {name: '重新生成'}));
+  expect(generate).toHaveBeenCalledExactlyOnceWith('请解释 Redis 的持久化取舍');
+});
+it('validates empty/oversized questions inline and preserves the draft on a rejected request', async () => {
+  const generate = vi.fn(() => false);
+  render(<AnswerQuestion question="原问题" editable busy={false} onGenerate={generate} />);
+  await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
+  const field = screen.getByRole('textbox');
+  fireEvent.change(field, {target: {value: '   '}});
+  await userEvent.click(screen.getByRole('button', {name: '重新生成'}));
+  expect(screen.getByRole('alert').textContent).toContain('请填写问题');
+  fireEvent.change(field, {target: {value: '问'.repeat(16001)}});
+  await userEvent.click(screen.getByRole('button', {name: '重新生成'}));
+  expect(screen.getByRole('alert').textContent).toContain('最多 16000 字');
+  expect(generate).not.toHaveBeenCalled();
+  fireEvent.change(field, {target: {value: '保留这份草稿'}});
+  await userEvent.click(screen.getByRole('button', {name: '重新生成'}));
+  expect(screen.getByRole('alert').textContent).toContain('暂时无法生成');
+  expect((field as HTMLTextAreaElement).value).toBe('保留这份草稿');
+});
+it('blocks editing during generation or after completion, including an already open editor', async () => {
+  const generate = vi.fn(() => true);
+  const {rerender} = render(<AnswerQuestion question="问题" editable busy onGenerate={generate} />);
+  expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(true);
+  rerender(<AnswerQuestion question="问题" editable busy={false} onGenerate={generate} />);
+  await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
+  rerender(<AnswerQuestion question="问题" editable={false} busy={false} onGenerate={generate} />);
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(generate).not.toHaveBeenCalled();
+});
+it('supports multiline typing, ignores IME confirmation, and submits only the explicit shortcut', async () => {
+  const generate = vi.fn(() => true);
+  render(<AnswerQuestion question="问题" editable busy={false} onGenerate={generate} />);
+  await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
+  const field = screen.getByRole('textbox');
+  fireEvent.keyDown(field, {key: 'Enter'});
+  fireEvent.keyDown(field, {key: 'Enter', ctrlKey: true, isComposing: true});
+  expect(generate).not.toHaveBeenCalled();
+  fireEvent.keyDown(field, {key: 'Enter', ctrlKey: true});
+  expect(generate).toHaveBeenCalledExactlyOnceWith('问题');
+});

@@ -451,13 +451,15 @@ export function useAudioCapture() {
   );
 
   const sendLLMQuery = useCallback(
-    (sessionId: string, messageIds: string[], context: AnswerContext, supplement?: {text: string; instruction: string}): string | null => {
+    (sessionId: string, messageIds: string[], context: AnswerContext, supplement?: {text: string; instruction: string}, questionOverride?: string): string | null => {
       if (stateRef.current.captureState === 'completed') return null;
       const selected = stateRef.current.conversation.filter(message =>
         messageIds.includes(message.id),
       );
       if (!selected.length) return null;
-      const question = selected.map(message => message.text).join('\n');
+      const originalQuestion = selected.map(message => message.text).join('\n');
+      const question = (questionOverride ?? originalQuestion).trim();
+      if (!question) return null;
       if (selected.length > 30 || question.length > 16000) {
         dispatch({
           type: 'error',
@@ -476,6 +478,7 @@ export function useAudioCapture() {
       const requestId = genId('request');
       const snapshot = {
         ...context,
+        ...(questionOverride !== undefined && question !== originalQuestion.trim() ? {question_edited: true} : {}),
         role: context.role.slice(0, 300),
         job_description: context.job_description.slice(0, 5000),
         resume_text: resumeExcerpt(context.resume_text, question),
