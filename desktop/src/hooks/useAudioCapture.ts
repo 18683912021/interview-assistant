@@ -7,6 +7,7 @@ import {
   type PreparedStreams,
 } from '../services/capture-preparation';
 import {getToken} from '../utils/token';
+import {messageOf} from '../utils/error-message';
 import {streamJSON} from '../api/stream';
 import {resumeExcerpt, questionContext, previousReference} from '../services/answer-context';
 import type {Settings} from '../api/workspace';
@@ -49,7 +50,6 @@ export interface AnswerContext {
   context_version: number;
   resume_version?: number;
 }
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 function closeAudio(handle: AudioHandle | null) {
   if (!handle) return;
   handle.stream.getTracks().forEach(track => track.stop());
@@ -209,7 +209,7 @@ export function useAudioCapture() {
   }, [api, pauseForLoss]);
 
   const attachPipeline = useCallback(
-    async (stream: MediaStream, send: (frame: Uint8Array) => void) => {
+    async (stream: MediaStream, send: (frame: Uint8Array) => void, epoch: number) => {
       const ctx = new AudioContext({sampleRate: 16000});
       try {
         await ctx.audioWorklet.addModule('./mic-processor.js');
@@ -237,7 +237,10 @@ export function useAudioCapture() {
           .forEach(track =>
             track.addEventListener(
               'ended',
-              () => pauseForLoss('音频设备已断开或共享已结束，采集已暂停。请检查设备后继续。'),
+              () => {
+                if (epoch === startEpoch.current)
+                  pauseForLoss('音频设备已断开或共享已结束，采集已暂停。请检查设备后继续。');
+              },
               {once: true},
             ),
           );
@@ -277,6 +280,8 @@ export function useAudioCapture() {
       dispatch({type: 'asr_error', message: null});
       dispatch({type: 'captureState', value: 'preparing'});
       let streams: PreparedStreams | null = null;
+      let preparedMic: AudioHandle | null = null;
+      let preparedSystem: AudioHandle | null = null;
       try {
         // Windows enumeration opens no audio stream; fail before saving a new
         // session or opening provider connections if its selected output vanished.
@@ -291,17 +296,27 @@ export function useAudioCapture() {
           /Mac/i.test(navigator.userAgent),
           () => epoch !== startEpoch.current,
         );
-        setEchoMode(microphoneEchoMode(streams.mic));
-        micRef.current = await attachPipeline(streams.mic, frame => api.sendMicFrame(frame));
+        if (epoch !== startEpoch.current) throw new Error('启动已取消');
+        preparedMic = await attachPipeline(streams.mic, frame => api.sendMicFrame(frame), epoch);
+        if (epoch !== startEpoch.current) throw new Error('启动已取消');
         if (streams.system)
-          sysRef.current = await attachPipeline(streams.system, frame =>
-            api.sendSystemFrame(frame),
+          preparedSystem = await attachPipeline(streams.system, frame =>
+            api.sendSystemFrame(frame), epoch,
           );
         if (epoch !== startEpoch.current) throw new Error('启动已取消');
+        // Publish only after all async work still belongs to this attempt.
+        micRef.current = preparedMic;
+        sysRef.current = preparedSystem;
+        setEchoMode(microphoneEchoMode(streams.mic));
         preparedKey.current = key;
       } catch (error) {
-        stoppingRef.current = true;
+        closeAudio(preparedMic);
+        closeAudio(preparedSystem);
         if (streams) releaseStreams(streams);
+        // A cancelled permission/worklet operation can finish after a new start.
+        // Its cleanup must never stop or reset the newer attempt.
+        if (epoch !== startEpoch.current) throw error;
+        stoppingRef.current = true;
         stopLocal();
         dispatch({type: 'captureState', value: 'paused'});
         dispatch({

@@ -1,5 +1,6 @@
 import type {Settings} from '../api/workspace';
 import {captureMicrophone} from './microphone-capture';
+import {messageOf} from '../utils/error-message';
 
 export type PreparedStreams = {mic: MediaStream; system: MediaStream | null};
 type MediaAccess = Pick<MediaDevices, 'getUserMedia' | 'getDisplayMedia'>;
@@ -24,7 +25,7 @@ export function audioPreparationError(error: unknown): string {
     return '音频输入或回声消除无法启动，请检查设备连接、麦克风与系统音频权限，并关闭正在独占设备的应用。';
   if (error instanceof Error && error.message.includes('Invalid capture constraints'))
     return '系统音频采集未能启动。请检查屏幕与系统音频录制权限，重新允许本应用后重启；也可以选择「仅麦克风」。';
-  return error instanceof Error ? error.message : '音频准备失败，请检查设备后重试。';
+  return error instanceof Error ? messageOf(error) : '音频准备失败，请检查设备后重试。';
 }
 
 async function captureSystemPlayback(media: MediaAccess): Promise<MediaStream> {

@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
+import {messageOf} from '../utils/error-message';
 
 type Permissions = Awaited<ReturnType<NonNullable<Window['electronAPI']>['audio']['getPermissions']>>;
 const labels: Record<Permissions['microphone'], string> = {
@@ -44,7 +45,7 @@ export function AudioPermissions({onlyBlocked = false, systemRequired = true, sc
             try {
               const result = await api?.checkSystemAudio();
               setSystemMessage(result?.signal ? '已检测到系统播放声音，音频链路可用。' : '组件已启动，但未检测到声音。请播放音频后再检测；若仍无信号，请在下方音频权限设置中重新允许当前版本并重启。');
-            } catch (error) { setError(error instanceof Error ? error.message : '系统音频检测失败。'); }
+            } catch (error) { setError(messageOf(error)); }
             finally {ownsCheck.current = false; setRequesting(null);}
           }}>{requesting === 'system' ? '正在检测…' : '检测并申请权限'}</button>
           <button className="btn btn-quiet" type="button" onClick={() => void api?.openPrivacySettings('screen').catch(() => setError('系统设置未能打开，请重试。'))}>打开音频权限设置</button>

@@ -80,6 +80,7 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(managers.splice(0).map(manager => manager.stop()));
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 async function start(source: 'both' | 'mic') {
@@ -90,6 +91,25 @@ async function start(source: 'both' | 'mic') {
 }
 
 describe('microphone and system PCM isolation', () => {
+  it.each(['mic', 'system'] as const)('reports a missing %s track even when the other track sends frames', async missing => {
+    vi.useFakeTimers();
+    const manager = await start('both');
+    const errors = vi.fn();
+    manager.on('error', errors);
+    if (missing === 'system') manager.pushMicFrame(pcm(640, 1));
+    else manager.pushSystemFrame(pcm(640, -1));
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(errors).toHaveBeenCalledWith(expect.objectContaining({code: 'E_NO_SIGNAL', source: missing, recoverable: true}));
+  });
+  it('does not treat quiet PCM as a missing device or require an unselected system track', async () => {
+    vi.useFakeTimers();
+    const manager = await start('mic');
+    const errors = vi.fn();
+    manager.on('error', errors);
+    manager.pushMicFrame(Buffer.alloc(1280));
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(errors).not.toHaveBeenCalled();
+  });
   it('keeps interleaved chunks, sequence counters and flushed tails on their original source', async () => {
     const manager = await start('both');
     const mic = pcm(1500, 1),

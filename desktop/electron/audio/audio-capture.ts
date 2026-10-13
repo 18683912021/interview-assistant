@@ -240,14 +240,15 @@ export class AudioCaptureManager extends EventEmitter {
     // 上屏明确提示，避免 UI 显示"连接中"却全程无声、无从排查
     this.silenceTimer = setTimeout(() => {
       if (this.state !== 'capturing') return;
-      const frames = [...this.tracks.values()].reduce((n, t) => n + t.seq, 0);
-      if (frames === 0) {
+      for (const [source, track] of this.tracks) {
+        if (track.seq > 0) continue;
         this.emit('error', {
           code: 'E_NO_SIGNAL',
           stage: 'capture',
-          message: this.tracks.has('system') && !this.tracks.has('mic')
-            ? '未检测到系统音频信号（8 秒）。请确认电脑正在播放声音、默认输出设备已启用'
-            : '未检测到音频信号（8 秒）。请确认麦克风已授权且系统正在播放声音',
+          source,
+          message: source === 'system'
+            ? '系统音频尚未收到数据（8 秒）。请播放声音，并检查系统音频权限与输出设备。'
+            : '麦克风尚未收到数据（8 秒）。请检查麦克风权限与输入设备。',
           recoverable: true,
         });
       }

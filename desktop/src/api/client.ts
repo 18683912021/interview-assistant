@@ -71,5 +71,4 @@ export const api = {
   upload: <T = unknown>(path: string, body: FormData) =>
     request<T>('POST', path, body, true, 90_000),
 };
-export const messageOf = (error: unknown) =>
-  error instanceof Error ? error.message : '操作失败，请重试';
+export {messageOf} from '../utils/error-message';
