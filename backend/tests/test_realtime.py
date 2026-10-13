@@ -177,6 +177,7 @@ def test_code_examples_include_candidate_explanation_rules(style, language):
     assert "解释为什么这样写、数据如何流转" in prompt
     assert "该编程语言合法的注释语法" in prompt
     assert "JSON 等不支持注释的格式保持合法" in prompt
+    assert "注释必须符合当前语言和实现的实际语义" in prompt
     assert "不重复所有注释，不输出内部思考过程" in prompt
 
 
