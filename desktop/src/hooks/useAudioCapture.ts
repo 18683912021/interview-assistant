@@ -266,7 +266,7 @@ export function useAudioCapture() {
         preparedKey.current === key &&
         micRef.current?.stream.getAudioTracks().some(track => track.readyState === 'live') &&
         (source !== 'both' ||
-          !/Mac/i.test(navigator.userAgent) ||
+          !/Mac/i.test(navigator.userAgent) || !settings.system_device_id ||
           sysRef.current?.stream.getAudioTracks().some(track => track.readyState === 'live'))
       )
         return;
@@ -320,11 +320,12 @@ export function useAudioCapture() {
   );
 
   const discardPreparation = useCallback(() => {
+    void api?.cancelSystemAudioCheck().catch(() => {});
     startEpoch.current++;
     stoppingRef.current = true;
     stopLocal();
     dispatch({type: 'captureState', value: 'paused'});
-  }, [stopLocal]);
+  }, [api, stopLocal]);
 
   const assertPrepared = useCallback((settings: Settings, source: 'both' | 'mic') => {
     const key = JSON.stringify([source, settings.microphone_id, settings.system_device_id]);
@@ -333,7 +334,7 @@ export function useAudioCapture() {
     if (
       preparedKey.current !== key ||
       !live(micRef.current) ||
-      (source === 'both' && /Mac/i.test(navigator.userAgent) && !live(sysRef.current))
+      (source === 'both' && /Mac/i.test(navigator.userAgent) && settings.system_device_id && !live(sysRef.current))
     ) {
       throw new Error('音频准备已取消或设备已断开，请检查设备后重新开始。');
     }
@@ -354,7 +355,7 @@ export function useAudioCapture() {
           directAddress: STREAM_DIRECT_ADDRESS,
           sessionId,
           token,
-          ...(desktopPlatform() === 'windows' ? {systemDeviceId: settings.system_device_id} : {}),
+          systemDeviceId: settings.system_device_id,
         });
         if (epoch !== startEpoch.current) throw new Error('启动已取消');
         await api.sendControl({type: 'config', language: settings.language});
@@ -410,10 +411,11 @@ export function useAudioCapture() {
       startEpoch.current++;
       answerRequests.current.forEach(controller => controller.abort());
       answerRequests.current.clear();
+      void api?.cancelSystemAudioCheck().catch(() => {});
       stopLocal();
       void stopNative().catch(() => {});
     },
-    [stopNative, stopLocal],
+    [api, stopNative, stopLocal],
   );
 
   const sendLLMQuery = useCallback(

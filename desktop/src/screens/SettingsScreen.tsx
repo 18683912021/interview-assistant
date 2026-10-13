@@ -1,3 +1,4 @@
+import {SCREEN_AUDIO_FALLBACK} from '../services/capture-preparation';
 import {AnswerStylePicker} from '../components/AnswerStylePicker';
 import {Select, SelectOption} from '../components/Select';
 import {useCallback, useContext, useEffect, useRef, useState, type FormEvent} from 'react';
@@ -389,7 +390,7 @@ export default function SettingsScreen() {
                 )}
                 {category === 'audio' && (
                   <>
-                    <AudioPermissions />
+                    <AudioPermissions systemRequired={!settings.system_device_id || settings.system_device_id === SCREEN_AUDIO_FALLBACK} screenFallback={settings.system_device_id === SCREEN_AUDIO_FALLBACK} />
                     <label className="setting-row">
                       <span>
                         麦克风<small>用于记录你的回答</small>
@@ -438,8 +439,9 @@ export default function SettingsScreen() {
                         <Select
                           value={settings.system_device_id}
                           onValueChange={selectedValue => change('system_device_id', selectedValue)}>
-                          <SelectOption value="">系统播放声音（推荐）</SelectOption>
-                          {settings.system_device_id &&
+                          <SelectOption value="">仅系统音频（推荐，不采集屏幕）</SelectOption>
+                          <SelectOption value={SCREEN_AUDIO_FALLBACK}>屏幕采集兼容模式（会显示共享提示）</SelectOption>
+                          {settings.system_device_id && settings.system_device_id !== SCREEN_AUDIO_FALLBACK &&
                             !devices.some(
                               value => value.deviceId === settings.system_device_id,
                             ) && (
@@ -466,7 +468,7 @@ export default function SettingsScreen() {
                           value={settings.system_device_id}
                           onValueChange={selectedValue => change('system_device_id', selectedValue)}>
                           <SelectOption value="">系统默认输出</SelectOption>
-                          {settings.system_device_id &&
+                          {settings.system_device_id && settings.system_device_id !== SCREEN_AUDIO_FALLBACK &&
                             !outputs.some(device => device.id === settings.system_device_id) && (
                               <SelectOption value={settings.system_device_id}>
                                 之前选择的输出（暂不可用）
@@ -496,7 +498,7 @@ export default function SettingsScreen() {
                     )}
                     {isMac && (
                       <p className="notice">
-                        默认使用屏幕与系统音频录制权限，画面不会保存或上传。选择虚拟音频输入时，需要先配置声音路由；普通麦克风不能代替电脑播放的声音。
+                        默认只读取系统播放的声音（macOS 14.2+），不采集屏幕。首次使用需允许系统音频录制；系统仍可能显示录音提示。只有手动选择兼容模式才会启用屏幕采集。虚拟输入需要单独配置声音路由。
                       </p>
                     )}
                     <p className="notice">

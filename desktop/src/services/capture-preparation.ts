@@ -3,6 +3,7 @@ import {captureMicrophone} from './microphone-capture';
 
 export type PreparedStreams = {mic: MediaStream; system: MediaStream | null};
 type MediaAccess = Pick<MediaDevices, 'getUserMedia' | 'getDisplayMedia'>;
+export const SCREEN_AUDIO_FALLBACK = '__screen_capture__';
 const systemConstraints: MediaTrackConstraints = {
   echoCancellation: false,
   noiseSuppression: false,
@@ -16,7 +17,7 @@ export function releaseStreams(streams: Partial<PreparedStreams>) {
 export function audioPreparationError(error: unknown): string {
   const name = error instanceof Error ? error.name : '';
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError')
-    return '未获音频权限或已取消选择。请在系统设置中允许本应用使用麦克风及屏幕与系统音频，再重试。';
+    return '未获音频权限或已取消选择。请在系统设置中允许本应用使用麦克风及所选音频来源，再重试。';
   if (name === 'NotFoundError' || name === 'OverconstrainedError')
     return '已选音频设备不可用，请重新选择设备或使用系统默认输入。';
   if (name === 'NotReadableError')
@@ -58,9 +59,14 @@ export async function prepareAudioStreams(
       throw new Error(
         '麦克风与系统音频选中了同一个输入。请将麦克风设为内置或耳机麦克风，系统音频选择电脑播放声音或独立虚拟输入。',
       );
-    // Ask for system sharing first while the user's click still has transient activation.
-    if (source === 'both' && isMac) {
-      streams.system = settings.system_device_id
+    // Screen capture is an explicit fallback; native audio never requests a screen.
+    if (source === 'both' && isMac && !settings.system_device_id) {
+      const api = typeof window !== 'undefined' ? window.electronAPI?.audio : undefined;
+      if (!api?.checkSystemAudio) throw new Error('纯系统音频需要最新版桌面客户端。');
+      await api.checkSystemAudio();
+    }
+    if (source === 'both' && isMac && settings.system_device_id) {
+      streams.system = settings.system_device_id !== SCREEN_AUDIO_FALLBACK
         ? await media.getUserMedia({
             audio: {...systemConstraints, deviceId: {exact: settings.system_device_id}},
           })

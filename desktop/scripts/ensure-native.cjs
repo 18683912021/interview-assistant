@@ -102,7 +102,7 @@ function ensureNative({
 } = {}) {
   const log = message => console.log(`[ensure-native] ${message}`);
   if (platform !== 'win32') {
-    log(`跳过 ${platform}（WASAPI 仅 Windows，macOS 保持 ScreenCaptureKit 路径）`);
+    log(`跳过 ${platform}（WASAPI 仅 Windows，macOS 使用独立 Core Audio 组件）`);
     return;
   }
   if (!PE_MACHINES[arch]) throw new Error(`WASAPI 不支持目标架构 ${arch}`);

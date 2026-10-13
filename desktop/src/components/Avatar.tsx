@@ -39,7 +39,7 @@ export default function Avatar({ name, size = 36, className = '' }: Props) {
     <div
       className={`bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-extrabold shadow-sm select-none ${className}`}
       style={{ width: size, height: size, borderRadius: size / 3, fontSize: size * 0.38 }}
-      title={displayName}
+      aria-label={displayName}
     >
       {initials(displayName)}
     </div>

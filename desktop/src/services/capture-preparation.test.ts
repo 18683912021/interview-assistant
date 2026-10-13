@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {audioPreparationError, prepareAudioStreams} from './capture-preparation';
+import {audioPreparationError, prepareAudioStreams, SCREEN_AUDIO_FALLBACK} from './capture-preparation';
 import {DEFAULT_SETTINGS} from '../api/workspace';
 vi.mock('../api/client', () => ({api: {}}));
 afterEach(() => vi.unstubAllGlobals());
@@ -17,13 +17,37 @@ const stream = (audio = true, deviceId = '', groupId = '', label = deviceId) => 
   } as unknown as MediaStream;
 };
 describe('device preparation before interview creation', () => {
+  it('uses native audio by default without opening a screen or a second microphone', async () => {
+    const checkSystemAudio = vi.fn().mockResolvedValue({signal: true});
+    vi.stubGlobal('window', {electronAPI: {audio: {checkSystemAudio}}});
+    const mic = stream();
+    const media = {getUserMedia: vi.fn().mockResolvedValue(mic), getDisplayMedia: vi.fn()};
+    expect(await prepareAudioStreams(DEFAULT_SETTINGS, 'both', media, true)).toEqual({mic, system: null});
+    expect(checkSystemAudio).toHaveBeenCalledOnce();
+    expect(media.getDisplayMedia).not.toHaveBeenCalled();
+    expect(media.getUserMedia).toHaveBeenCalledOnce();
+  });
+  it('does not silently fall back to screen capture when native audio fails', async () => {
+    vi.stubGlobal('window', {electronAPI: {audio: {checkSystemAudio: vi.fn().mockRejectedValue(new Error('audio denied'))}}});
+    const media = {getUserMedia: vi.fn(), getDisplayMedia: vi.fn()};
+    await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', media, true)).rejects.toThrow('audio denied');
+    expect(media.getDisplayMedia).not.toHaveBeenCalled();
+    expect(media.getUserMedia).not.toHaveBeenCalled();
+  });
+  it('does not request a microphone after a native probe was cancelled', async () => {
+    let cancelled = false;
+    vi.stubGlobal('window', {electronAPI: {audio: {checkSystemAudio: vi.fn(async () => {cancelled = true;})}}});
+    const media = {getUserMedia: vi.fn(), getDisplayMedia: vi.fn()};
+    await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', media, true, () => cancelled)).rejects.toThrow('启动已取消');
+    expect(media.getUserMedia).not.toHaveBeenCalled();
+  });
   it('uses the main-process reason for a failed display request before opening the microphone', async () => {
     const takeDisplayCaptureFailure = vi.fn().mockResolvedValue({
       code: 'E_SCREEN_PERMISSION', message: 'macOS 尚未允许屏幕与系统音频录制。',
     });
     vi.stubGlobal('window', {electronAPI: {audio: {takeDisplayCaptureFailure}}});
     const getUserMedia = vi.fn();
-    await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', {
+    await expect(prepareAudioStreams({...DEFAULT_SETTINGS, system_device_id: SCREEN_AUDIO_FALLBACK}, 'both', {
       getUserMedia,
       getDisplayMedia: vi.fn().mockRejectedValue(new Error('Invalid capture constraints')),
     }, true)).rejects.toThrow('macOS 尚未允许屏幕与系统音频录制');
@@ -32,7 +56,7 @@ describe('device preparation before interview creation', () => {
   });
   it('still explains capture failure if diagnostics are unavailable', async () => {
     vi.stubGlobal('window', {electronAPI: {audio: {takeDisplayCaptureFailure: vi.fn().mockRejectedValue(new Error('IPC unavailable'))}}});
-    await expect(prepareAudioStreams(DEFAULT_SETTINGS, 'both', {
+    await expect(prepareAudioStreams({...DEFAULT_SETTINGS, system_device_id: SCREEN_AUDIO_FALLBACK}, 'both', {
       getUserMedia: vi.fn(),
       getDisplayMedia: vi.fn().mockRejectedValue(new Error('Invalid capture constraints')),
     }, true)).rejects.toThrow('系统音频采集未能启动');
@@ -138,7 +162,7 @@ describe('device preparation before interview creation', () => {
       getUserMedia = vi.fn();
     await expect(
       prepareAudioStreams(
-        DEFAULT_SETTINGS,
+        {...DEFAULT_SETTINGS, system_device_id: SCREEN_AUDIO_FALLBACK},
         'both',
         {getDisplayMedia: vi.fn().mockResolvedValue(videoOnly), getUserMedia},
         true,
@@ -153,7 +177,7 @@ describe('device preparation before interview creation', () => {
     denied.name = 'NotAllowedError';
     await expect(
       prepareAudioStreams(
-        DEFAULT_SETTINGS,
+        {...DEFAULT_SETTINGS, system_device_id: SCREEN_AUDIO_FALLBACK},
         'both',
         {
           getDisplayMedia: vi.fn().mockResolvedValue(system),

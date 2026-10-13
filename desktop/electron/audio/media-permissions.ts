@@ -75,8 +75,8 @@ function sourceFailure(): DisplayCaptureFailure {
 export function configureSystemAudioCapture(): void {
   if (process.platform !== 'darwin' || process.versions.electron?.split('.')[0] !== '43') return;
   const flags = new Set(app.commandLine.getSwitchValue('disable-features').split(',').filter(Boolean));
-  // Electron 43's CoreAudio Tap may fail without asking the responsible terminal
-  // for permission. Its documented ScreenCaptureKit path uses OS screen approval.
+  // Only the explicitly selected legacy screen-capture route uses Chromium.
+  // Default system audio uses our native Core Audio Tap and never enters here.
   flags.add('MacCatapLoopbackAudioForScreenShare');
   app.commandLine.appendSwitch('disable-features', [...flags].join(','));
 }
@@ -91,7 +91,7 @@ export function getAudioPermissions() {
       ? systemPreferences.getMediaAccessStatus('microphone') : 'unsupported',
     screen: process.platform === 'darwin'
       ? systemPreferences.getMediaAccessStatus('screen') : 'unsupported',
-    systemAudioMode: process.platform === 'darwin' ? 'screen-capture-loopback' : 'native-loopback',
+    systemAudioMode: process.platform === 'darwin' ? 'coreaudio-tap' : 'native-loopback',
   };
 }
 

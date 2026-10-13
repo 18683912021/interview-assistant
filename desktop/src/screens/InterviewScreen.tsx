@@ -1,3 +1,4 @@
+import {SCREEN_AUDIO_FALLBACK} from '../services/capture-preparation';
 import {ScrollToTop} from '../components/ScrollToTop';
 import {SessionSplit} from '../components/SessionSplit';
 import {IconButton} from '../components/IconButton';
@@ -593,7 +594,7 @@ export default function InterviewScreen() {
           </div>
         </div>
         {error && <ErrorState message={error} retry={() => void load()} />}
-        <AudioPermissions onlyBlocked systemRequired={source === 'both' && !settings.system_device_id} />
+        <AudioPermissions onlyBlocked systemRequired={source === 'both' && (!settings.system_device_id || settings.system_device_id === SCREEN_AUDIO_FALLBACK)} screenFallback={settings.system_device_id === SCREEN_AUDIO_FALLBACK} />
         {drafts.length > 0 && (
           <div className="recovery-list">
             {drafts.map(value => (
@@ -881,7 +882,7 @@ export default function InterviewScreen() {
         </div>
       )}
       {(error || state.error?.stage === 'devices' || state.error?.stage === 'capture') && (
-        <AudioPermissions onlyBlocked systemRequired={source === 'both' && !settings.system_device_id} />
+        <AudioPermissions onlyBlocked systemRequired={source === 'both' && (!settings.system_device_id || settings.system_device_id === SCREEN_AUDIO_FALLBACK)} screenFallback={settings.system_device_id === SCREEN_AUDIO_FALLBACK} />
       )}
       {saveState === 'offline' && (
         <div className="session-alert" role="alert">
@@ -1291,8 +1292,9 @@ export default function InterviewScreen() {
                 onValueChange={selectedValue =>
                   setSettings(value => ({...value, system_device_id: selectedValue}))
                 }>
-                <SelectOption value="">系统播放声音（屏幕与系统音频权限）</SelectOption>
-                {settings.system_device_id &&
+                <SelectOption value="">仅系统音频（不采集屏幕）</SelectOption>
+                <SelectOption value={SCREEN_AUDIO_FALLBACK}>屏幕采集兼容模式（会显示共享提示）</SelectOption>
+                {settings.system_device_id && settings.system_device_id !== SCREEN_AUDIO_FALLBACK &&
                   !audioDevices.some(device => device.deviceId === settings.system_device_id) && (
                     <SelectOption value={settings.system_device_id}>之前选择的输入（暂不可用）</SelectOption>
                   )}
@@ -1303,7 +1305,7 @@ export default function InterviewScreen() {
                   </SelectOption>
                 ))}
               </Select>
-              <small>已配置虚拟声卡时可选择对应输入；普通麦克风不能代替系统播放声音。</small>
+              <small>默认不采集屏幕；兼容模式会显示系统共享提示。虚拟输入需先配置声音路由，普通麦克风不能代替系统音频。</small>
             </label>
           )}
           {isWindows && (
@@ -1315,7 +1317,7 @@ export default function InterviewScreen() {
                   setSettings(value => ({...value, system_device_id: selectedValue}))
                 }>
                 <SelectOption value="">系统默认输出</SelectOption>
-                {settings.system_device_id &&
+                {settings.system_device_id && settings.system_device_id !== SCREEN_AUDIO_FALLBACK &&
                   !systemOutputs.some(device => device.id === settings.system_device_id) && (
                     <SelectOption value={settings.system_device_id}>之前选择的输出（暂不可用）</SelectOption>
                   )}

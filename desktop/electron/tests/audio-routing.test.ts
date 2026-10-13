@@ -85,7 +85,7 @@ afterEach(async () => {
 async function start(source: 'both' | 'mic') {
   const manager = new AudioCaptureManager();
   managers.push(manager);
-  await manager.start(source, sessionId, 'wss://audio.test/stream', 'test-token');
+  await manager.start(source, sessionId, 'wss://audio.test/stream', 'test-token', '__screen_capture__');
   return manager;
 }
 

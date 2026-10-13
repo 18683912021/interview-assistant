@@ -29,7 +29,8 @@ export function createTrayIcon(): Electron.NativeImage {
 export function createTray(showMainWindow: () => void): Tray {
   if (tray && !tray.isDestroyed()) return tray;
   tray = new Tray(createTrayIcon());
-  tray.setToolTip('AI 面试助手');
+  // OS tray tooltips are not covered by BrowserWindow content protection.
+  tray.setToolTip('');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '打开主窗口', click: showMainWindow },
     { label: '隐藏所有窗口', click: hideWindows },

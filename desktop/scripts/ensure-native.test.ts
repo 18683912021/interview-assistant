@@ -66,11 +66,7 @@ afterEach(() => {
 describe('native packaging gate', () => {
   it('leaves macOS builds independent of Windows sources and SDKs', async () => {
     rmSync(path.join(root, 'electron'), {recursive: true});
-    await beforePack({
-      arch: 3,
-      electronPlatformName: 'darwin',
-      packager: {projectDir: root, info: {framework: {version: target.electronVersion}}},
-    });
+    ensureNative({root, platform: 'darwin', arch: 'arm64'});
     expect(existsSync(path.join(root, 'dist-electron'))).toBe(false);
   });
 

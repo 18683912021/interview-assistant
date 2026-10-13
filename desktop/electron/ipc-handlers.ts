@@ -1,3 +1,4 @@
+import {checkMacAudio, cancelMacAudioCheck} from './audio/macos-loopback.js';
 import {getWindowMode, setWindowCompact, setWindowPinned} from './windows/window-mode.js';
 /**
  * IPC 路由注册 —— 连接 preload 暴露的 channel 和主进程实现
@@ -178,6 +179,11 @@ export function registerIpcHandlers(): void {
     return audioCapture.getSnapshot();
   });
   ipcMain.handle('audio:get-permissions', getAudioPermissions);
+  ipcMain.handle('audio:cancel-system-audio-check', () => cancelMacAudioCheck());
+  ipcMain.handle('audio:check-system-audio', () => {
+    if (audioCapture.getState() === 'capturing') throw new Error('请先暂停面试，再检测系统音频。');
+    return checkMacAudio();
+  });
   ipcMain.handle('audio:display-capture-failure', event => takeDisplayCaptureFailure(event.senderFrame));
   ipcMain.handle('audio:open-privacy-settings', (_event, kind: unknown) => openAudioPrivacySettings(kind));
   ipcMain.handle('audio:request-permission', (_event, kind: unknown) => requestAudioPermission(kind));

@@ -15,6 +15,7 @@ asar:
 asarUnpack:
   # WASAPI native addon：asar 内的 .node 无法加载，必须解包
   - dist-electron/audio/native/**/*
+  - dist-electron/audio/mac-native/**/*
 win:
   artifactName: Interview-Assistant-${version}-windows-${arch}-setup.${ext}
   target:

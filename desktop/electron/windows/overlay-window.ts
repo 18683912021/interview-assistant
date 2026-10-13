@@ -31,6 +31,8 @@ export function createOverlayWindow(): BrowserWindow {
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
+      // OS spelling suggestion popups are outside the protected window.
+      spellcheck: false,
       nodeIntegration: false,
       sandbox: false,
       // Live transcript/answer updates must continue while another meeting window is focused.

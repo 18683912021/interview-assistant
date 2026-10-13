@@ -71,7 +71,7 @@ describe('desktop audio WebSocket boundary', () => {
     const manager = new AudioCaptureManager();
     const stopNative = vi.fn();
     (manager as any).state = 'capturing';
-    (manager as any).wasapi = { stop: stopNative };
+    (manager as any).nativeCapture = { stop: stopNative };
     const first = manager.stop('user_stop');
     const second = manager.stop('main_window_closed');
     expect(first).toBe(second);

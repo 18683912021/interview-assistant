@@ -200,7 +200,6 @@ function AuthenticatedApp({profile}: {profile: UserProfile | null}) {
                 className={`side-link ${path === item.path ? 'active' : ''}`}
                 aria-current={path === item.path ? 'page' : undefined}
                 aria-label={item.label}
-                title={item.label}
                 onClick={() => go(item.path)}>
                 <item.icon />
                 <span>{item.label}</span>
@@ -211,14 +210,12 @@ function AuthenticatedApp({profile}: {profile: UserProfile | null}) {
             <button
               className={`side-link ${path === '/settings' ? 'active' : ''}`}
               aria-label="设置"
-              title="设置"
               onClick={() => go('/settings')}>
               <Settings />
               <span>设置</span>
             </button>
             <button
               aria-label={`账号设置 · ${name}`}
-              title={name}
               className="account-button"
               onClick={() => go('/settings?tab=account')}>
               <ProfileAvatar name={name} avatar={profile?.avatar} />

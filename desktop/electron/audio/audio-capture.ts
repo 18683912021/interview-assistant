@@ -15,6 +15,7 @@ import { PcmFrameAccumulator } from './frame-accumulator.js';
 import { encodeRealtimeFrame, SourceKind } from './wire-protocol.js';
 import { StreamClient, type StreamState } from './stream-client.js';
 import { createWindowsLoopback, type WasapiCapture } from './windows-loopback.js';
+import { createMacLoopback } from './macos-loopback.js';
 import { StreamingPcmNormalizer } from './windows-pcm.js';
 
 export type CaptureState = 'idle' | 'preparing' | 'capturing' | 'completed';
@@ -52,8 +53,8 @@ export class AudioCaptureManager extends EventEmitter {
   private sessionId: string | null = null;
   private source: CaptureSource = 'both';
   private stream = new StreamClient();
-  private wasapi: WasapiCapture | null = null;
-  private windowsPcm: StreamingPcmNormalizer | null = null;
+  private nativeCapture: WasapiCapture | null = null;
+  private nativePcm: StreamingPcmNormalizer | null = null;
   private tracks = new Map<TrackName, TrackState>();
   private levelsTimer: NodeJS.Timeout | null = null;
   private silenceTimer: NodeJS.Timeout | null = null;
@@ -123,10 +124,11 @@ export class AudioCaptureManager extends EventEmitter {
     }
     // Fail before opening a paid transcription connection when the native
     // component or selected Windows playback endpoint is unavailable.
-    const windowsCapture = source !== 'mic' && process.platform === 'win32'
-      ? createWindowsLoopback(systemDeviceId) : null;
+    const systemCapture = source !== 'mic' && process.platform === 'win32'
+      ? createWindowsLoopback(systemDeviceId)
+      : source !== 'mic' && process.platform === 'darwin' && !systemDeviceId ? createMacLoopback() : null;
     const generation = ++this.captureGeneration;
-    this.wasapi = windowsCapture;
+    this.nativeCapture = systemCapture;
     this.currentAnswer = null;
     this.source = source;
     this.sessionId = sessionId;
@@ -185,26 +187,26 @@ export class AudioCaptureManager extends EventEmitter {
 
     // ── 3. system 轨 ──
     // Windows：WASAPI Loopback addon（主进程采集）
-    // macOS：渲染进程 getDisplayMedia（SCK 系统选择器）采集后经 audio:system-frame 送入
-    if (windowsCapture) {
+    // macOS：Core Audio Tap；仅手动兼容模式/虚拟输入从 renderer 送入
+    if (systemCapture) {
       let synchronousFailure: Error | null = null;
       try {
-        const {sampleRate: rate, channels, isFloat, bitsPerSample: bits} = windowsCapture;
+        const {sampleRate: rate, channels, isFloat, bitsPerSample: bits} = systemCapture;
         if (!Number.isFinite(rate) || rate < 8000 || rate > 384000 ||
             !Number.isInteger(channels) || channels < 1 || channels > 32 ||
             (isFloat ? bits !== 32 : ![16, 24, 32].includes(bits))) {
-          throw new Error('系统音频输出格式不受支持，请在 Windows 声音设置中选择标准 PCM 输出格式');
+          throw new Error('系统音频输出格式不受支持，请在声音设置中选择标准 PCM 输出格式');
         }
         const normalizer = new StreamingPcmNormalizer(rate, channels);
-        this.windowsPcm = normalizer;
-        windowsCapture.start((err, buf) => {
+        this.nativePcm = normalizer;
+        systemCapture.start((err, buf) => {
           // Native callbacks already queued when stop() runs may arrive after
           // the next interview starts. They must never enter the new tracks.
           if (generation !== this.captureGeneration || this.state !== 'capturing') return;
           if (err) {
             synchronousFailure = err;
             void this.stop('system_capture_failed');
-            this.emit('error', { code: err.code || 'E_WASAPI', stage: 'capture', source: 'system', message: err.message, recoverable: false });
+            this.emit('error', { code: err.code || 'E_SYSTEM_AUDIO', stage: 'capture', source: 'system', message: err.message, recoverable: false });
             return;
           }
           try {
@@ -225,7 +227,7 @@ export class AudioCaptureManager extends EventEmitter {
       } catch (error) {
         // 不再静默降级：system 轨失败必须让用户看到
         const message = error instanceof Error ? error.message : '系统音频采集不可用，请检查输出设备或选择仅麦克风';
-        if (!synchronousFailure) this.emit('error', { code: 'E_WASAPI_START', stage: 'capture', source: 'system', message, recoverable: false });
+        if (!synchronousFailure) this.emit('error', { code: 'E_SYSTEM_AUDIO_START', stage: 'capture', source: 'system', message, recoverable: false });
         await this.stop('system_capture_failed');
         throw new Error(message);
       }
@@ -266,7 +268,7 @@ export class AudioCaptureManager extends EventEmitter {
   pushSystemFrame(buffer: Buffer): void {
     // Windows owns this source in WASAPI; accepting renderer loopback frames
     // there could double or cross-route system audio.
-    if (process.platform !== 'darwin') return;
+    if (process.platform !== 'darwin' || this.nativeCapture) return;
     if (this.state !== 'capturing') return;
     if (!this.tracks.has('system')) return;
     this.pushNorm('system', normalizePcm(buffer, 16000, 1));
@@ -294,7 +296,7 @@ export class AudioCaptureManager extends EventEmitter {
     if (this.levelsTimer) { clearInterval(this.levelsTimer); this.levelsTimer = null; }
     if (this.silenceTimer) { clearTimeout(this.silenceTimer); this.silenceTimer = null; }
     try {
-      const systemTail = this.windowsPcm?.flush();
+      const systemTail = this.nativePcm?.flush();
       if (systemTail?.length) this.pushNorm('system', systemTail);
 
       // 2. flush 尾帧（isFinal=1，携带剩余不足一帧的数据）
@@ -328,7 +330,7 @@ export class AudioCaptureManager extends EventEmitter {
     } finally {
       // A transport send can race a disconnect. Never leave native resources or
       // reconnection timers alive because flushing the last packet failed.
-      this.windowsPcm = null;
+      this.nativePcm = null;
       this.stream.disconnect();
       this.tracks.clear();
       this.lastLevels = { mic: 0, system: 0 };
@@ -349,8 +351,8 @@ export class AudioCaptureManager extends EventEmitter {
   }
 
   private releaseNativeCapture(): void {
-    const capture = this.wasapi;
-    this.wasapi = null;
+    const capture = this.nativeCapture;
+    this.nativeCapture = null;
     if (capture) {
       try { capture.stop(); } catch { /* Native cleanup must not block websocket teardown. */ }
     }

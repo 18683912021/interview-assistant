@@ -27,6 +27,8 @@ export function createMainWindow(): BrowserWindow {
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
+      // OS spelling suggestion popups are outside the protected window.
+      spellcheck: false,
       nodeIntegration: false,
       sandbox: false,
       // Live transcript/answer updates must continue while another meeting window is focused.

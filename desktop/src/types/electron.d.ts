@@ -10,6 +10,8 @@ interface ElectronAPI {
     requestPermission(kind: 'microphone' | 'screen'): ReturnType<ElectronAPI['audio']['getPermissions']>;
     repairScreenPermission(): ReturnType<ElectronAPI['audio']['getPermissions']>;
     listSystemOutputs(): Promise<{id: string; name: string; isDefault: boolean}[]>;
+    cancelSystemAudioCheck(): Promise<void>;
+    checkSystemAudio(): Promise<{sampleRate: number; channels: number; signal: boolean}>;
     getPermissions(): Promise<{
       platform: string; osRelease: string; electronVersion: string;
       canRepairScreenPermission: boolean;

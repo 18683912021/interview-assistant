@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     startCapture: (opts: unknown) => ipcRenderer.invoke('audio:start-capture', opts),
     stopCapture: () => ipcRenderer.invoke('audio:stop-capture'),
     getSnapshot: () => ipcRenderer.invoke('audio:get-snapshot'),
+    cancelSystemAudioCheck: () => ipcRenderer.invoke('audio:cancel-system-audio-check'),
+    checkSystemAudio: () => ipcRenderer.invoke('audio:check-system-audio'),
     getPermissions: () => ipcRenderer.invoke('audio:get-permissions'),
     takeDisplayCaptureFailure: () => ipcRenderer.invoke('audio:display-capture-failure'),
     openPrivacySettings: (kind: 'microphone' | 'screen') => ipcRenderer.invoke('audio:open-privacy-settings', kind),

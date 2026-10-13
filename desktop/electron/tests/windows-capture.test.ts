@@ -12,6 +12,7 @@ const fixture = vi.hoisted(() => ({
   stopConfirmation: null as Promise<void> | null,
 }));
 
+vi.mock('../audio/macos-loopback.js', () => ({createMacLoopback: fixture.createNative}));
 vi.mock('../audio/windows-loopback.js', () => ({createWindowsLoopback: fixture.createNative}));
 vi.mock('../audio/stream-client.js', async () => {
   const {EventEmitter} = await import('events');
@@ -292,5 +293,40 @@ describe('Windows native capture lifecycle without recording hardware', () => {
     expect(fixture.disconnects).toBe(1);
     expect(capture.getSnapshot()).toMatchObject({captureState: 'completed', sessionId: null, levels: {mic: 0, system: 0}});
     expect(errors).toEqual([expect.objectContaining({code: 'E_STOP_CONFIRM'})]);
+  });
+});
+
+
+describe('Mac native system audio ownership', () => {
+  beforeEach(() => {
+    vi.stubGlobal('process', new Proxy(process, {get: (target, key, receiver) => key === 'platform' ? 'darwin' : Reflect.get(target, key, receiver)}));
+  });
+  it('streams native PCM and ignores duplicate renderer system frames', async () => {
+    const native = nativeDevice(); fixture.createNative.mockReturnValue(native);
+    const capture = manager(); await start(capture);
+    expect(native.start).toHaveBeenCalledOnce();
+    capture.pushSystemFrame(Buffer.alloc(1280));
+    expect(fixture.frames).toHaveLength(0);
+    native.deliver(null, Buffer.alloc(2560));
+    expect(fixture.frames).toHaveLength(1);
+    await capture.stop(); expect(native.stop).toHaveBeenCalledOnce();
+    const count = fixture.frames.length;
+    native.deliver(null, Buffer.alloc(2560));
+    expect(fixture.frames).toHaveLength(count);
+  });
+  it('only accepts renderer audio for an explicitly chosen fallback or virtual input', async () => {
+    for (const route of ['__screen_capture__', 'virtual-input']) {
+      const capture = manager(); await start(capture, route);
+      expect(fixture.createNative).not.toHaveBeenCalled();
+      const count = fixture.frames.length;
+      capture.pushSystemFrame(Buffer.alloc(1280));
+      expect(fixture.frames.length).toBe(count + 1);
+      await capture.stop();
+    }
+  });
+  it('fails before connecting when the native audio component is unavailable', async () => {
+    fixture.createNative.mockImplementation(() => {throw new Error('audio denied');});
+    await expect(start(manager())).rejects.toThrow('audio denied');
+    expect(fixture.connects).toBe(0);
   });
 });

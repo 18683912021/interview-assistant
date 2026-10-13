@@ -27,7 +27,7 @@ export function SessionSplit({pane, children}: {pane: string; children: ReactNod
       <div className="session-divider" role="separator" tabIndex={0} aria-label="调整对话与回答宽度"
         aria-orientation="vertical" aria-valuemin={30} aria-valuemax={48} aria-valuenow={Math.round(width)}
         aria-valuetext={`对话 ${Math.round(width)}%，回答 ${100 - Math.round(width)}%`}
-        title="拖动调整宽度，双击恢复默认；方向键微调"
+        aria-description="拖动调整宽度，双击恢复默认；方向键微调"
         onDoubleClick={() => update(38)}
         onKeyDown={event => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter'].includes(event.key)) return;
