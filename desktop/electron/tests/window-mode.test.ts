@@ -12,7 +12,7 @@ class WindowStub extends EventEmitter {
   getNormalBounds = () => ({...this.bounds});
   isFullScreen = () => this.fullscreen;
   isMaximized = () => this.maximized;
-  setFullScreen = vi.fn((on: boolean) => {this.fullscreen = on; if (!on) queueMicrotask(() => this.emit('leave-full-screen'));});
+  setFullScreen = vi.fn((on: boolean) => {this.fullscreen = on; queueMicrotask(() => this.emit(on ? 'enter-full-screen' : 'leave-full-screen')); });
   maximize = vi.fn(() => {this.maximized = true;});
   unmaximize = vi.fn(() => {this.maximized = false;});
   setBounds = vi.fn((value: typeof this.bounds) => {this.bounds = value;});
@@ -54,6 +54,21 @@ describe.each(['darwin', 'win32'] as const)('%s window modes', platform => {
     expect(win.setFullScreen.mock.invocationCallOrder[0]).toBeLessThan(win.setBounds.mock.invocationCallOrder[0]!);
     await setWindowCompact(win.asWindow(), false);
     expect(win.fullscreen).toBe(true);
+  });
+  it('waits for the Mac fullscreen animation before completing a restore', async () => {
+    if (platform !== 'darwin') return;
+    const win = setup(); win.fullscreen = true;
+    await setWindowCompact(win.asWindow(), true);
+    let restored = false;
+    win.setFullScreen.mockImplementation(on => {win.fullscreen = on;});
+    const transition = setWindowCompact(win.asWindow(), false).then(() => {restored = true;});
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(restored).toBe(false);
+    win.emit('enter-full-screen');
+    await transition;
+    expect(restored).toBe(true);
+    expect(win.listenerCount('enter-full-screen')).toBe(0);
+    expect(win.listenerCount('closed')).toBe(0);
   });
   it('keeps restored bounds on screen after a monitor is disconnected', async () => {
     const win = setup(); win.bounds.x = 1800;

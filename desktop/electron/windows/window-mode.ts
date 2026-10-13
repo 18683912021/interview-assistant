@@ -41,18 +41,24 @@ function fit(bounds: Rectangle): Rectangle {
   return {width, height, x: Math.max(area.x, Math.min(bounds.x, area.x + area.width - width)),
     y: Math.max(area.y, Math.min(bounds.y, area.y + area.height - height))};
 }
-async function leaveFullscreen(win: BrowserWindow) {
-  if (!win.isFullScreen()) return;
+async function changeFullscreen(win: BrowserWindow, on: boolean) {
+  if (win.isFullScreen() === on) return;
   await new Promise<void>((resolve, reject) => {
-    const cleanup = () => {clearTimeout(timer); win.removeListener('leave-full-screen', done); win.removeListener('closed', closed);};
+    const cleanup = () => {
+      clearTimeout(timer);
+      win.removeListener('enter-full-screen', done);
+      win.removeListener('leave-full-screen', done);
+      win.removeListener('closed', closed);
+    };
     const done = () => {cleanup(); resolve();};
     const closed = () => {cleanup(); reject(new Error('窗口已关闭'));};
-    const timer = setTimeout(() => {cleanup(); reject(new Error('请退出全屏后再切换小窗口'));}, 4000);
-    win.once('leave-full-screen', done);
+    const timer = setTimeout(() => {cleanup(); reject(new Error('全屏切换未完成，请稍后重试'));}, 4000);
+    if (on) win.once('enter-full-screen', done);
+    else win.once('leave-full-screen', done);
     win.once('closed', closed);
-    win.setFullScreen(false);
+    win.setFullScreen(on);
     // Windows changes fullscreen synchronously and may not emit a transition event.
-    if (process.platform !== 'darwin' && !win.isFullScreen()) done();
+    if (process.platform !== 'darwin' && win.isFullScreen() === on) done();
   });
 }
 export function setWindowPinned(win: BrowserWindow, pinned: boolean) {
@@ -70,7 +76,7 @@ export function setWindowCompact(win: BrowserWindow, compact: boolean) {
     if (value.mode.compact === compact) return {...value.mode};
     if (compact) {
       const saved = {bounds: win.getNormalBounds(), maximized: win.isMaximized(), fullscreen: win.isFullScreen()};
-      await leaveFullscreen(win);
+      await changeFullscreen(win, false);
       if (win.isMaximized()) win.unmaximize();
       value.saved = saved;
       win.setMinimumSize(360, 560);
@@ -85,7 +91,13 @@ export function setWindowCompact(win: BrowserWindow, compact: boolean) {
       if (value.saved) {
         win.setBounds(fit(value.saved.bounds));
         if (value.saved.maximized) win.maximize();
-        if (value.saved.fullscreen) win.setFullScreen(true);
+        if (value.saved.fullscreen) {
+          // Keep the transition queued until macOS has actually entered its Space.
+          // A rapid second click must not resize halfway through that animation.
+          value.mode.compact = false;
+          try {await changeFullscreen(win, true);}
+          catch (error) {value.saved = undefined; apply(win); throw error;}
+        }
       }
       value.saved = undefined;
     }
