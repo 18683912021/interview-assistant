@@ -29,6 +29,7 @@ async def test_existing_postgres_schema_migrates_without_open_cursor_ddl():
             await conn.execute(insert(User).values(email='migration@example.invalid', remaining_seconds=0))
             await conn.execute(insert(WorkspaceInterview).values(id=identifier, owner_email='migration@example.invalid', revision=1, snapshot_json=json.dumps(snapshot)))
             await conn.execute(insert(WorkspaceResume).values(id=resume_id, owner_email='migration@example.invalid', version=1, filename='准备草稿 · 自我介绍', text='待核实内容'))
+            original_updated = await conn.scalar(select(WorkspaceInterview.updated_at))
             # Reconstruct the deployed pre-005 schema and verify in-place additive migration.
             await conn.execute(text('DROP INDEX ix_workspace_history_owner_status'))
             for column in ('summary_json', 'search_text', 'status'):
@@ -40,6 +41,7 @@ async def test_existing_postgres_schema_migrates_without_open_cursor_ddl():
             assert json.loads(await conn.scalar(select(WorkspaceInterview.snapshot_json))) == snapshot
             assert json.loads(await conn.scalar(select(WorkspaceInterview.summary_json)))['message_count'] == 1
             assert await conn.scalar(select(WorkspaceResume.kind)) == 'draft'
+            assert await conn.scalar(select(WorkspaceInterview.updated_at)) == original_updated
     finally:
         if engine:
             await engine.dispose()
