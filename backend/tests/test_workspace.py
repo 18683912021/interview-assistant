@@ -723,7 +723,7 @@ async def test_paused_answers_stream_without_audio_and_ground_resume(environment
     events = [json.loads(line) for line in result.text.splitlines()]
     assert [event['type'] for event in events] == ['delta', 'delta', 'done']
     assert captured[0]['context']['resume_text'] == ''
-    assert captured[0]['max_tokens'] == 5000
+    assert captured[0]['max_tokens'] == 6500
     assert result.headers['x-accel-buffering'] == 'no'
 
 

@@ -2205,3 +2205,5 @@ html, body, body *, body *::before, body *::after { cursor: default !important; 
 .answer-question-editor p { margin: 8px 0; line-height: 1.6; }
 .answer-question-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .answer-edited-label { font-size: 11px; }
+
+.required-mark { color: var(--danger, #c54343); margin-left: 3px; }

@@ -150,7 +150,7 @@ def test_answer_format_and_output_budget_are_consistent(style, length):
         assert "标准书面回答" in prompt["content"] and "实现步骤" in prompt["content"]
         assert "控制在约 150 字" not in prompt["content"]
         assert "控制在约 300 字" not in prompt["content"]
-        assert llm_module.answer_token_budget(context) == 5000
+        assert llm_module.answer_token_budget(context) == 6500
         assert "可进一步补充" in prompt["content"]
     else:
         assert "标准书面回答" not in prompt["content"]
@@ -184,7 +184,7 @@ def test_code_examples_include_candidate_explanation_rules(style, language):
 def test_written_english_and_legacy_preferences():
     prompt = llm_module.build_messages("Explain idempotency", None, "en", {
         "answer_style": "标准书面", "answer_length": "balanced"})[0]["content"]
-    assert "1000～1300 个英文单词" in prompt
+    assert "1400～1800 个英文单词" in prompt
     assert llm_module.answer_token_budget({"answer_length": "short"}) == 1800
     assert llm_module.answer_preferences({"answer_style": "untrusted instructions"}) == ("conversational", "standard")
 
@@ -214,7 +214,7 @@ async def test_written_answer_streams_before_completion_with_larger_budget(monke
         await asyncio.wait_for(recorder.first.wait(), 1)
         assert not task.done()
         assert recorder.events[0]["delta"] == "先给核心结论。"
-        assert captured["max_tokens"] == 5000
+        assert captured["max_tokens"] == 6500
         assert captured["stream"] is True and captured["thinking"] == {"type": "disabled"}
         gate.set()
         await asyncio.wait_for(task, 1)

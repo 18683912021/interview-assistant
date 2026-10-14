@@ -435,8 +435,9 @@ export default function InterviewScreen() {
   const begin = async () => {
     if (busy) return;
     if (!role.trim()) {
-      setRoleError('请填写本次面试岗位');
-      roleInput.current?.focus();
+      setRoleError('请填写面试岗位，或从已保存的岗位中选择。');
+      roleInput.current?.scrollIntoView({block: 'center', behavior: 'smooth'});
+      roleInput.current?.focus({preventScroll: true});
       return;
     }
     if (!window.electronAPI) {
@@ -626,7 +627,7 @@ export default function InterviewScreen() {
         <div className="page-heading">
           <div>
             <h1>准备好，开始这场面试</h1>
-            <p>选定岗位与简历，回答会围绕这一次的经历和目标展开。</p>
+            <p>填写面试岗位即可准备开始；关联简历后，回答会更贴合你的经历。</p>
           </div>
         </div>
         {error && <ErrorState message={error} retry={() => void load()} />}
@@ -658,7 +659,7 @@ export default function InterviewScreen() {
               <span>01 / 面试背景</span>
             </div>
             <label className="field">
-              已保存的岗位
+              <span>已保存的岗位 <span className="muted">（选填）</span></span>
               <Select
                 value={jobId}
                 onValueChange={selectedValue => {
@@ -682,17 +683,21 @@ export default function InterviewScreen() {
             </label>
             <div className="form-grid">
               <label className="field">
-                面试岗位
+                <span>面试岗位 <span className="required-mark" aria-hidden="true">*</span><span className="muted">（必填）</span></span>
                 <input
+                  aria-label="面试岗位"
+                  aria-required="true"
                   ref={roleInput}
                   aria-invalid={!!roleError}
-                  aria-describedby={roleError ? 'interview-role-error' : undefined}
+                  aria-describedby={roleError ? 'interview-role-error' : 'interview-role-hint'}
                   value={role}
                   onChange={e => {setRole(e.target.value); setRoleError('');}}
+                  onBlur={() => {if (!role.trim()) setRoleError('请填写面试岗位，或从已保存的岗位中选择。');}}
                   placeholder="例如：Java 后端工程师"
                   maxLength={100}
                 />
-                {roleError && <small id="interview-role-error" className="field-error" role="alert">{roleError}</small>}
+                {roleError ? <small id="interview-role-error" className="field-error" role="alert">{roleError}</small>
+                  : <small id="interview-role-hint">填写岗位名称，或选择上方已保存的岗位。</small>}
               </label>
               <label className="field">
                 <span>
@@ -719,7 +724,7 @@ export default function InterviewScreen() {
               />
             </label>
             <label className="field">
-              关联简历
+              <span>关联简历 <span className="muted">（选填）</span></span>
               <Select value={resumeId} onValueChange={selectedValue => setResumeId(selectedValue)}>
                 <SelectOption value="">暂不关联，仅提供通用思路</SelectOption>
                 {resumes.map(resume => (
@@ -782,12 +787,12 @@ export default function InterviewScreen() {
             </div>
             <button
               className="btn btn-primary setup-start"
-              disabled={busy || !role.trim()}
+              disabled={busy}
               onClick={() => void begin()}>
               <Play />
               {busy ? startStage || '正在检查音频…' : '开始面试'}
             </button>
-            {!role.trim() && <small className="setup-requirement">填写左侧面试岗位后即可开始。</small>}
+            {!role.trim() && <small className="setup-requirement">需填写面试岗位；开始前会自动检查音频权限。</small>}
             <button className="btn btn-quiet" onClick={() => navigate('/settings?tab=audio')}>
               检查音频设备
             </button>

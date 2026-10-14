@@ -58,3 +58,31 @@ it('cancelling a pending first start releases a late permission result without c
   expect(screen.queryByRole('alert')).toBeNull();
   expect(screen.getAllByText('待检查')).toHaveLength(2);
 });
+
+it('shows required guidance at the role field and focuses it before any audio or API work', async () => {
+  const getUserMedia = vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError'));
+  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia}});
+  render(<MemoryRouter><ToastProvider><InterviewScreen /></ToastProvider></MemoryRouter>);
+  const role = await screen.findByRole('textbox', {name: '面试岗位'});
+  expect(role.getAttribute('aria-required')).toBe('true');
+  expect(role.getAttribute('aria-invalid')).toBe('false');
+  const start = screen.getByRole('button', {name: '开始面试'});
+  expect((start as HTMLButtonElement).disabled).toBe(false);
+  await userEvent.click(start);
+  expect(document.activeElement).toBe(role);
+  expect(role.getAttribute('aria-invalid')).toBe('true');
+  expect(screen.getByRole('alert').closest('label')?.contains(role)).toBe(true);
+  expect(getUserMedia).not.toHaveBeenCalled();
+  expect(checkAIReadiness).not.toHaveBeenCalled();
+  expect(saveWorkspaceInterview).not.toHaveBeenCalled();
+  await userEvent.type(role, '   ');
+  await userEvent.click(start);
+  expect(getUserMedia).not.toHaveBeenCalled();
+  await userEvent.clear(role);
+  await userEvent.type(role, 'Java 后端开发');
+  expect(screen.queryByRole('alert')).toBeNull();
+  await userEvent.click(start);
+  // Company, JD and resume remain optional; a valid role reaches audio preparation.
+  await waitFor(() => expect(getUserMedia).toHaveBeenCalledOnce());
+  expect(saveWorkspaceInterview).not.toHaveBeenCalled();
+});
