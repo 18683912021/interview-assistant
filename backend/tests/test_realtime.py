@@ -147,7 +147,7 @@ def test_answer_format_and_output_budget_are_consistent(style, length):
     assert json.loads(background["content"])["context"]["resume_text"] == context["resume_text"]
     assert "简历或项目里没有的事实不要编造" in prompt["content"]
     if style == "written":
-        assert "标准书面回答" in prompt["content"] and "实现步骤" in prompt["content"]
+        assert "标准书面回答" in prompt["content"] and "实施细节" in prompt["content"]
         assert "控制在约 150 字" not in prompt["content"]
         assert "控制在约 300 字" not in prompt["content"]
         assert llm_module.answer_token_budget(context) == 6500

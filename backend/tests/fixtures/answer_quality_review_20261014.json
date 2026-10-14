@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-14",
+  "model": "deepseek-flash",
+  "scope": "Synthetic questions; direct configured provider streaming, not end-to-end desktop latency. Manual review, not a factual correctness guarantee.",
+  "tests": {
+    "passed": 162,
+    "skipped": 1,
+    "warnings": 4
+  },
+  "source_sha256": {
+    "llm_service.py": "271f201f1136105f169607b0c5a14a8c6c26c76f9acb02d548080ed5da16126c",
+    "answer_reference.py": "eba9c91d68f3e8bc7268db085a0b126ca06221b965d2e6c083ee2816f15671cb"
+  },
+  "manual_review": {
+    "improved": [
+      "SEO covers a fuller workflow with implementation and explanation comments.",
+      "No resume coaching or invented personal SEO achievements in final SEO output.",
+      "CSR, robots/noindex, canonical, client-component prerender and streaming notFound boundaries improved.",
+      "Performance answer contains reasons, limitations and follow-up explanation instead of only a checklist.",
+      "All sampled streams finished normally; final simple answer was shorter than the final comprehensive answers."
+    ],
+    "remaining": [
+      "Generated code fragments may omit imports or application helpers; examples were not compiled.",
+      "Performance sample lazy-loads a component rendered immediately: example and noncritical-load advice are not fully consistent.",
+      "Some performance metrics and causal claims still need human review.",
+      "Repeated samples varied in completeness and length; prompting and reviewed topic notes do not guarantee accuracy."
+    ]
+  },
+  "samples": [
+    {
+      "id": "performance_plan",
+      "variant": "final",
+      "firstSeconds": 0.53,
+      "totalSeconds": 10.15,
+      "chars": 2292,
+      "chunks": 1210,
+      "finish": "stop",
+      "answer": "首屏慢要先定位瓶颈发生在网络、资源体积还是主线程渲染，再按“先解决阻塞首屏的瓶颈、后做锦上添花”的顺序优化，并用真实用户指标验证效果。\n\n**一、先量化指标，确定“慢”的定义**\n\n不能凭感觉说慢，要先看数据。核心指标是 LCP（最大内容绘制，衡量首屏主要内容出现时间）、FCP（首次内容绘制）、TTI/TBT（可交互时间/主线程阻塞）、CLS（布局偏移）。数据来源分两层：实验室数据用 Lighthouse、Performance 面板复现，字段数据用 web-vitals 上报真实用户。例如，可以先用 Performance 面板录制一次冷启动加载，看 LCP 元素是什么、它前面被什么阻塞。判断标准是：如果 LCP 元素是图片，瓶颈多半在网络和图片体积；如果是文本块，多半在 JS 解析执行和渲染阻塞。这一步决定了后面优化的方向，避免盲目压缩。\n\n**二、定位瓶颈：网络、资源、主线程三条线**\n\n网络层看请求瀑布图：首屏关键请求是否串行、是否有慢接口、是否走了不必要的重定向、TTFB 是否过高。资源层看打包产物：主 chunk 是否过大、是否把非首屏代码打进了入口、第三方脚本是否阻塞。主线程看长任务：JS 解析执行是否超过 50ms 的长任务、是否有同步布局抖动。例如，可以打开 Coverage 面板看首屏实际用到的 JS/CSS 占比，如果入口 chunk 里首屏只用了一小部分，说明代码分割没做好。这一步的产出是一份明确的瓶颈清单，而不是笼统的“包太大”。\n\n**三、优化资源体积与加载时机**\n\n按收益排序：第一，路由级和组件级代码分割，用动态 import 把非首屏模块拆出去，配合 React.lazy 和 Suspense 做懒加载。第二，Tree-shaking 和按需引入，避免整包引入 UI 库或工具库。第三，压缩与传输，开启 gzip/Brotli，静态资源上 CDN 并设置长缓存加内容哈希。第四，预加载关键资源，用 `<link rel=\"preload\">` 提前拉取首屏必需的字体、关键图片，用 `modulepreload` 预加载入口模块。需要说明边界：preload 只对确定首屏必需且发现较晚的资源有效，滥用会抢占带宽、反而拖慢其他请求。\n\n**四、优化渲染路径与主线程**\n\n首屏 HTML 应尽早返回可渲染内容，避免整页由 JS 渲染后才出现。可以做服务端渲染或静态生成，让首屏 HTML 直接带内容；如果项目是纯客户端渲染的管理后台，至少保证骨架屏先出现，减少白屏感知。主线程方面，把非关键计算延后到 `requestIdleCallback` 或拆成小块，避免长任务阻塞渲染。图片用现代格式（WebP/AVIF）、设置明确宽高避免布局偏移、首屏图不做懒加载、非首屏图用 `loading=\"lazy\"`。字体用 `font-display: swap` 避免文字长时间不可见。\n\n**五、一个可落地的懒加载示例**\n\n```tsx\nimport React, { Suspense, lazy } from 'react';\n\n// 路由级分割：把非首屏页面拆成独立 chunk，\n// 入口包只保留首屏真正需要的代码，减小首屏下载和解析量\nconst Dashboard = lazy(() => import('./pages/Dashboard'));\n\nfunction App() {\n  return (\n    // fallback 先渲染骨架，避免等待 chunk 时白屏，改善感知性能\n    <Suspense fallback={<div className=\"skeleton\" />}>\n      <Dashboard />\n    </Suspense>\n  );\n}\n```\n\n这里的关键是：`lazy` 让 `Dashboard` 的代码在真正渲染时才请求，入口 bundle 因此变小；`Suspense` 的 fallback 保证加载期间有内容占位。边界是懒加载会增加一次网络往返，如果该模块是首屏立即需要的，反而会推迟内容出现，所以只对非首屏或可延后的模块使用。\n\n**六、验收与回归**\n\n优化后要用同一套指标对比：Lighthouse 分数、LCP 字段数据、入口 chunk 体积。设定可观测目标，例如 LCP 从 4s 降到 2.5s 以内、入口 JS 从 800KB 降到 300KB 以内。同时要防止回归，把 bundle 体积和 Lighthouse 纳入 CI，超过阈值就告警。注意实验室数据和真实用户数据可能不一致，最终以字段数据为准。\n\n**可进一步补充**\n\n关于 SSR 与 CSR 的取舍：SSR 能让首屏 HTML 直接带内容，缩短 LCP，但代价是服务端渲染开销、 hydration 成本和更复杂的部署。如果首屏内容依赖用户个性化数据、且接口本身慢，SSR 收益会被接口耗时抵消，此时更该先优化接口和缓存。判断依据是首屏内容是否可静态化、TTFB 是否可控；条件改变（比如内容强个性化、服务端压力大）时，可能退回 CSR 加骨架屏更合适。\n\n关于第三方脚本：很多首屏慢的根因是埋点、客服、广告等第三方脚本同步加载并占用主线程。处理方式是把它们改为异步加载、延后到首屏渲染后执行，或用 `requestIdleCallback` 调度。但要区分：埋点若丢失首屏曝光数据会影响业务统计，所以延后执行时要保证关键事件仍能上报，不能为了性能牺牲数据准确性。"
+    },
+    {
+      "id": "seo_plan",
+      "variant": "before",
+      "firstSeconds": 0.85,
+      "totalSeconds": 5.56,
+      "chars": 1420,
+      "chunks": 670,
+      "finish": "stop",
+      "answer": "前端 SEO 的核心是让搜索引擎能顺利抓取、理解并信任页面内容，同时保证首屏体验和页面性能。结合 Next.js App Router 的技术栈，可以从以下几个层面展开。\n\n**一、渲染方式与内容可抓取性**\n\n搜索引擎爬虫主要依赖服务端返回的 HTML。如果页面内容完全靠客户端 JS 渲染，抓取可能不完整。Next.js App Router 默认使用 Server Component，页面 HTML 在服务端生成后直接返回，这对 SEO 更友好。需要交互的部分才拆成 Client Component，避免把整页都变成客户端渲染。\n\n对于内容更新频繁、需要实时性的页面，可以用动态渲染或 ISR（增量静态再生）；对于变化不频繁的营销页、博客，优先用静态生成，兼顾速度和抓取稳定性。\n\n**二、语义化 HTML 与元数据**\n\n- 使用正确的标签结构：`<h1>` 每页一个，标题层级递进，`<nav>`、`<main>`、`<article>` 等语义标签帮助爬虫理解页面结构。\n- 通过 Next.js 的 Metadata API 设置 `title`、`description`、`canonical`、`openGraph` 等。每个页面应有唯一且描述准确的 title 和 description。\n- 图片使用 `<Image>` 组件并填写有意义的 `alt`，既利于无障碍也利于图片搜索。\n\n**三、结构化数据**\n\n在页面中注入 JSON-LD 结构化数据（如 Article、Product、BreadcrumbList），帮助搜索引擎生成富媒体摘要。Next.js 中可以在 Server Component 里直接渲染 `<script type=\"application/ld+json\">`。\n\n**四、站点地图与 robots**\n\n- 生成 `sitemap.xml`，列出需要被收录的 URL。App Router 支持用 `sitemap.ts` 动态生成。\n- 配置 `robots.txt`，明确允许抓取的范围，屏蔽后台、搜索结果页等无价值页面。\n- 设置 canonical URL，避免重复内容分散权重。\n\n**五、性能与 Core Web Vitals**\n\nSEO 排名会受页面体验影响，重点是 LCP、CLS、INP：\n\n- 首屏关键资源优先加载，图片用 `priority` 标记 LCP 元素。\n- 字体使用 `next/font` 避免布局偏移。\n- 减少不必要的客户端 JS，Server Component 天然减少 bundle 体积。\n- 合理使用缓存和 CDN。\n\n**六、URL 与链接结构**\n\n- URL 保持简洁、可读、含关键词，避免过长参数。\n- 内部链接用 `<Link>` 保证可爬取，重要页面从首页几跳内可达。\n- 避免死链和重定向链。\n\n**七、验证与监控**\n\n用 Google Search Console 提交 sitemap、查看索引覆盖和抓取错误；用 Lighthouse、PageSpeed Insights 检查性能指标；用富媒体测试工具验证结构化数据。\n\n需要说明的是，简历中未提供 SEO 优化的实际项目经历，以上是通用做法。如果要在面试中结合个人经历，建议补充你实际做过的具体页面、优化前后的指标变化，以及遇到的抓取或性能问题。"
+    },
+    {
+      "id": "seo_plan",
+      "variant": "final",
+      "firstSeconds": 0.83,
+      "totalSeconds": 9.62,
+      "chars": 3071,
+      "chunks": 1336,
+      "finish": "stop",
+      "answer": "前端 SEO 的核心不是“加几个 meta 标签”，而是保证搜索引擎能稳定抓取、正确渲染、理解页面语义，并让用户和爬虫看到一致的有效内容。完整方案我会按渲染与抓取、内容与语义、元数据与结构化数据、索引与站点治理、体验与上线验收这几个环节推进，先解决影响收录和正文可见性的障碍，再做元数据和体验层面的优化。\n\n**渲染与抓取：先保证正文可被稳定获取**\n\n搜索引擎能执行 JavaScript，但执行有成本、有延迟，也不保证所有爬虫都具备同样能力，所以关键正文不应只依赖客户端二次请求后才出现。使用 Next.js App Router 时，我会优先让页面成为 Server Component，在服务端完成正文取数和渲染，把交互部分下沉为 Client Component。`use client` 不等于纯 CSR，Client Component 在首次访问时同样可以被预渲染，真正决定 SEO 的是正文取数和渲染发生在什么时机。\n\n```tsx\n// app/articles/[slug]/page.tsx\n// 这是 Server Component：正文在服务端取数并渲染，爬虫拿到 HTML 时已包含主要内容\nexport default async function ArticlePage({\n  params,\n}: {\n  params: Promise<{ slug: string }> // Next.js 15+ 动态 params 是 Promise，需要 await\n}) {\n  const { slug } = await params;\n  const article = await getArticleBySlug(slug); // 服务端取数，避免正文依赖客户端 useEffect\n\n  if (!article) {\n    // notFound 在流式响应已开始后可能保持 200 并附加 noindex，不能保证任何时机都返回 404\n    notFound();\n  }\n\n  return (\n    <article>\n      <h1>{article.title}</h1>\n      {/* 正文用 React 文本节点输出，不直接注入未清洗 HTML */}\n      <div>{article.content}</div>\n    </article>\n  );\n}\n```\n\n验收时不能只看“关闭 JS 后页面有没有内容”，那只能确认预渲染结果，不能独立判定索引结果。更可靠的做法是结合 Search Console 的网址检查、渲染结果和索引状态，确认 Google 实际抓取到的 HTML 与预期一致。其他搜索引擎的 JS 执行能力可能不同，所以服务端渲染正文是更稳的基线。\n\n**内容与语义结构：让爬虫理解页面主题**\n\n正文要真实、可读、有明确主题，标题层级按 `h1` 到 `h2/h3` 组织，避免整页只有图片或大量无意义 div。语义化标签如 `article`、`nav`、`main` 能帮助解析结构，但更重要的是内容本身与搜索意图匹配。图片使用有意义的 `alt`，链接锚文本描述目标内容，而不是“点击这里”。如果页面内容需要登录才能看到，就不属于公开 SEO 页面，应通过服务端鉴权保护，而不是指望 robots.txt 或前端隐藏。\n\n**元数据与结构化数据：控制展示信息**\n\nNext.js App Router 使用 `metadata` 或 `generateMetadata` 配置标题、描述和 canonical，不要混用 Pages Router 的 `getStaticProps/getServerSideProps`。canonical 用绝对 URL，相对地址需要配置 `metadataBase`。描述没有通用硬性长度上限，展示时可能被截断或改写，所以写清楚页面价值即可，不必卡死字数。结构化数据能帮助理解页面，但不保证出现富媒体结果。\n\n```tsx\n// app/articles/[slug]/page.tsx\nimport type { Metadata } from \"next\";\n\nexport async function generateMetadata({\n  params,\n}: {\n  params: Promise<{ slug: string }>;\n}): Promise<Metadata> {\n  const { slug } = await params;\n  const article = await getArticleBySlug(slug);\n\n  return {\n    title: article?.title ?? \"文章未找到\",\n    description: article?.summary,\n    // canonical 是规范页信号，不保证搜索引擎一定采纳；用绝对 URL 更明确\n    alternates: { canonical: `https://example.com/articles/${slug}` },\n  };\n}\n```\n\n如果输出 JSON-LD，不能直接把不可信内容 `JSON.stringify` 后塞进 `script`，因为内容里若含 `</script>` 可能提前闭合标签。序列化后至少把 `<` 替换为 `\\u003c`，保留安全边界。\n\n**索引与站点治理：让该收录的能收录，不该收录的别乱收**\n\nrobots.txt 管的是抓取，不是鉴权，也不能可靠禁止索引。要让页面不被索引，应让爬虫能抓到它并读到 `noindex`，不能同时屏蔽抓取。sitemap 只放希望索引的有效规范 URL，它不保证收录。真实不存在的路径要返回 404，避免 fallback 把所有路径都返回 200，否则会制造大量重复或无效页面。带查询参数的 URL 不等于不能收录，关键看内容是否重复，必要时用 canonical 归并。\n\n**体验与上线验收：用可观察证据闭环**\n\n性能方面关注 LCP、CLS、INP，图片用合适尺寸和懒加载，字体避免布局偏移。上线后通过 Search Console 看抓取、索引和富媒体报告，用站点地图提交和日志确认爬虫访问。验收标准是：关键页面服务端 HTML 含正文、canonical 正确、无意外 noindex、404 真实返回、结构化数据能通过测试工具校验。\n\n**可进一步补充**\n\n一个容易被追问的点是动态 metadata 的时机。App Router 的 `generateMetadata` 可以流式输出，不能一概声称它在所有正文渲染之前同步完成；如果 metadata 依赖的取数和正文取数有重复，可以用缓存或请求记忆减少开销，但要确认缓存键包含 slug 等区分参数，否则不同页面可能拿到同一份 metadata。\n\n另一个点是 Client Component 与 SEO 的关系。把交互组件标为 `use client` 不会自动让它变成纯 CSR，它仍可在首次访问时预渲染；真正影响收录的是正文是否在服务端输出、是否依赖客户端二次请求。如果正文必须客户端取数，就要评估爬虫执行 JS 的延迟和失败情况，必要时改为服务端取数或提供预渲染兜底。"
+    },
+    {
+      "id": "simple",
+      "variant": "final",
+      "firstSeconds": 0.56,
+      "totalSeconds": 2.63,
+      "chars": 453,
+      "chunks": 245,
+      "finish": "stop",
+      "answer": "HTTP 404 表示服务器已成功接收请求，但找不到与请求 URL 对应的资源，因此返回“未找到”。它属于 4xx 客户端错误类别，含义是问题出在请求所指向的目标上，而不是服务器内部处理失败。\n\n需要区分几个容易混淆的状态码。404 强调“这个具体资源不存在或不愿暴露”；410 Gone 表示资源曾经存在且已永久删除，语义比 404 更明确；403 Forbidden 表示服务器理解请求但拒绝授权，资源可能存在；400 Bad Request 则是请求本身格式或参数有误。实际项目中，很多系统出于安全考虑，对无权限访问的资源也直接返回 404，避免通过状态码差异泄露资源是否存在。\n\n从服务端角度看，404 通常由路由未匹配、数据库查询为空、静态文件缺失或反向代理转发目标不存在等触发。它并不表示服务器宕机或代码抛异常，后者一般对应 5xx。对前端而言，收到 404 后应展示明确的“页面或数据不存在”提示，而不是笼统报错；对 API 调用方，则应把它当作可预期的业务分支处理，而不是当作系统故障重试。"
+    }
+  ],
+  "deployment": {
+    "status": "deployed",
+    "local_health": "ok",
+    "public_health": "ok",
+    "client_reinstall_required": false
+  }
+}
