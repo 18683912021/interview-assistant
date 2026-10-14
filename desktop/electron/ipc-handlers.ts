@@ -15,6 +15,7 @@ import net from 'node:net';
 import { app } from 'electron';
 import { mainWindow, restartApplication } from './main.js';
 import {getWindowPrivacy, hideWindows} from './windows/window-privacy.js';
+import {registerScreenshotIPC} from './screenshot/capture.js';
 
 const storage = new DesktopStorage(app.getPath('userData'));
 
@@ -32,6 +33,7 @@ export function checkPort(port: number): Promise<boolean> {
 }
 
 export function registerIpcHandlers(): void {
+  registerScreenshotIPC(() => mainWindow);
   // 窗口可能已销毁（用户关闭/重建窗口时 mainWindow 仍指向旧实例），
   // webContents.send 会抛 "Object has been destroyed" 导致主进程崩溃
   const sendToMain = (channel: string, data: unknown): void => {

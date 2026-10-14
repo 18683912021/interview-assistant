@@ -1,6 +1,12 @@
 /// <reference types="vite/client" />
 
 interface ElectronAPI {
+  screenshot: {
+    recognize(id: string): Promise<{status: 'success'; text: string; confidence: number; durationMs: number} |
+      {status: 'cancelled'} | {status: 'error'; message: string; permission?: boolean}>;
+    cancel(id: string): Promise<void>;
+    onProgress(cb: (value: {id: string; stage: string; percent?: number}) => void): () => void;
+  };
   audio: {
     startCapture(opts: { source?: 'mic' | 'system' | 'both'; streamUrl?: string; token?: string; sessionId?: string; systemDeviceId?: string; directAddress?: string }): Promise<unknown>;
     stopCapture(): Promise<void>;

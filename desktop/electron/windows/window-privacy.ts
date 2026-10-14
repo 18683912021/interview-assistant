@@ -23,6 +23,15 @@ export function showPrivateWindow(window: BrowserWindow): void {
   else window.show();
 }
 
+/** Temporarily clear our windows for a screenshot without overriding a later Hide action. */
+export function suspendPrivateWindows(): () => void {
+  const visible = [...windows].filter(window => !window.isDestroyed() && window.isVisible());
+  for (const window of visible) window.hide();
+  return () => {
+    for (const window of visible) showPrivateWindow(window);
+  };
+}
+
 export function hideWindows(): void {
   hidden = true;
   for (const window of windows) {

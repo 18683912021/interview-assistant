@@ -2204,6 +2204,10 @@ html, body, body *, body *::before, body *::after { cursor: default !important; 
 .answer-question-editor textarea { width: 100%; min-height: 100px; max-height: 260px; resize: vertical; font: inherit; font-size: 13px; line-height: 1.7; }
 .answer-question-editor p { margin: 8px 0; line-height: 1.6; }
 .answer-question-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.screenshot-question { margin: 8px 0 12px; }
+.screenshot-question-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.screenshot-question .btn { min-height: 30px; font-size: 12px; padding: 5px 8px; }
+.screenshot-question p { margin: 6px 0; line-height: 1.5; }
 .answer-edited-label { font-size: 11px; }
 
 .required-mark { color: var(--danger, #c54343); margin-left: 3px; }

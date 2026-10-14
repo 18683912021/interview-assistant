@@ -10,9 +10,13 @@ files:
   - dist-renderer/**/*
   - package.json
   - assets/LICENSE-icons.txt
+  - assets/LICENSE-ocr.txt
 asar:
   smartUnpack: true
 asarUnpack:
+  # Node worker threads must resolve the OCR worker, WASM and dependencies as real files.
+  - dist-electron/screenshot/**/*
+  - node_modules/**/*
   # WASAPI native addon：asar 内的 .node 无法加载，必须解包
   - dist-electron/audio/native/**/*
   - dist-electron/audio/mac-native/**/*

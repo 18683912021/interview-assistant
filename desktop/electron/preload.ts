@@ -4,6 +4,15 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  screenshot: {
+    recognize: (id: string) => ipcRenderer.invoke('screenshot:recognize', id),
+    cancel: (id: string) => ipcRenderer.invoke('screenshot:cancel', id),
+    onProgress: (cb: (value: {id: string; stage: string; percent?: number}) => void) => {
+      const listener = (_event: unknown, value: Parameters<typeof cb>[0]) => cb(value);
+      ipcRenderer.on('screenshot:progress', listener);
+      return () => ipcRenderer.removeListener('screenshot:progress', listener);
+    },
+  },
   // 音频控制（采集 + WS 推流都在主进程，渲染进程只发控制与麦克风帧）
   audio: {
     startCapture: (opts: unknown) => ipcRenderer.invoke('audio:start-capture', opts),

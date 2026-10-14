@@ -53,6 +53,7 @@ import {loadDrafts, removeDraft, storeDraft} from '../services/drafts';
 import {genId, interviewReducer} from '../store/interview-reducer';
 import type {ConversationMessage} from '../store/types';
 import {AnswerQuestion} from '../components/AnswerQuestion';
+import {ScreenshotQuestion} from '../components/ScreenshotQuestion';
 import {AnswerBody} from '../components/AnswerBody';
 import {AudioPermissions} from '../components/AudioPermissions';
 import {findReusableAnswer, hasRevisedSources} from '../services/conversation';
@@ -134,6 +135,11 @@ export default function InterviewScreen() {
     [splitEditing, setSplitEditing] = useState(false),
     [manual, setManual] = useState(false),
     [manualText, setManualText] = useState('');
+  const [manualRecognizing, setManualRecognizing] = useState(false);
+  const manualInput = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (manual && !manualRecognizing) manualInput.current?.focus();
+  }, [manual, manualRecognizing]);
   const chatScroll = useRef<HTMLDivElement>(null),
     following = useRef(true);
   const answerScroll = useRef<HTMLDivElement>(null),
@@ -1108,6 +1114,7 @@ export default function InterviewScreen() {
                 icon={<FileText size={24} />}
                 title="选一句，展开思路"
                 text="回答在这一侧独立显示。左侧继续记录，你可以安心查看当前回答。"
+                action={canAnswer ? <button className="btn" onClick={() => setManual(true)}>输入或截图提问</button> : undefined}
               />
             ) : (
               <div
@@ -1369,15 +1376,18 @@ export default function InterviewScreen() {
       )}
       {manual && (
         <Modal title="补充一个问题" onClose={() => setManual(false)}>
+          <ScreenshotQuestion disabled={!canAnswer} onBusyChange={setManualRecognizing} onText={setManualText} />
           <label className="field">
             面试官的问题
             <textarea
               autoFocus
+              ref={manualInput}
               rows={5}
+              disabled={manualRecognizing}
               value={manualText}
               onChange={e => setManualText(e.target.value)}
               placeholder="输入或粘贴问题"
-              maxLength={10000}
+              maxLength={16000}
             />
           </label>
           <div className="form-actions">
@@ -1386,7 +1396,7 @@ export default function InterviewScreen() {
             </button>
             <button
               className="btn btn-primary"
-              disabled={!manualText.trim() || !canAnswer}
+              disabled={!manualText.trim() || !canAnswer || manualRecognizing}
               onClick={() => {
                 dispatch({
                   type: 'add_message',

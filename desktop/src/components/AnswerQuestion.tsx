@@ -1,5 +1,6 @@
 import {useEffect, useRef, useState} from 'react';
 import {Pencil, RotateCcw} from 'lucide-react';
+import {ScreenshotQuestion} from './ScreenshotQuestion';
 
 export function AnswerQuestion({question, edited = false, editable, generating, onGenerate, onEditingChange}: {
   question: string;
@@ -12,16 +13,17 @@ export function AnswerQuestion({question, edited = false, editable, generating, 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(question);
   const [error, setError] = useState('');
+  const [recognizing, setRecognizing] = useState(false);
   const submitting = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {if (editing && editable) input.current?.focus();}, [editing, editable]);
+  useEffect(() => {if (editing && editable && !recognizing) input.current?.focus();}, [editing, editable, recognizing]);
   useEffect(() => {
-    onEditingChange?.(editing && editable);
+    onEditingChange?.((editing || recognizing) && editable);
     return () => onEditingChange?.(false);
-  }, [editing, editable, onEditingChange]);
+  }, [editing, recognizing, editable, onEditingChange]);
   const open = () => {setDraft(question); setError(''); setEditing(true);};
   const generate = () => {
-    if (submitting.current || !editable) return;
+    if (submitting.current || !editable || recognizing) return;
     const value = draft.trim();
     if (!value || value.length > 16000) {
       setError(!value ? '请填写问题后再生成。' : '问题最多 16000 字，请精简后再生成。');
@@ -37,14 +39,16 @@ export function AnswerQuestion({question, edited = false, editable, generating, 
   return <section className="answer-question-block" aria-label="本次回答的问题">
     <div className="answer-question-heading">
       <span>本次问题{edited ? ' · 已编辑' : ''}</span>
-      {editable && !editing && <button type="button" className="btn btn-quiet" onClick={open}>
+      {editable && !editing && <button type="button" className="btn btn-quiet" disabled={recognizing} onClick={open}>
         <Pencil size={13} />编辑问题
       </button>}
     </div>
+    {editable && <ScreenshotQuestion disabled={!editable} onBusyChange={setRecognizing}
+      onText={text => {setDraft(text); setError(''); setEditing(true);}} />}
     {editing && editable ? <form className="answer-question-editor" onSubmit={event => {event.preventDefault(); generate();}}>
       <label htmlFor="answer-question-input" className="sr-only">编辑本次问题</label>
       <textarea id="answer-question-input" ref={input}
-        rows={4} value={draft} aria-invalid={!!error}
+        rows={4} value={draft} disabled={recognizing} aria-invalid={!!error}
         aria-describedby={error ? 'answer-question-error' : 'answer-question-hint'}
         onChange={event => {setDraft(event.target.value); setError('');}}
         onKeyDown={event => {
@@ -55,8 +59,8 @@ export function AnswerQuestion({question, edited = false, editable, generating, 
       {error && <p id="answer-question-error" className="field-error" role="alert">{error}</p>}
       <p id="answer-question-hint" className="muted small">{generating ? '提交后停止当前生成，按新问题重新回答。' : ''}原始对话和旧答案会保留。</p>
       <div className="answer-question-actions">
-        <button type="button" className="btn" onClick={() => {setEditing(false); setError('');}}>取消</button>
-        <button type="submit" className="btn btn-primary"><RotateCcw size={14} />重新生成</button>
+        <button type="button" className="btn" disabled={recognizing} onClick={() => {setEditing(false); setError('');}}>取消</button>
+        <button type="submit" className="btn btn-primary" disabled={recognizing}><RotateCcw size={14} />重新生成</button>
       </div>
     </form> : <div className="answer-question">{question}</div>}
   </section>;

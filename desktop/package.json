@@ -1,6 +1,6 @@
 {
   "name": "audio-capture",
-  "version": "0.5.18",
+  "version": "0.5.19",
   "description": "Interview workspace for preparation, live assistance, and review",
   "private": true,
   "packageManager": "pnpm@9.15.0",
@@ -9,7 +9,7 @@
   },
   "main": "dist-electron/main.js",
   "scripts": {
-    "predev": "node scripts/ensure-native.cjs && node scripts/ensure-macos-audio.cjs",
+    "predev": "node scripts/ensure-screenshot.cjs && node scripts/ensure-native.cjs && node scripts/ensure-macos-audio.cjs",
     "dev": "concurrently --kill-others-on-fail \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"node scripts/launch-electron.cjs\"",
     "build": "vite build && tsc -p electron/tsconfig.json && node scripts/ensure-native.cjs && node scripts/ensure-macos-audio.cjs && electron-builder",
     "ensure:native": "node scripts/ensure-native.cjs",
@@ -27,10 +27,13 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-router-dom": "7.1.1",
+    "tesseract.js": "6.0.1",
     "ws": "^8.21.3"
   },
   "devDependencies": {
     "@eslint/js": "9.16.0",
+    "@tesseract.js-data/chi_sim": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "24.13.3",

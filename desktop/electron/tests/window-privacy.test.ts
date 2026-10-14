@@ -21,6 +21,17 @@ function windowFixture(visible = false) {
 beforeEach(() => {vi.resetModules(); vi.clearAllMocks(); shortcut.register.mockReturnValue(true);});
 
 describe('window privacy', () => {
+  it('restores temporarily suspended windows but respects a user hide during screenshot selection', async () => {
+    const privacy = await import('../windows/window-privacy');
+    const main = windowFixture(true);
+    privacy.protectWindow(main.native);
+    const resume = privacy.suspendPrivateWindows();
+    expect(main.window.visible).toBe(false);
+    privacy.hideWindows(); resume();
+    expect(main.window.visible).toBe(false);
+    privacy.restorePrivateWindows();
+    expect(main.window.visible).toBe(true);
+  });
   it('hides and restores both windows, including an overlay that finishes loading while hidden', async () => {
     const privacy = await import('../windows/window-privacy');
     const main = windowFixture(true), overlay = windowFixture();
