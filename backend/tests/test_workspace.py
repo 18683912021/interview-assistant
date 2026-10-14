@@ -705,7 +705,8 @@ async def test_typed_materials_and_ended_session_guard(environment):
 
 
 @pytest.mark.asyncio
-async def test_paused_answers_stream_without_audio_and_ground_resume(environment, monkeypatch):
+@pytest.mark.parametrize("style,budget", [("conversational", 2400), ("structured", 3200), ("written", 8000)])
+async def test_paused_answers_stream_without_audio_and_ground_resume(environment, monkeypatch, style, budget):
     from app.services.llm_service import LLMService
     captured = []
     async def stream(self, question, **kwargs):
@@ -719,11 +720,11 @@ async def test_paused_answers_stream_without_audio_and_ground_resume(environment
     path = f"/api/workspace/interviews/{data['id']}"
     await client.put(path, json=data)
     result = await client.post(path + '/answer', json={'request_id': 'paused', 'question_text': '请解释',
-        'context': {'resume_text': '客户端试图伪造经历', 'answer_style': 'written'}})
+        'context': {'resume_text': '客户端试图伪造经历', 'answer_style': style}})
     events = [json.loads(line) for line in result.text.splitlines()]
     assert [event['type'] for event in events] == ['delta', 'delta', 'done']
     assert captured[0]['context']['resume_text'] == ''
-    assert captured[0]['max_tokens'] == 6500
+    assert captured[0]['max_tokens'] == budget
     assert result.headers['x-accel-buffering'] == 'no'
 
 

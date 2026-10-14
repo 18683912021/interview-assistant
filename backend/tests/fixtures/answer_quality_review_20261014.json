@@ -235,5 +235,148 @@
       "tests_passed": 162,
       "tests_skipped": 1
     }
+  },
+  "mode_budget_followup": {
+    "scope": "Synthetic questions sent directly from production host to configured provider. Character counts include Markdown and code, not token usage or Chinese word counts. Timings are not desktop latency guarantees.",
+    "source_sha256": {
+      "app/services/llm_service.py": "e74f9b726acd21e9f70950589e07bd5798b6d71816c057a7dd3584809f7aa623",
+      "app/services/answer_reference.py": "a41c336d395f885cdb0367dd9d54eda3e77f08411c57ec14f16aa36143534017",
+      "app/routers/audio.py": "6bad538b7f4704b74bbf8522caf00cea97f0757b18f7cc8d250fd3219b1509bc"
+    },
+    "tests": {
+      "passed": 170,
+      "skipped": 1,
+      "warnings": 4,
+      "skip_reason": "PostgreSQL integration requires TEST_POSTGRES_URL"
+    },
+    "budgets": {
+      "conversational": {
+        "before_tokens": 1800,
+        "after_tokens": 2400,
+        "before_zh": "350–500",
+        "after_zh": "450–700",
+        "before_en": "200–300",
+        "after_en": "250–400"
+      },
+      "structured": {
+        "before_tokens": 2400,
+        "after_tokens": 3200,
+        "before_zh": "500–750",
+        "after_zh": "700–1000",
+        "before_en": "300–450",
+        "after_en": "400–600"
+      },
+      "written": {
+        "before_tokens": 6500,
+        "after_tokens": 8000,
+        "before_zh": "2200–3000",
+        "after_zh": "2800–3800",
+        "before_en": "1400–1800",
+        "after_en": "1800–2300"
+      }
+    },
+    "manual_review": {
+      "improved": [
+        "All three request budgets reached the actual provider; all seven samples ended with stop rather than length.",
+        "Each paired SEO sample grew in substance and length; written uses actual Markdown section headings and named measure lists.",
+        "Written SEO separates authenticated SSR from shared-cache privacy risks, and content updates from URL migrations.",
+        "HTTP and legacy WebSocket mode budgets covered; provider cap is shared and cannot silently truncate written mode to the old 5000/6500 ceiling."
+      ],
+      "remaining": [
+        "Reference lengths are guidance, not enforced quotas. Models still sometimes finish shorter or longer; the cache answer finished naturally below the written target.",
+        "Spoken SEO output still occasionally uses a list-like or coaching phrase and includes code; naturalness varies.",
+        "Written supplementary paragraphs partially repeat content. SEO coverage can still omit mobile-specific examples.",
+        "Cache sample overstates version checks and distributed locks without fully spelling out atomic comparisons, reader/writer participation, or failure modes. Retry pseudocode is not a durable outbox implementation. This is a quality sample, not validated production code.",
+        "No guarantee of factual accuracy or universal completeness; larger caps alone do not fix reasoning mistakes."
+      ]
+    },
+    "samples": [
+      {
+        "mode": "conversational",
+        "variant": "after",
+        "budget": 2400,
+        "first_seconds": 0.71,
+        "total_seconds": 4.18,
+        "chunks": 544,
+        "chars": 1052,
+        "finish": "stop",
+        "answer": "前端 SEO 的核心不是堆 meta 标签，而是先保证内容能被稳定抓取和渲染，再谈结构化数据和性能。我一般按这个顺序讲：渲染方式选型、内容与元数据、抓取索引控制、最后才是体验和验收。\n\n先说渲染方式。纯 CSR 的页面，首屏 HTML 里往往只有空壳，虽然 Google 能执行 JS，但其他爬虫能力参差不齐，而且 JS 渲染有延迟和失败风险。所以内容型页面优先 SSG，构建时生成静态 HTML，天然可缓存、可抓取；需要登录态或实时数据的页面用 SSR，服务端渲染出完整 HTML 再返回。已有 SPA 如果不想大改，至少要做预渲染，把关键路由的 HTML 提前生成出来。\n\n内容结构上，一个页面聚焦一个主题，标题用语义化的 h1、h2，别用 div 堆。URL 保持可读、稳定，正文更新不一定改 canonical，但 URL 迁移必须同步规范地址、内链、重定向和 sitemap。元数据这块，title、description、canonical 要写全，canonical 用绝对地址：\n\n```html\n<head>\n  <title>前端 SEO 优化实践 - 示例站</title>\n  <meta name=\"description\" content=\"从渲染方式、内容结构到抓取索引，讲清前端 SEO 的落地做法。\">\n  <!-- canonical 用绝对 URL，避免相对路径在不同域名下解析歧义 -->\n  <link rel=\"canonical\" href=\"https://example.com/seo-guide\">\n</head>\n```\n\n抓取和索引要分清。robots.txt 管的是抓取，不是禁止索引，想让爬虫读到 noindex，就不能同时屏蔽这个页面的抓取。私密数据靠服务端鉴权，不能指望 robots 或 noindex 保护。sitemap 只放希望被索引的有效规范 URL，提交了也不保证立刻收录。分页每页内容不同，应该有独立 URL 和自指 canonical，不能都归到第一页。\n\n性能方面，LCP 图片不要懒加载，懒加载留给非首屏资源；预加载只用在真正关键、发现较晚的资源上，滥用会抢带宽。结构化数据能帮助理解页面，但不保证出现富媒体结果。\n\n最后验收：Search Console 的实时测试和渲染快照用来排查可访问和渲染问题，不代表已收录；索引状态要看页面索引报告。原始 HTML 或关 JS 检查只能确认预渲染内容，不能独立判定索引结果。"
+      },
+      {
+        "mode": "conversational",
+        "variant": "before",
+        "budget": 1800,
+        "first_seconds": 0.75,
+        "total_seconds": 3.96,
+        "chunks": 452,
+        "chars": 830,
+        "finish": "stop",
+        "answer": "前端 SEO 的核心不是堆标签，而是让搜索引擎能稳定拿到你想让它收录的内容，并且让页面结构、元数据和真实体验保持一致。具体可以从渲染方式、内容结构、抓取索引和验收四块来做。\n\n先说渲染方式。内容型页面优先考虑 SSG，构建时生成静态 HTML，爬虫和用户首屏都能直接拿到正文；更新频繁或需要登录态的页面可以用 SSR，在服务端按请求输出 HTML；已有 SPA 如果只是后台或登录后业务，不必为了 SEO 强行改造，但公开营销页最好做预渲染或迁移到支持 SSG/SSR 的方案。要注意，Google 能执行 JavaScript，CSR 并非完全无法索引，只是首屏 HTML 里没有正文时，抓取和渲染链路更容易出问题，其他爬虫的能力也可能不同。\n\n内容结构上，每个页面要有唯一且能描述主题的 title、description，正文用合理的 h1/h2 层级，图片加有意义的 alt，链接用可爬取的 a 标签而不是纯 JS 跳转。canonical 用绝对 URL 指向规范页，它是信号不是保证，搜索引擎不一定采纳。分页各页内容不同，应该有独立 URL 和自指 canonical，不能都归到第一页。\n\n抓取和索引方面，robots.txt 管的是抓取，不是鉴权，也不能可靠地禁止索引。要让爬虫读到 noindex，就不能同时屏蔽该页面抓取；私密数据必须靠服务端鉴权保护。sitemap 只放希望被索引的有效规范 URL，它不保证收录。真实不存在的路径要返回 404，避免 fallback 把所有路径都返回 200。\n\n最后是验收。用 Search Console 的实时测试看页面能否访问和渲染，但那只说明可访问性，不代表已经收录，收录状态要看索引报告。性能上关注 LCP，首屏关键图片不要懒加载，非首屏资源才延迟加载。结构化数据可以帮助理解页面，但不保证出现富媒体结果。整体上，SEO 是抓取、渲染、内容和体验共同作用的结果，单靠某个标签很难有稳定收益。"
+      },
+      {
+        "mode": "structured",
+        "variant": "after",
+        "budget": 3200,
+        "first_seconds": 0.86,
+        "total_seconds": 5.5,
+        "chunks": 729,
+        "chars": 1436,
+        "finish": "stop",
+        "answer": "前端 SEO 的核心是让爬虫能拿到可索引的正文和规范元数据，同时保证真实用户的首屏体验；具体手段取决于页面是内容型、营销型还是登录后业务页。\n\n**1. 先选渲染方式，再谈标签**\n内容型页面优先 SSG，构建时生成 HTML 并可缓存；频繁更新且需要实时数据的公开页可用 SSR；已有 SPA 若正文依赖客户端取数，至少要做预渲染或 SSR，否则抓取和首屏都会受影响。CSR 并非完全不能索引，Google 能执行 JavaScript，但渲染有延迟、其他爬虫能力不一，关键正文放在初始 HTML 更稳。登录后个性化页面是否 SSR 是渲染决策，不等于有公开收录需求。\n\n**2. 元数据与规范地址**\n每个可索引页面应有唯一、描述准确的 `title` 和 `description`，并用绝对 URL 的 canonical 指向规范版本。canonical 是信号不是强制，分页各页内容不同时应自指，不能都归到第一页；带查询参数也不等于不能收录，是否规范化取决于内容是否相同。正文更新通常不需要改 canonical，只有 URL 迁移才要同步规范地址、内链、重定向和 sitemap。\n\n```html\n<head>\n  <title>前端 SEO 优化指南</title>\n  <!-- 描述用于摘要展示，不保证不被改写或截断 -->\n  <meta name=\"description\" content=\"讲清渲染方式、元数据、抓取索引与验收方法。\">\n  <!-- canonical 用绝对地址，避免相对路径在不同域名下产生歧义 -->\n  <link rel=\"canonical\" href=\"https://example.com/seo-guide\">\n</head>\n```\n\n**3. 抓取与索引控制**\nrobots.txt 管抓取，不是鉴权手段；要禁止索引应让爬虫能读到页面的 `noindex`，不能同时屏蔽该页抓取。私密数据必须靠服务端鉴权保护，不能依赖前端隐藏。sitemap 只放希望索引的有效规范 URL，提交不保证收录；真实不存在的路径要返回 404，避免 fallback 全部返回 200 造成大量软 404。\n\n**4. 内容结构与可访问性**\n用语义化标签组织标题层级，`h1` 对应页面主题，图片补 `alt`，链接锚文本要有意义。结构化数据能帮助理解页面，但不保证出现富媒体结果。正文尽量服务端输出或用 React 文本节点渲染，不要为 SEO 注入未清洗的 HTML。\n\n**5. 体验与验收**\n首屏 LCP 图片不要懒加载，延迟加载留给非首屏资源；字体、图片预加载只用于真正关键且发现较晚的资源，滥用会争抢带宽。验收时用 Search Console 的实时测试看可访问和渲染快照，但它不代表已收录；索引状态要看页面索引报告。关闭 JS 检查只能确认预渲染内容，不能独立判定索引结果。\n\n**可补充**\n- 若用 Next.js App Router，动态 metadata 用 `generateMetadata`，Next.js 15+ 的 `params` 需 `await`；canonical 用绝对 URL 或配置 `metadataBase`。\n- 若展示 JSON-LD，`JSON.stringify` 后至少把 `<` 替换为 `\\u003c`，防止不可信内容提前闭合 `script`。"
+      },
+      {
+        "mode": "structured",
+        "variant": "before",
+        "budget": 2400,
+        "first_seconds": 0.75,
+        "total_seconds": 4.33,
+        "chunks": 637,
+        "chars": 1274,
+        "finish": "stop",
+        "answer": "前端 SEO 的核心不是“多写 meta 标签”，而是让搜索引擎能稳定拿到可索引的正文和规范 URL，同时保证页面体验与内容结构一致。做法可以按下面五块展开。\n\n**1. 先选对渲染方式**\n公开内容页优先 SSG 或 SSR，让首屏 HTML 就包含正文；已有 SPA 可以只对营销页做预渲染，业务后台不必强求收录。CSR 并非完全不能索引，Google 能执行 JavaScript，但原始 HTML 或关闭 JS 检查只能确认预渲染内容，不能独立判定最终索引结果。个性化或登录态页面是否用 SSR 是渲染决策，不等于有公开收录需求。\n\n**2. 内容结构与元数据**\n每页应有唯一、能概括主题的 `title` 和 `description`，正文用语义化标题层级，图片给有意义的 `alt`。canonical 用绝对 URL，指向规范页；它是信号，不保证搜索引擎一定采纳。描述长度没有通用硬上限，展示时可能被截断或改写。静态页可以直接在 head 中写：\n\n```html\n<head>\n  <title>前端 SEO 优化指南</title>\n  <meta name=\"description\" content=\"讲清渲染方式、元数据、抓取索引与验收方法。\">\n  <!-- canonical 用绝对地址，避免相对路径在不同域名或协议下产生歧义 -->\n  <link rel=\"canonical\" href=\"https://example.com/seo-guide\">\n</head>\n```\n\n**3. 抓取与索引控制**\nrobots.txt 管的是抓取，不是鉴权，也不能可靠地禁止索引；要让爬虫读到 `noindex`，就不能同时屏蔽该页抓取。私密数据必须靠服务端鉴权保护，不能指望前端隐藏。sitemap 只放希望索引的有效规范 URL，它不保证收录。真实不存在的路径要返回 404，避免 fallback 把所有路径都返回 200。\n\n**4. 分页与参数**\n分页各页通常展示不同内容，应有独立 URL 和自指 canonical，不能全部归到第一页。带查询参数不等于不能收录，是否需要规范化取决于参数是否改变实际内容，不能一刀切。\n\n**5. 体验与验收**\n首屏 LCP 图片不要懒加载，延迟加载留给非首屏资源；字体或图片预加载只用于真正关键且发现较晚的资源，滥用会争抢带宽。验收时用 Search Console 的实时测试和渲染快照排查可访问与渲染问题，但它不代表已经收录；索引状态要看索引数据或页面索引报告。\n\n**可补充**\n- 结构化数据不保证出现富媒体结果，它只是帮助搜索引擎理解内容的信号，最终展示由搜索引擎决定。\n- 如果项目用 Next.js App Router，动态页面用 `generateMetadata` 输出元数据，不要混用 Pages Router 的 `getStaticProps`；动态 `params` 在 Next.js 15+ 需要按 Promise await。"
+      },
+      {
+        "mode": "written",
+        "variant": "after",
+        "budget": 8000,
+        "first_seconds": 0.7,
+        "total_seconds": 13.31,
+        "chunks": 1967,
+        "chars": 3774,
+        "finish": "stop",
+        "answer": "前端 SEO 的核心不是“加几个 meta 标签”，而是让搜索引擎能稳定拿到可索引的正文和规范 URL，同时让用户首屏尽快看到内容。落地时先按页面类型选渲染方式，再处理内容结构、元数据、抓取索引、体验和验收。\n\n### 1. 按页面类型选择渲染方式\n\n- **公开内容页优先 SSG/ISR**：文章、商品详情、帮助文档这类内容相对稳定、需要被收录的页面，适合构建时预生成静态 HTML，再配合增量再生成或 CDN 缓存。它的优势是原始 HTML 里就有正文，爬虫不依赖执行 JavaScript，首屏也少一次数据等待。反例是库存、价格、登录态强相关的页面，纯静态可能展示过期信息。\n- **个性化或强时效页面用 SSR**：需要按用户身份、实时库存或最新数据渲染时，在服务端鉴权后生成 HTML。SSR 本身不会泄露私密数据，风险在于越权取数，或把带用户信息的响应错误地放进共享缓存。公开页面可以缓存，登录后的私有响应必须 `Cache-Control: private` 或直接不缓存。\n- **已有 SPA 不必整体重写**：如果后台系统或交互型应用已经用 CSR，且没有公开收录需求，可以保持现状。需要收录的营销页、详情页可以单独做预渲染或迁移到 SSG/SSR。Google 能执行 JavaScript，CSR 并非完全无法索引，但渲染依赖 JS 执行，其他爬虫能力可能不同，首屏体验也更依赖脚本加载。\n- **渲染方式不是唯一变量**：SSG 不代表所有情况下首屏最快，页面很大、数据很多时，构建产物和缓存策略同样影响体验。选择依据是内容是否需要收录、更新频率、是否个性化，以及团队能否维护服务端渲染。\n\n### 2. 让正文和结构可被抓取理解\n\n- **保证关键内容出现在服务端返回的 HTML 或可稳定渲染的 DOM 中**：标题、正文、价格、面包屑这类核心信息不要只靠客户端二次请求后才出现。可以用 `curl` 或关闭 JavaScript 检查原始 HTML，确认正文是否已经存在；但这只能确认预渲染内容，不能独立判定最终索引结果。\n- **使用语义化标签和清晰标题层级**：`header`、`nav`、`main`、`article`、`h1` 到 `h3` 表达内容结构，帮助爬虫判断页面主题和主次。不要为了样式把整页都写成 `div`，也不要在同一页堆多个 `h1` 表达不同主题。\n- **内部链接使用可抓取的 `a href`**：导航、分页、相关推荐用真实链接，不要只用 `onclick` 跳转。链接锚文本要能说明目标页面内容，避免大量“点击这里”。这既帮助爬虫发现页面，也帮助它理解页面之间的关系。\n- **图片提供有意义的 `alt`**：装饰图可以留空，内容图用简短描述表达图片信息。`alt` 不是关键词堆砌位，写清楚图片在页面中的作用即可。\n\n### 3. 管理元数据与规范地址\n\n- **每页设置独立的 `title` 和 `description`**：`title` 要准确描述页面主题，`description` 影响摘要展示但不直接决定排名。描述长度没有通用硬上限，展示时可能被截断或改写，所以把关键信息放在前面。下面是一段静态 HTML 的 head 示例，重点是绝对 canonical 和基础元数据：\n\n```html\n<head>\n  <!-- 标题和描述按页面内容生成，避免全站复用同一份 -->\n  <title>前端 SEO 优化实践 - 示例站点</title>\n  <meta name=\"description\" content=\"介绍前端 SEO 的渲染选择、元数据、抓取索引与验收方法。\">\n\n  <!-- canonical 用绝对 URL，减少相对路径解析歧义 -->\n  <link rel=\"canonical\" href=\"https://example.com/seo/frontend\">\n\n  <!-- 社交分享元数据与 canonical 指向同一规范地址 -->\n  <meta property=\"og:title\" content=\"前端 SEO 优化实践\">\n  <meta property=\"og:url\" content=\"https://example.com/seo/frontend\">\n</head>\n```\n\n- **canonical 指向规范页，但不保证被采纳**：同一内容有多个 URL 时，用绝对地址声明首选版本。canonical 是信号，不是强制指令；如果站内链接、sitemap 和 canonical 互相矛盾，搜索引擎可能选择其他版本。带查询参数不等于不能收录，是否需要规范化取决于参数是否改变实际内容。\n- **分页每页自指 canonical**：列表第 2 页、第 3 页展示不同内容，应有独立 URL 和指向自身的 canonical，不能全部归到第一页。否则后续页面的内容可能不被独立对待。\n- **URL 迁移才需要同步规范地址**：正文更新通常不需要改 canonical；如果文章换了 URL，才需要同步更新 canonical、站内链接、重定向和 sitemap。不要把普通内容更新都说成替换旧 URL。\n\n### 4. 控制抓取与索引边界\n\n- **robots.txt 管抓取，不管鉴权**：它用于告诉爬虫哪些路径不要抓，但不能保护私密数据，也不能可靠地禁止索引。私密数据必须靠服务端鉴权。如果希望页面被读取 `noindex`，就不能同时在 robots.txt 里屏蔽它的抓取，否则爬虫看不到这个指令。\n- **用 `noindex` 处理不希望收录的公开页**：搜索结果页、筛选参数页、测试页可以返回 `noindex`。它和 robots.txt 的区别是：`noindex` 需要爬虫先抓到页面才能看到，robots.txt 是直接阻止抓取。\n- **sitemap 只放希望索引的有效规范 URL**：它帮助爬虫发现页面，但不保证收录。不要把重定向、404、`noindex` 页面塞进去。提交 sitemap 也不代表索引会立即更新。\n- **真实 404 要返回 404**：不存在的路径不要用 fallback 全部返回 200 和空页面，否则会制造大量低质量可索引页面。只有约定的“资源不存在”才转成 404，鉴权失败、限流、上游故障和网络超时不能一律伪装成 404 或空数组。\n\n### 5. 优化首屏体验与 Core Web Vitals\n\n- **首屏 LCP 图片不要懒加载**：首屏主图应正常加载，必要时用 `fetchpriority=\"high\"` 提示优先级；`loading=\"lazy\"` 留给非首屏图片。懒加载首屏图会推迟 LCP，反而伤害体验。\n- **预加载只用于真正关键且发现较晚的资源**：字体、首屏背景图如果很晚才被发现，可以 `preload`。滥用预加载会争抢带宽，拖慢其他关键资源。是否有效要看实际网络面板和指标变化。\n- **减少阻塞渲染的资源**：关键 CSS 内联或优先加载，非关键 JS 延迟执行。第三方脚本用 `async` 或 `defer`，并评估是否真的需要。性能措施要说明条件，不能列成无条件优化清单。\n- **用真实指标验证**：LCP、CLS、INP 以真实用户数据为准，实验室工具只能辅助定位。优化后对比同一页面、同一网络条件下的指标变化，而不是只看构建体积。\n\n### 6. 结构化数据与验收\n\n- **结构化数据按内容类型添加**：文章用 `Article`，商品用 `Product`，面包屑用 `BreadcrumbList`。它帮助搜索引擎理解页面，但不保证出现富媒体结果。标记内容必须和页面可见内容一致，不能标记用户看不到的信息。\n- **用 Search Console 区分抓取和索引**：URL 检查的实时测试和渲染快照用于排查可访问性、渲染问题，不代表已经收录。是否收录要看索引数据或页面索引报告。提交 sitemap 后也要观察实际抓取和索引状态。\n- **建立回归检查**：上线前检查关键页面的 title、description、canonical、robots、状态码和正文是否在原始 HTML 中。可以用自动化脚本对核心 URL 做断言，避免改版后元数据丢失或 canonical 指错。\n\n### 可进一步补充\n\n- **更新与失效场景**：内容更新后，如果 URL 不变，通常只需更新页面内容和 sitemap 的 `lastmod`；如果 URL 变了，要同时处理 301、canonical、内链和 sitemap。验证方式是观察旧 URL 是否逐步被新 URL 替代，而不是期待提交后立即生效。\n- **缓存与个性化冲突**：公开页面可以 CDN 缓存，登录后页面如果误用共享缓存，可能把 A 用户的数据返回给 B 用户。处理方式是在服务端鉴权后设置 `Cache-Control: private, no-store`，并验证响应头与缓存键是否包含用户维度。"
+      },
+      {
+        "mode": "written",
+        "variant": "before",
+        "budget": 6500,
+        "first_seconds": 0.62,
+        "total_seconds": 9.8,
+        "chunks": 1393,
+        "chars": 2591,
+        "finish": "stop",
+        "answer": "前端 SEO 的核心是让爬虫能稳定拿到可索引的正文和元数据，同时让用户获得可用的首屏体验；技术选型要按页面类型区分，而不是全站套一种渲染方式。下面按实际落地流程展开。\n\n## 1. 先按页面类型选渲染方式\n\n- **公开内容页用 SSG**：文章、商品详情、帮助中心这类内容相对稳定、面向匿名用户的页面，构建时预生成 HTML，可直接被爬虫读取，也能配合 CDN 缓存。它的优势是预生成和可缓存，不代表所有情况下首屏都最快；内容更新频繁时要用增量再生成或定时重建，否则会拿到旧内容。\n- **个性化或强时效页面用 SSR**：登录态首页、实时价格、库存等需要按请求取数的页面，服务端渲染返回完整 HTML。是否使用 SSR 是渲染决策，不等于该页面有公开收录需求；登录后的业务页通常不需要被索引，重点应放在服务端鉴权而不是 SEO。\n- **已有 SPA 不必推倒重来**：Google 能执行 JavaScript，CSR 并非无法索引，但渲染有延迟和失败可能，其他爬虫能力也可能不同。可行做法是对爬虫和首访返回预渲染 HTML，或把营销页、详情页逐步迁到 SSG/SSR，交互密集的后台仍保留 CSR。\n- **判断依据是内容是否需要被公开检索**：需要收录且内容可预生成就 SSG，需要按请求变化就 SSR，纯登录后交互就 CSR。不要为了 SEO 把私密数据也做成可抓取的静态页。\n\n## 2. 把内容结构做成爬虫可理解的形式\n\n- **语义化标签承载层级**：用 `header`、`nav`、`main`、`article`、`h1`～`h3` 表达页面结构，标题层级按内容嵌套而不是按字号选标签。爬虫据此判断主体内容和主题，屏幕阅读器也受益。\n- **正文用真实文本节点**：关键文案不要只放在图片、Canvas 或纯 CSS 背景里；图片配 `alt`，但 `alt` 是替代描述，不是关键词堆砌位。正文用框架的文本插值输出，避免未经清洗的 HTML 注入。\n- **链接用可抓取的 `a href`**：站内导航和分页用真实链接而不是 `onclick` 跳转，爬虫才能顺着链接发现页面。需要交互增强时再叠加事件，保留 `href` 作为兜底。\n\n## 3. 元数据与规范化\n\n- **每页独立 title 和 description**：title 写清页面主题，description 概括内容供摘要参考。描述长度没有通用硬上限，展示时可能被截断或改写，所以要把关键信息放前面，而不是卡某个字数。\n- **canonical 指向规范 URL**：同一内容有多个入口时，用绝对地址声明规范页，例如：\n\n```html\n<head>\n  <title>无线耳机选购指南</title>\n  <meta name=\"description\" content=\"按降噪、续航和佩戴场景对比主流无线耳机。\" />\n  <!-- 用绝对地址声明规范页，避免相对路径在不同域名或协议下产生歧义 -->\n  <link rel=\"canonical\" href=\"https://example.com/guide/wireless-earbuds\" />\n</head>\n```\n\ncanonical 是规范页信号，不能保证搜索引擎一定采纳；带查询参数的 URL 也不等于不能收录，是否需要规范化取决于参数是否改变实际内容。\n\n- **分页各页独立规范**：第 2、3 页展示不同内容，应有独立 URL 和自指 canonical，不能全部归到第一页，否则后续页可能不被单独收录。\n- **结构化数据按真实内容标注**：文章、商品、FAQ 可用 JSON-LD 描述，但它不保证出现富媒体结果，标注内容必须与页面可见内容一致，否则可能被判定为误导。\n\n## 4. 抓取与索引控制\n\n- **robots.txt 管抓取范围**：用它屏蔽后台、搜索结果页等无需抓取的路径，但它不是鉴权手段，也不能可靠地禁止索引；私密数据必须靠服务端鉴权保护。\n- **noindex 要允许抓取**：要让爬虫读到 `noindex`，就不能同时屏蔽该页面抓取，否则规则读不到，页面仍可能被索引。\n- **sitemap 只放希望索引的有效规范 URL**：它帮助发现页面，但不保证收录；把 404、重定向和参数垃圾页放进去只会浪费抓取预算。\n- **真实处理 404**：不存在的路径返回 404，不要让 fallback 把所有未知路径都返回 200，否则会制造大量重复或空页面。\n\n## 5. 性能与体验\n\n- **首屏 LCP 图片不要懒加载**：延迟加载用于非首屏资源，首屏主图应正常加载，必要时用 `fetchpriority` 提升优先级。\n- **预加载只给关键且发现较晚的资源**：字体、首屏关键图可预加载，滥用会争抢带宽，反而拖慢其他资源。\n- **减少阻塞渲染的资源**：关键 CSS 内联或优先加载，非关键脚本用 `defer`/`async`，避免长任务阻塞首屏。性能措施要结合真实指标验证，不能默认某项优化一定生效。\n\n## 6. 验证与排查\n\n- **区分“能渲染”和“已收录”**：原始 HTML 或关闭 JS 检查只能确认预渲染内容，不能独立判定索引结果；Search Console 的实时测试和渲染快照用于排查可访问与渲染问题，索引状态要看索引数据或页面索引报告。\n- **用真实抓取视角检查**：查看返回的 HTML 是否包含正文和元数据、状态码是否正确、canonical 是否自指、robots 与 noindex 是否冲突。\n- **上线后持续观察**：收录量、展现点击、抓取统计的变化能反映改动效果，异常时回查渲染方式和元数据是否被正确输出。\n\n如果使用 Next.js App Router，元数据通过 `metadata` 或 `generateMetadata` 配置，动态 `params` 在 15+ 需按 Promise 处理，canonical 用绝对地址或配置 `metadataBase`；这与 Pages Router 的 `getStaticProps`/`getServerSideProps` 属于不同体系，不要混用。"
+      },
+      {
+        "mode": "written",
+        "variant": "cache",
+        "budget": 8000,
+        "first_seconds": 0.81,
+        "total_seconds": 8.79,
+        "chunks": 1096,
+        "chars": 1963,
+        "finish": "stop",
+        "answer": "缓存与数据库的一致性没有单一方案，核心是接受“缓存与数据库更新不是原子操作”这一前提，再根据业务对一致性、延迟和吞吐的要求选择策略。常见做法是 Cache Aside 配合删除缓存，强一致场景则让读请求也走数据库或引入版本号校验。\n\n### 1. 先明确一致性目标\n\n- **区分强一致与最终一致**：强一致要求读到的数据始终是最新提交值，通常需要把缓存纳入事务或加锁；最终一致允许短暂旧值，只要在可接受时间内收敛。多数互联网业务选择最终一致。\n- **确定可接受的旧值窗口**：例如商品详情允许 1 秒旧值，而账户余额通常不允许。窗口决定了用删除缓存、延迟双删还是版本号。\n- **识别读写比例**：读多写少适合缓存，写多读少时缓存收益低，直接读库可能更简单。\n\n### 2. 主流更新策略及选择依据\n\n- **Cache Aside（旁路缓存）**：读时先查缓存，未命中查库并回填；写时先更新数据库，再删除缓存。它实现简单、缓存只存被访问的数据，是默认选择。反例是写后立即读且删除失败时，会读到旧值。\n- **先删缓存再更新数据库**：并发读可能在删除后、更新前把旧值回填，导致长期脏数据，通常不推荐单独使用。\n- **Write Through / Write Behind**：写操作经过缓存层，由缓存同步或异步写库。Write Behind 吞吐高但可能丢数据，适合日志、计数等可容忍丢失的场景。\n- **延迟双删**：更新数据库后删除缓存，再延迟一段时间（大于一次读回填耗时）二次删除，降低并发回填旧值的概率。延迟时间需要根据主从复制和业务耗时估算，不是固定值。\n\n### 3. 处理删除失败与并发回填\n\n- **删除失败重试**：删除缓存失败时，把 key 写入消息队列或本地重试表，由消费者重试删除，避免缓存永久脏。\n- **订阅数据库变更**：通过 binlog（如 Canal）或 CDC 流捕获变更，异步删除或更新缓存。它把缓存更新与业务代码解耦，适合多服务写同一份数据的场景，但引入中间件和延迟。\n- **版本号或时间戳校验**：缓存值附带数据版本，读时比对数据库版本，旧版本不覆盖新版本。它能解决并发回填，但每次读多一次版本查询，成本上升。\n- **加分布式锁**：对同一 key 的更新串行化，保证删除和回填顺序。锁会降低并发，只适合热点 key 且一致性要求高的场景。\n\n### 4. 关键措施：Cache Aside 的写路径\n\n以商品详情为例，写路径先更新数据库再删除缓存，删除失败进入重试。下面片段展示核心逻辑，前提是已有 `db` 和 `cache` 客户端，且删除失败会抛错而不是静默返回。\n\n```python\ndef update_product(product_id, data):\n    # 先更新数据库，保证持久层是最新值\n    db.update(\"product\", product_id, data)\n    try:\n        # 删除而非更新缓存，避免并发写覆盖顺序问题\n        cache.delete(f\"product:{product_id}\")\n    except CacheError:\n        # 删除失败不能假装成功，写入重试队列由消费者补偿\n        retry_queue.push({\"key\": f\"product:{product_id}\", \"op\": \"delete\"})\n```\n\n读路径未命中时查库回填，回填前可加短过期时间，降低脏数据停留时长。验证方式是并发压测：一个线程持续写，多个线程读，统计读到旧值的比例和持续时间；若旧值窗口超过业务容忍值，再引入版本号或延迟双删。\n\n### 5. 边界与取舍\n\n- **缓存和数据库不是同一事务**：任何“先写一个再写另一个”的方案都存在中间状态，只能缩小窗口，不能消除。\n- **删除比更新缓存更安全**：更新缓存可能因并发顺序导致旧值覆盖新值，删除让下次读自然回源。\n- **强一致读走数据库**：对余额、库存扣减等场景，读请求直接查库或加锁，缓存只用于展示类数据。\n- **缓存穿透与雪崩**：空值缓存、布隆过滤器、过期时间加随机抖动，这些与一致性正交，但会影响回填行为。\n\n### 可进一步补充\n\n- **主从复制延迟下的读**：如果读库是只读从库，更新主库后立即删除缓存，下一次读可能从从库读到旧值并回填。处理方式是回填前检查复制位点，或让回填读主库；验证时对比主从延迟和旧值窗口。\n- **缓存与数据库同时故障**：数据库不可用时不能把缓存旧值当作最新值返回给强一致接口，应明确返回错误或降级标识；缓存不可用时直接读库并限流，避免打垮数据库。"
+      }
+    ],
+    "deployment": {
+      "status": "deployed",
+      "local_health": "ok",
+      "public_health": "ok",
+      "production_prompt_import": "verified",
+      "backup": "/www/backups/interview-assistant/20261014-answer-mode-budgets",
+      "client_reinstall_required": false,
+      "idle_connections_checked_before_restart": true
+    }
   }
 }

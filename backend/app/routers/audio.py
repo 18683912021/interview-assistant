@@ -32,7 +32,7 @@ from app.services.audio_service import (
     V1AudioSession,
     storage_root,
 )
-from app.services.llm_service import LLMService, answer_token_budget
+from app.services.llm_service import LLMService, MAX_ANSWER_TOKENS, answer_token_budget
 from app.services.stt_streaming import StreamingASRSession
 from app.services.asr_provider import asr_ready, create_asr_session
 
@@ -265,7 +265,7 @@ async def audio_stream(ws: WebSocket):
                             raise ProtocolError("E_CONFIG", "llm config must be an object")
                         llm_config = {"enabled": cfg.get("enabled", True)}
                         if isinstance(cfg.get("max_tokens"), int):
-                            llm_config["max_tokens"] = max(64, min(cfg["max_tokens"], 5000))
+                            llm_config["max_tokens"] = max(64, min(cfg["max_tokens"], MAX_ANSWER_TOKENS))
                         if cfg.get("model") in ("deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro"):
                             llm_config["model"] = cfg["model"]
                         if isinstance(payload.get("track"), str):

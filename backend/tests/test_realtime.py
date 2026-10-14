@@ -130,7 +130,7 @@ async def test_llm_wire_thinking_disabled_context_and_truncation(monkeypatch):
                             source_message_ids=["m1"], source_revisions=[4], context_version=2)
     assert captured["thinking"] == {"type": "disabled"}
     assert "做过组件库" in captured["messages"][1]["content"]
-    assert captured["max_tokens"] == 1800
+    assert captured["max_tokens"] == 2400
     assert [x["delta"] for x in recorder.events[:-1]] == ["核心结论", "。"]
     done = recorder.events[-1]
     assert done["full_answer"] == "核心结论。" and done["status"] == "truncated"
@@ -150,11 +150,11 @@ def test_answer_format_and_output_budget_are_consistent(style, length):
         assert "标准书面回答" in prompt["content"] and "实施细节" in prompt["content"]
         assert "控制在约 150 字" not in prompt["content"]
         assert "控制在约 300 字" not in prompt["content"]
-        assert llm_module.answer_token_budget(context) == 6500
+        assert llm_module.answer_token_budget(context) == 8000
         assert "可进一步补充" in prompt["content"]
     else:
         assert "标准书面回答" not in prompt["content"]
-        assert llm_module.answer_token_budget(context) == {"conversational": 1800, "structured": 2400}[style]
+        assert llm_module.answer_token_budget(context) == {"conversational": 2400, "structured": 3200}[style]
 
 
 @pytest.mark.parametrize("style", ["conversational", "structured", "written"])
@@ -184,13 +184,14 @@ def test_code_examples_include_candidate_explanation_rules(style, language):
 def test_written_english_and_legacy_preferences():
     prompt = llm_module.build_messages("Explain idempotency", None, "en", {
         "answer_style": "标准书面", "answer_length": "balanced"})[0]["content"]
-    assert "1400～1800 个英文单词" in prompt
-    assert llm_module.answer_token_budget({"answer_length": "short"}) == 1800
+    assert "1800～2300 个英文单词" in prompt
+    assert llm_module.answer_token_budget({"answer_length": "short"}) == 2400
     assert llm_module.answer_preferences({"answer_style": "untrusted instructions"}) == ("conversational", "standard")
 
 
 @pytest.mark.asyncio
-async def test_written_answer_streams_before_completion_with_larger_budget(monkeypatch):
+@pytest.mark.parametrize("style,budget", [("conversational", 2400), ("structured", 3200), ("written", 8000)])
+async def test_answer_modes_stream_before_completion_with_larger_budget(monkeypatch, style, budget):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     gate = asyncio.Event()
     captured = {}
@@ -209,12 +210,12 @@ async def test_written_answer_streams_before_completion_with_larger_budget(monke
     service._client = httpx.AsyncClient(transport=httpx.MockTransport(transport))
     recorder = Recorder()
     task = asyncio.create_task(audio._llm_single(recorder, "如何保证订单幂等？", "zh", None, service, {}, "written",
-        context={"answer_style": "written", "answer_length": "detailed"}))
+        context={"answer_style": style, "answer_length": "detailed"}))
     try:
         await asyncio.wait_for(recorder.first.wait(), 1)
         assert not task.done()
         assert recorder.events[0]["delta"] == "先给核心结论。"
-        assert captured["max_tokens"] == 6500
+        assert captured["max_tokens"] == budget
         assert captured["stream"] is True and captured["thinking"] == {"type": "disabled"}
         gate.set()
         await asyncio.wait_for(task, 1)
@@ -331,6 +332,47 @@ class SocketHarness:
     async def close(self):
         await self.inbound.put({"type": "websocket.disconnect", "code": 1000})
         await asyncio.wait_for(self.task, 5)
+
+
+@pytest.mark.asyncio
+async def test_websocket_token_config_uses_current_shared_ceiling(monkeypatch, tmp_path):
+    async def authenticate(_): return "owner@test.local"
+    monkeypatch.setattr(audio, "authenticate_socket", authenticate)
+    monkeypatch.setattr(audio, "storage_root", lambda: tmp_path)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    app = FastAPI()
+    app.include_router(audio.router, prefix="/api")
+    socket = SocketHarness(app, "test")
+    await socket.start()
+    try:
+        await socket.send({"type": "client_hello"})
+        await socket.recv()
+        for requested, expected in [(8000, 8000), (99999, 8000), (1000, 1000)]:
+            await socket.send({"type": "config", "llm": {"max_tokens": requested}})
+            response = await socket.recv()
+            assert response["type"] == "config_ack"
+            assert response["llm"]["max_tokens"] == expected
+    finally:
+        await socket.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("requested,expected", [(8000, 8000), (99999, 8000), (16, 16)])
+async def test_provider_token_cap_allows_expanded_budget_and_bounds_overrides(monkeypatch, requested, expected):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
+    captured = {}
+    def provider(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, content='data: {"choices":[{"delta":{"content":"回答"},"finish_reason":"stop"}]}\n\n')
+    service = LLMService()
+    service._client = httpx.AsyncClient(transport=httpx.MockTransport(provider))
+    try:
+        chunks = [chunk async for chunk in service.stream_answer("问题", max_tokens=requested)]
+        assert chunks == [("回答", True)]
+        assert captured["max_tokens"] == expected
+    finally:
+        await service.close()
 
 
 @pytest.mark.asyncio
