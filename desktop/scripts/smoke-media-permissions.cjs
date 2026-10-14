@@ -11,9 +11,9 @@ app.setPath('userData', path.join(tmp, 'profile'));
 app.disableHardwareAcceleration();
 let scenario = 'denied';
 // No microphone, screen or real system audio is opened by this regression test.
-dialog.showMessageBox = async () => ({response: scenario === 'cancelled' ? 1 : 0});
+dialog.showMessageBox = async () => {throw new Error('Capture must never open an authorization dialog');};
 desktopCapturer.getSources = async () => {if (scenario === 'empty') return []; throw new Error('source denied fixture');};
-systemPreferences.getMediaAccessStatus = () => 'denied';
+systemPreferences.getMediaAccessStatus = () => scenario === 'denied' ? 'denied' : 'granted';
 const {allowMediaPermissions, takeDisplayCaptureFailure} = require(path.join(root, 'dist-electron/audio/media-permissions.js'));
 const fixture = path.join(tmp, 'index.html');
 fs.writeFileSync(fixture, '<!doctype html><meta charset="utf-8"><title>Permission regression</title><script src="capture.js"></script>');
@@ -29,16 +29,16 @@ app.whenReady().then(async () => {
   win = new BrowserWindow({show:false,webPreferences:{preload:path.join(tmp,'preload.cjs'),contextIsolation:true,sandbox:false}});
   await win.loadFile(fixture);
   const report=[];
-  for (scenario of ['denied','empty','cancelled']) {
+  for (scenario of ['denied','empty','failure']) {
     const result=await win.webContents.executeJavaScript(`(async()=>{
       let micCalls=0;
-      try {await Capture.prepareAudioStreams({system_device_id:'',microphone_id:''},'both',{
+      try {await Capture.prepareAudioStreams({system_device_id:'__screen_capture__',microphone_id:''},'both',{
         getDisplayMedia:c=>navigator.mediaDevices.getDisplayMedia(c),
         getUserMedia:()=>{micCalls++;throw new Error('MIC MUST NEVER BE OPENED')}
       },true);return {unexpectedSuccess:true};}catch(e){return {message:e.message,micCalls};}
     })()`, true);
     assert.equal(result.micCalls,0);
-    assert.match(result.message, scenario==='cancelled' ? /已取消系统音频采集/ : /macOS 尚未允许屏幕与系统音频录制/);
+    assert.match(result.message, scenario === 'denied' ? /macOS 尚未允许屏幕与系统音频录制/ : /系统音频来源无法打开/);
     assert.doesNotMatch(result.message,/Invalid capture constraints/);
     report.push({scenario,...result});
   }

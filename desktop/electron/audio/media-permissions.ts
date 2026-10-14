@@ -75,8 +75,8 @@ function sourceFailure(): DisplayCaptureFailure {
 export function configureSystemAudioCapture(): void {
   if (process.platform !== 'darwin' || process.versions.electron?.split('.')[0] !== '43') return;
   const flags = new Set(app.commandLine.getSwitchValue('disable-features').split(',').filter(Boolean));
-  // Only the explicitly selected legacy screen-capture route uses Chromium.
-  // Default system audio uses our native Core Audio Tap and never enters here.
+  // Use the requested screen-audio route on macOS; keep Electron 43 on the
+  // documented loopback implementation rather than its experimental tap path.
   flags.add('MacCatapLoopbackAudioForScreenShare');
   app.commandLine.appendSwitch('disable-features', [...flags].join(','));
 }
@@ -91,7 +91,7 @@ export function getAudioPermissions() {
       ? systemPreferences.getMediaAccessStatus('microphone') : 'unsupported',
     screen: process.platform === 'darwin'
       ? systemPreferences.getMediaAccessStatus('screen') : 'unsupported',
-    systemAudioMode: process.platform === 'darwin' ? 'coreaudio-tap' : 'native-loopback',
+    systemAudioMode: process.platform === 'darwin' ? 'screen-loopback' : 'native-loopback',
   };
 }
 
@@ -119,14 +119,10 @@ export function allowMediaPermissions(): void {
     let streams: Electron.Streams = {};
     let failure: DisplayCaptureFailure | null = null;
     try {
-      const choice = await dialog.showMessageBox({
-        type: 'question', title: '采集系统声音',
-        message: '允许转写电脑正在播放的声音？',
-        detail: '这会包含其他应用播放的声音。macOS 可能要求允许屏幕与系统音频录制；画面不会保存或上传。',
-        buttons: ['开始采集', '取消'], defaultId: 0, cancelId: 1, noLink: true,
-      });
-      if (choice.response !== 0) {
-        failure = { code: 'E_CAPTURE_CANCELLED', message: '已取消系统音频采集。可重新开始，或选择「仅麦克风」。' };
+      // All OS authorization happens on the preparation page. Never open a
+      // confirmation or permission panel while resuming an interview.
+      if (process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
+        failure = sourceFailure();
       } else {
         const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
         if (!sources.length) failure = sourceFailure();

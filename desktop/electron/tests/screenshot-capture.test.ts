@@ -78,8 +78,8 @@ it('rejects foreign frames and simultaneous requests, and cancelling leaves no s
   expect(mocks.sources).not.toHaveBeenCalled(); expect(mocks.recognize).not.toHaveBeenCalled();
   expect(mocks.events.ipc!.listenerCount('screenshot:select')).toBe(0);
 });
-it('guides denied permissions without creating an overlay and never starts audio', async () => {
-  mocks.permission.mockReturnValue('denied');
+it.each(['denied', 'not-determined', 'restricted'])('never requests missing %s permissions from a live screenshot', async status => {
+  mocks.permission.mockReturnValue(status);
   await expect(mocks.handlers.get('screenshot:recognize')!(event, 'request-1')).resolves.toMatchObject({status: 'error', permission: true});
   expect(mocks.windows).toHaveLength(0); expect(mocks.sources).not.toHaveBeenCalled();
   expect(mocks.warm).not.toHaveBeenCalled();

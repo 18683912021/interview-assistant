@@ -2,11 +2,12 @@ import {useEffect, useRef, useState} from 'react';
 import {Pencil, RotateCcw} from 'lucide-react';
 import {ScreenshotQuestion} from './ScreenshotQuestion';
 
-export function AnswerQuestion({question, edited = false, editable, generating, onGenerate, onEditingChange}: {
+export function AnswerQuestion({question, edited = false, editable, generating, screenshotEnabled = true, onGenerate, onEditingChange}: {
   question: string;
   edited?: boolean;
   editable: boolean;
   generating: boolean;
+  screenshotEnabled?: boolean;
   onGenerate: (question: string) => boolean;
   onEditingChange?: (editing: boolean) => void;
 }) {
@@ -43,7 +44,7 @@ export function AnswerQuestion({question, edited = false, editable, generating, 
         <Pencil size={13} />编辑问题
       </button>}
     </div>
-    {editable && <ScreenshotQuestion disabled={!editable} onBusyChange={setRecognizing}
+    {editable && <ScreenshotQuestion disabled={!editable || !screenshotEnabled} onBusyChange={setRecognizing}
       onText={text => {setDraft(text); setError(''); setEditing(true);}} />}
     {editing && editable ? <form className="answer-question-editor" onSubmit={event => {event.preventDefault(); generate();}}>
       <label htmlFor="answer-question-input" className="sr-only">编辑本次问题</label>

@@ -76,7 +76,8 @@ export async function prepareAudioStreams(
       throw new Error(
         '麦克风与系统音频选中了同一个输入。请将麦克风设为内置或耳机麦克风，系统音频选择电脑播放声音或独立虚拟输入。',
       );
-    // Screen capture is an explicit fallback; native audio never requests a screen.
+    // Empty ids are retained only for old native callers. Current Mac settings
+    // migrate to SCREEN_AUDIO_FALLBACK before preparation starts.
     if (source === 'both' && isMac && !settings.system_device_id) {
       await prepareMic();
       current = 'system';
@@ -92,7 +93,7 @@ export async function prepareAudioStreams(
     if (source === 'both' && isMac && settings.system_device_id) {
       current = 'system';
       progress({source: current, status: 'checking', message: settings.system_device_id === SCREEN_AUDIO_FALLBACK
-        ? '请按系统提示允许兼容采集；该模式会显示屏幕共享提示。' : '正在连接所选系统音频输入…'});
+        ? '正在连接电脑播放声音；系统可能显示屏幕共享提示。' : '正在连接所选系统音频输入…'});
       streams.system = settings.system_device_id !== SCREEN_AUDIO_FALLBACK
         ? await media.getUserMedia({
             audio: {...systemConstraints, deviceId: {exact: settings.system_device_id}},

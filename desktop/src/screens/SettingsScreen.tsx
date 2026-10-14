@@ -439,8 +439,7 @@ export default function SettingsScreen() {
                         <Select
                           value={settings.system_device_id}
                           onValueChange={selectedValue => change('system_device_id', selectedValue)}>
-                          <SelectOption value="">仅系统音频（推荐，不采集屏幕）</SelectOption>
-                          <SelectOption value={SCREEN_AUDIO_FALLBACK}>屏幕采集兼容模式（会显示共享提示）</SelectOption>
+                          <SelectOption value={SCREEN_AUDIO_FALLBACK}>电脑播放声音（录屏通道）</SelectOption>
                           {settings.system_device_id && settings.system_device_id !== SCREEN_AUDIO_FALLBACK &&
                             !devices.some(
                               value => value.deviceId === settings.system_device_id,
@@ -498,7 +497,7 @@ export default function SettingsScreen() {
                     )}
                     {isMac && (
                       <p className="notice">
-                        默认只读取系统播放的声音（macOS 14.2+），不采集屏幕。首次使用需允许系统音频录制；系统仍可能显示录音提示。只有手动选择兼容模式才会启用屏幕采集。虚拟输入需要单独配置声音路由。
+                        系统音频通过录屏通道获取，与截图识题共用录屏权限。请在共享屏幕前完成授权；macOS 可能显示共享提示，画面不保存、不上传。虚拟输入需要单独配置声音路由。
                       </p>
                     )}
                     <p className="notice">

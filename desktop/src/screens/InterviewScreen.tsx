@@ -54,8 +54,8 @@ import {genId, interviewReducer} from '../store/interview-reducer';
 import type {ConversationMessage} from '../store/types';
 import {AnswerQuestion} from '../components/AnswerQuestion';
 import {ScreenshotQuestion} from '../components/ScreenshotQuestion';
+import {ScreenReadiness, type ScreenReadinessHandle} from '../components/ScreenReadiness';
 import {AnswerBody} from '../components/AnswerBody';
-import {AudioPermissions} from '../components/AudioPermissions';
 import {findReusableAnswer, hasRevisedSources} from '../services/conversation';
 import {sessionContentSignature as signature} from '../services/session-content';
 import {checkAIReadiness} from '../api/diagnostics';
@@ -110,7 +110,11 @@ export default function InterviewScreen() {
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
     [working, setBusy] = useState(false);
-  const busy = working || settling;
+  const [permissionWorking, setPermissionWorking] = useState(false);
+  const busy = working || settling || permissionWorking;
+  const [screenshotEnabled, setScreenshotEnabled] = useState(!!window.electronAPI?.screenshot);
+  const [screenReady, setScreenReady] = useState(false);
+  const screenPreparation = useRef<ScreenReadinessHandle>(null);
   const [startStage, setStartStage] = useState(''),
     [deviceModal, setDeviceModal] = useState(false),
     [audioDevices, setAudioDevices] = useState<AudioInputDevice[]>([]);
@@ -431,7 +435,11 @@ export default function InterviewScreen() {
     if (busy) return;
     const attempt = ++setupAttempt.current;
     setBusy(true); setError('');
-    try {await prepare(settings, source, true);}
+    try {
+      if (screenPreparation.current && !await screenPreparation.current.ensure(true)) {showAudioHelp(); return;}
+      if (attempt !== setupAttempt.current) return;
+      await prepare(settings, source, true);
+    }
     catch (error) {
       if (attempt !== setupAttempt.current) return;
       if (error instanceof AudioPreparationIssue) showAudioHelp();
@@ -454,6 +462,8 @@ export default function InterviewScreen() {
     setBusy(true);
     setError('');
     try {
+      if (screenPreparation.current && !await screenPreparation.current.ensure(false)) {showAudioHelp(); return;}
+      if (attempt !== setupAttempt.current) return;
       setStartStage('正在准备音频设备…');
       await prepare(settings, source);
       if (attempt !== setupAttempt.current) return;
@@ -510,6 +520,11 @@ export default function InterviewScreen() {
     setBusy(true);
     setError('');
     try {
+      if (desktopPlatform() === 'mac' && window.electronAPI?.audio.getPermissions) {
+        const permissions = await window.electronAPI.audio.getPermissions();
+        if (permissions.microphone !== 'granted' || (source === 'both' && settings.system_device_id === SCREEN_AUDIO_FALLBACK && permissions.screen !== 'granted'))
+          throw new Error('音频权限未就绪，本场可继续输入问题。为避免共享时弹出系统窗口，请结束后在面试准备中重新授权。');
+      }
       setStartStage('正在准备音频设备…');
       await prepare(settings, source);
       setStartStage('正在检查 AI 连接…');
@@ -780,6 +795,10 @@ export default function InterviewScreen() {
               </div>
             </div>
             <AudioReadiness sectionRef={audioSetup} source={source} steps={preparation} busy={busy}
+              screenReady={!window.electronAPI?.screenshot || screenReady}
+              screenPreparation={window.electronAPI?.screenshot && <ScreenReadiness ref={screenPreparation}
+                enabled={screenshotEnabled} requiredForAudio={desktopPlatform() === 'mac' && source === 'both' && settings.system_device_id === SCREEN_AUDIO_FALLBACK}
+                busy={working || settling} onBusy={setPermissionWorking} onEnabled={setScreenshotEnabled} onReady={setScreenReady} />}
               isMac={desktopPlatform() === 'mac'} onCheck={() => void checkAudio()} onCancel={cancelAudioCheck}
               onRestart={() => {discardPreparation(); clearPreparationFeedback(); void window.electronAPI?.window.restartApp().catch(error => toast(messageOf(error), 'error'));}}
               onSource={value => {discardPreparation(); clearPreparationFeedback(); setSource(value);}}
@@ -912,9 +931,6 @@ export default function InterviewScreen() {
             <X size={15} />
           </IconButton>
         </div>
-      )}
-      {(error || state.error?.stage === 'devices' || state.error?.stage === 'capture') && (
-        <AudioPermissions onlyBlocked systemRequired={source === 'both' && (!settings.system_device_id || settings.system_device_id === SCREEN_AUDIO_FALLBACK)} screenFallback={settings.system_device_id === SCREEN_AUDIO_FALLBACK} />
       )}
       {saveState === 'offline' && (
         <div className="session-alert" role="alert">
@@ -1120,7 +1136,7 @@ export default function InterviewScreen() {
               <div
                 className={`answer-document${generating && !answer.text ? ' answer-document-waiting' : ''}`}>
                 <AnswerQuestion key={answer.id} question={answer.question_text}
-                  edited={!!answer.context_snapshot?.question_edited} editable={canAnswer} generating={generating} onEditingChange={setQuestionEditing}
+                  screenshotEnabled={screenshotEnabled} edited={!!answer.context_snapshot?.question_edited} editable={canAnswer} generating={generating} onEditingChange={setQuestionEditing}
                   onGenerate={question => !!request(answer.source_message_ids, undefined, question)} />
                 <div className="answer-format-label">
                   {answer.context_snapshot?.supplement_instruction ? '深入补充 · ' : ''}{answerStyleLabel(answer.context_snapshot?.answer_style)}
@@ -1327,8 +1343,7 @@ export default function InterviewScreen() {
                 onValueChange={selectedValue =>
                   setSettings(value => ({...value, system_device_id: selectedValue}))
                 }>
-                <SelectOption value="">仅系统音频（不采集屏幕）</SelectOption>
-                <SelectOption value={SCREEN_AUDIO_FALLBACK}>屏幕采集兼容模式（会显示共享提示）</SelectOption>
+                <SelectOption value={SCREEN_AUDIO_FALLBACK}>电脑播放声音（录屏通道）</SelectOption>
                 {settings.system_device_id && settings.system_device_id !== SCREEN_AUDIO_FALLBACK &&
                   !audioDevices.some(device => device.deviceId === settings.system_device_id) && (
                     <SelectOption value={settings.system_device_id}>之前选择的输入（暂不可用）</SelectOption>
@@ -1340,7 +1355,7 @@ export default function InterviewScreen() {
                   </SelectOption>
                 ))}
               </Select>
-              <small>默认不采集屏幕；兼容模式会显示系统共享提示。虚拟输入需先配置声音路由，普通麦克风不能代替系统音频。</small>
+              <small>系统声音通过录屏通道获取，系统可能显示共享提示；画面不保存、不上传。虚拟输入需先配置声音路由。</small>
             </label>
           )}
           {isWindows && (
@@ -1376,7 +1391,7 @@ export default function InterviewScreen() {
       )}
       {manual && (
         <Modal title="补充一个问题" onClose={() => setManual(false)}>
-          <ScreenshotQuestion disabled={!canAnswer} onBusyChange={setManualRecognizing} onText={setManualText} />
+          <ScreenshotQuestion disabled={!canAnswer || !screenshotEnabled} onBusyChange={setManualRecognizing} onText={setManualText} />
           <label className="field">
             面试官的问题
             <textarea

@@ -12,7 +12,6 @@ export function ScreenshotQuestion({disabled = false, onText, onBusyChange}: {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [permission, setPermission] = useState(false);
   const request = useRef<string | null>(null);
   const callbacks = useRef({onText, onBusyChange}); callbacks.current = {onText, onBusyChange};
   const description = useId();
@@ -42,7 +41,7 @@ export function ScreenshotQuestion({disabled = false, onText, onBusyChange}: {
     if (disabled || request.current) return;
     const id = crypto.randomUUID(); request.current = id;
     setBusy(true); callbacks.current.onBusyChange?.(true);
-    setError(''); setPermission(false); setStatus('准备框选…');
+    setError(''); setStatus('准备框选…');
     try {
       const result = await api.recognize(id);
       if (request.current !== id) return;
@@ -50,7 +49,7 @@ export function ScreenshotQuestion({disabled = false, onText, onBusyChange}: {
         callbacks.current.onText(result.text);
         setStatus('已填入识别结果，请核对文字、代码缩进与符号后生成。');
       } else if (result.status === 'cancelled') setStatus('已取消，原问题已保留。');
-      else {setError(result.message); setPermission(!!result.permission); setStatus('');}
+      else {setError(result.message); setStatus('');}
     } catch (err) {if (request.current === id) {setError(messageOf(err)); setStatus('');}}
     finally {
       if (request.current === id) {
@@ -68,8 +67,6 @@ export function ScreenshotQuestion({disabled = false, onText, onBusyChange}: {
     </div>
     {status && <p className="muted small" role="status">{status}</p>}
     {error && <p className="field-error" role="alert">{error}</p>}
-    {permission && <button type="button" className="link-button" onClick={() => {
-      void window.electronAPI?.audio.openPrivacySettings('screen').catch(err => setError(messageOf(err)));
-    }}>打开录屏权限设置</button>}
+
   </div>;
 }

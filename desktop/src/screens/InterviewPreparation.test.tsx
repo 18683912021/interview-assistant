@@ -30,9 +30,37 @@ async function setup() {
   render(<MemoryRouter><ToastProvider><InterviewScreen /></ToastProvider></MemoryRouter>);
   await userEvent.type(await screen.findByRole('textbox', {name: '面试岗位'}), '后端开发');
 }
+it('blocks starting before screen authorization without opening a system prompt or creating a session', async () => {
+  const getPermissions = vi.fn().mockResolvedValue({platform: 'darwin', screen: 'denied'});
+  const requestPermission = vi.fn();
+  Object.assign(window.electronAPI!.audio, {getPermissions, requestPermission});
+  window.electronAPI!.screenshot = {} as NonNullable<Window['electronAPI']>['screenshot'];
+  const getUserMedia = vi.fn();
+  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia}});
+  await setup();
+  await userEvent.click(screen.getByRole('button', {name: '开始面试'}));
+  expect((await screen.findByRole('alert')).textContent).toContain('请先完成录屏授权');
+  expect(requestPermission).not.toHaveBeenCalled();
+  expect(getUserMedia).not.toHaveBeenCalled();
+  expect(saveWorkspaceInterview).not.toHaveBeenCalled();
+  expect(checkAIReadiness).not.toHaveBeenCalled();
+});
+it('requests screen access only from the preparation check and then checks devices', async () => {
+  const getPermissions = vi.fn().mockResolvedValue({platform: 'darwin', screen: 'denied'});
+  const requestPermission = vi.fn(async () => {getPermissions.mockResolvedValue({platform: 'darwin', screen: 'granted'});});
+  Object.assign(window.electronAPI!.audio, {getPermissions, requestPermission});
+  window.electronAPI!.screenshot = {} as NonNullable<Window['electronAPI']>['screenshot'];
+  const getDisplayMedia = vi.fn().mockRejectedValue(new DOMException('test stop', 'NotAllowedError'));
+  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia: vi.fn(), getDisplayMedia}});
+  await setup();
+  await userEvent.click(screen.getByRole('button', {name: '授权并检查设备与权限'}));
+  await waitFor(() => expect(getDisplayMedia).toHaveBeenCalledOnce());
+  expect(requestPermission).toHaveBeenCalledExactlyOnceWith('screen');
+  expect(saveWorkspaceInterview).not.toHaveBeenCalled();
+});
 it('starting for the first time requests permission, keeps denial inline, and creates no session', async () => {
   const getUserMedia = vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError'));
-  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia}});
+  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia, getDisplayMedia: vi.fn().mockResolvedValue({getAudioTracks: () => [{readyState: 'live', stop: vi.fn()}], getVideoTracks: () => [], getTracks: () => [{stop: vi.fn()}]})}});
   await setup();
   await userEvent.click(screen.getByRole('button', {name: '开始面试'}));
   await screen.findByRole('alert');
@@ -46,7 +74,7 @@ it('starting for the first time requests permission, keeps denial inline, and cr
 it('cancelling a pending first start releases a late permission result without creating a session', async () => {
   let resolve!: (value: MediaStream) => void;
   const getUserMedia = vi.fn(() => new Promise<MediaStream>(done => {resolve = done;}));
-  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia}});
+  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia, getDisplayMedia: vi.fn().mockResolvedValue({getAudioTracks: () => [{readyState: 'live', stop: vi.fn()}], getVideoTracks: () => [], getTracks: () => [{stop: vi.fn()}]})}});
   await setup();
   await userEvent.click(screen.getByRole('button', {name: '开始面试'}));
   await userEvent.click(await screen.findByRole('button', {name: '取消检查'}));
@@ -61,7 +89,7 @@ it('cancelling a pending first start releases a late permission result without c
 
 it('shows required guidance at the role field and focuses it before any audio or API work', async () => {
   const getUserMedia = vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError'));
-  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia}});
+  vi.stubGlobal('navigator', {userAgent: 'Mac', mediaDevices: {getUserMedia, getDisplayMedia: vi.fn().mockResolvedValue({getAudioTracks: () => [{readyState: 'live', stop: vi.fn()}], getVideoTracks: () => [], getTracks: () => [{stop: vi.fn()}]})}});
   render(<MemoryRouter><ToastProvider><InterviewScreen /></ToastProvider></MemoryRouter>);
   const role = await screen.findByRole('textbox', {name: '面试岗位'});
   expect(role.getAttribute('aria-required')).toBe('true');

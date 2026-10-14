@@ -50,12 +50,12 @@ it('cancels work, ignores late recognition, and preserves drafts on failure', as
   expect(text).not.toHaveBeenCalled();
   expect((screen.getByRole('button', {name: '截图识别'}) as HTMLButtonElement).disabled).toBe(false);
 });
-it('offers a targeted permission action and cancels when the interview ends or editor unmounts', async () => {
+it('does not open system settings during interviews and cancels when the interview ends or editor unmounts', async () => {
   const {rerender, unmount} = render(<ScreenshotQuestion onText={vi.fn()} />);
   await userEvent.click(screen.getByRole('button', {name: '截图识别'}));
   await act(async () => pending[0]!({status: 'error', message: '请允许录屏权限', permission: true}));
-  await userEvent.click(screen.getByRole('button', {name: '打开录屏权限设置'}));
-  expect(window.electronAPI!.audio.openPrivacySettings).toHaveBeenCalledWith('screen');
+  expect(screen.queryByRole('button', {name: '打开录屏权限设置'})).toBeNull();
+  expect(window.electronAPI!.audio.openPrivacySettings).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole('button', {name: '截图识别'}));
   rerender(<ScreenshotQuestion onText={vi.fn()} disabled />);
   expect(cancel).toHaveBeenCalledWith(recognize.mock.calls[1]![0]);

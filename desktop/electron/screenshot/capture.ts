@@ -131,12 +131,7 @@ export function registerScreenshotIPC(getMainWindow: () => BrowserWindow | null)
     const started = Date.now();
     try {
       if (process.platform === 'darwin' && systemPreferences.getMediaAccessStatus('screen') !== 'granted') {
-        progress('permission');
-        if (systemPreferences.getMediaAccessStatus('screen') === 'not-determined') {
-          await abortable(desktopCapturer.getSources({types: ['screen'], thumbnailSize: {width: 0, height: 0}}), signal);
-        }
-        if (systemPreferences.getMediaAccessStatus('screen') !== 'granted')
-          return {status: 'error', permission: true, message: '截图需要录屏权限。请允许「AI面试助手」录制屏幕，再回来重试；若系统要求重启，请先保存面试。'};
+        return {status: 'error', permission: true, message: '截图权限未就绪，本场请先输入问题。请在下次面试准备时完成授权；当前不会打开系统授权窗口。'};
       }
       if (signal.aborted) return {status: 'cancelled'};
       ocr.warm();

@@ -115,32 +115,38 @@ describe('desktop system audio permissions', () => {
     const callback = vi.fn();
     await handler({ audioRequested: true }, callback);
     expect(callback).toHaveBeenCalledExactlyOnceWith({ video: { id: 'screen:1:0', name: 'Display' }, audio: 'loopback' });
+    expect(mocks.dialog).not.toHaveBeenCalled();
     expect(mocks.sources).toHaveBeenCalledWith({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
     expect(mocks.check.mock.calls[0][0](null, 'media')).toBe(true);
     expect(mocks.check.mock.calls[0][0](null, 'display-capture')).toBe(true);
     expect(mocks.check.mock.calls[0][0](null, 'geolocation')).toBe(false);
   });
 
-  it('does not enumerate or capture a screen when the user cancels', async () => {
-    mocks.dialog.mockResolvedValue({ response: 1 });
+  it('does not open authorization or enumerate screens when permission is unavailable', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    mocks.status.mockReturnValue('denied');
     allowMediaPermissions();
     const callback = vi.fn();
     await mocks.display.mock.calls[0][0]({ audioRequested: true }, callback);
     expect(callback).toHaveBeenCalledExactlyOnceWith(null);
     expect(mocks.sources).not.toHaveBeenCalled();
+    expect(mocks.dialog).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 
-  it('preserves a cancelled request reason only for its requesting frame and consumes it once', async () => {
+  it('preserves permission failure only for its requesting frame and consumes it once', async () => {
     const frame = {} as Electron.WebFrameMain;
-    mocks.dialog.mockResolvedValue({ response: 1 });
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    mocks.status.mockReturnValue('denied');
     allowMediaPermissions();
     const callback = vi.fn();
     await mocks.display.mock.calls[0][0]({ audioRequested: true, frame }, callback);
     expect(callback).toHaveBeenCalledExactlyOnceWith(null);
     expect(takeDisplayCaptureFailure({} as Electron.WebFrameMain)).toBeNull();
-    expect(takeDisplayCaptureFailure(frame)).toMatchObject({ code: 'E_CAPTURE_CANCELLED' });
+    expect(takeDisplayCaptureFailure(frame)).toMatchObject({ code: 'E_SCREEN_PERMISSION' });
     expect(takeDisplayCaptureFailure(frame)).toBeNull();
     expect(takeDisplayCaptureFailure(null)).toBeNull();
+    vi.restoreAllMocks();
   });
 
   it.each(['reject', 'empty'])('explains missing macOS screen permission when sources %s', async result => {
@@ -162,7 +168,7 @@ describe('desktop system audio permissions', () => {
 
   it('does not reuse an earlier failure after a successful retry', async () => {
     const frame = {} as Electron.WebFrameMain;
-    mocks.dialog.mockResolvedValueOnce({ response: 1 }).mockResolvedValueOnce({ response: 0 });
+    mocks.sources.mockRejectedValueOnce(new Error('source unavailable')).mockResolvedValueOnce([{id: 'screen:1:0', name: 'Display'}]);
     allowMediaPermissions();
     const handler = mocks.display.mock.calls[0][0];
     await handler({ audioRequested: true, frame }, vi.fn());

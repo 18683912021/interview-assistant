@@ -12,7 +12,7 @@ it('switch controls the source without claiming OS permission or silently starti
   await userEvent.click(screen.getByRole('switch', {name: '采集系统音频'}));
   expect(p.onSource).toHaveBeenCalledWith('mic');
   expect(p.onCheck).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole('button', {name: '授权并检查音频'}));
+  await userEvent.click(screen.getByRole('button', {name: '授权并检查设备与权限'}));
   expect(p.onCheck).toHaveBeenCalledOnce();
 });
 it('places failure and recovery alongside the correct input, with microphone-only fallback', async () => {

@@ -1,4 +1,5 @@
 import type {Settings} from '../api/workspace';
+import {SCREEN_AUDIO_FALLBACK} from './capture-preparation';
 
 export type DesktopPlatform = 'mac' | 'windows' | 'other';
 type DeviceSettings = Pick<Settings, 'microphone_id' | 'system_device_id'>;
@@ -33,6 +34,8 @@ export function withLocalAudioDevices(
 ): Settings {
   const local = read(storage, keyFor(platform)),
     legacy = read(storage, legacyKey);
+  const systemDevice = local.system_device_id ??
+    (platform === 'mac' ? (legacy.system_device_id ?? settings.system_device_id) : '');
   return {
     ...settings,
     // Keep the existing Mac preference migration. Windows must not reuse a
@@ -41,9 +44,9 @@ export function withLocalAudioDevices(
       local.microphone_id ??
       legacy.microphone_id ??
       (platform === 'mac' ? settings.microphone_id : ''),
-    system_device_id:
-      local.system_device_id ??
-      (platform === 'mac' ? (legacy.system_device_id ?? settings.system_device_id) : ''),
+    // Migrate the old empty Core Audio default to the requested screen-audio route.
+    // Explicit virtual inputs and Windows endpoints remain unchanged.
+    system_device_id: platform === 'mac' && !systemDevice ? SCREEN_AUDIO_FALLBACK : systemDevice,
   };
 }
 

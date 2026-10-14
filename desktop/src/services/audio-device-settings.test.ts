@@ -26,6 +26,13 @@ const storage = () => {
   };
 };
 describe('platform-local audio devices', () => {
+  it('migrates empty Mac native-audio preferences to screen audio without changing Windows', () => {
+    const local = storage();
+    local.setItem('interview_audio_devices:mac', JSON.stringify({system_device_id: ''}));
+    expect(withLocalAudioDevices(settings, 'mac', local).system_device_id).toBe('__screen_capture__');
+    expect(withLocalAudioDevices({...settings, system_device_id: ''}, 'mac', storage()).system_device_id).toBe('__screen_capture__');
+    expect(withLocalAudioDevices(settings, 'windows', local).system_device_id).toBe('');
+  });
   it('preserves existing Mac device choices when migrating to per-platform storage', () => {
     const local = storage();
     local.setItem(

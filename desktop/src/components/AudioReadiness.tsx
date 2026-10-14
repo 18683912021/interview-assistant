@@ -1,4 +1,4 @@
-import type {Ref} from 'react';
+import type {Ref, ReactNode} from 'react';
 import {Check, Circle, LoaderCircle, Mic, Monitor, AlertCircle} from 'lucide-react';
 import type {AudioPreparationStep} from '../services/capture-preparation';
 
@@ -13,14 +13,16 @@ type Props = {
   onRestart?: () => void;
   onSettings: (source: 'mic' | 'system') => void;
   isMac: boolean;
+  screenPreparation?: ReactNode;
+  screenReady?: boolean;
 };
 
-export function AudioReadiness({source, steps, busy, sectionRef, onSource, onCheck, onCancel, onRestart, onSettings, isMac}: Props) {
-  const checked = steps.mic?.status === 'ready' && (source === 'mic' || ['ready', 'quiet'].includes(steps.system?.status || ''));
+export function AudioReadiness({source, steps, busy, sectionRef, onSource, onCheck, onCancel, onRestart, onSettings, isMac, screenPreparation, screenReady = true}: Props) {
+  const checked = screenReady && steps.mic?.status === 'ready' && (source === 'mic' || ['ready', 'quiet'].includes(steps.system?.status || ''));
   const checking = Object.values(steps).some(step => step.status === 'checking');
   return <section className="audio-readiness" ref={sectionRef} tabIndex={-1} aria-label="面试音频准备">
-    <h2>02 / 音频准备</h2>
-    <p className="audio-readiness-intro">首次使用需要系统授权。点击开始也会自动检查，不用提前去系统里找。</p>
+    <h2>02 / 设备与权限准备</h2>
+    <p className="audio-readiness-intro">请在共享屏幕前完成授权与检查，面试中不再弹出系统授权窗口。</p>
     {(['mic', 'system'] as const).map(kind => {
       const enabled = kind === 'mic' || source === 'both';
       const step = enabled ? steps[kind] : undefined;
@@ -41,16 +43,17 @@ export function AudioReadiness({source, steps, busy, sectionRef, onSource, onChe
           <span>{enabled ? label : '未启用'}</span>
         </div>
         <p>{!enabled ? '仅记录麦克风声音；适合练习或手动输入问题。' : step?.message ||
-          (kind === 'mic' ? '用于记录你的回答，首次检查时请在系统弹框中点“允许”。' : '用于记录电脑播放的面试官声音。Mac 自检会自动播放一声短测试音，无需手动播放；仅在本机检查。')}</p>
+          (kind === 'mic' ? '用于记录你的回答，首次检查时请在系统弹框中点“允许”。' : '用于记录电脑播放的面试官声音。Mac 使用录屏通道获取声音，与截图共用录屏权限；画面不保存、不上传。')}</p>
         {status === 'error' && <div className="audio-readiness-actions">
           <button type="button" className="link-button" disabled={busy} onClick={() => onSettings(kind)}>{isMac ? '打开系统权限设置' : '检查音频设备'}</button>
           {kind === 'system' && <button type="button" className="link-button" disabled={busy} onClick={() => onSource('mic')}>先用麦克风</button>}
         </div>}
       </div>;
     })}
+    {screenPreparation}
     <button type="button" className="btn audio-check" onClick={onCheck} disabled={busy}>
       {busy ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}
-      {busy ? checking ? '请按上方提示完成检查…' : '正在准备面试…' : checked ? '重新检查音频' : '授权并检查音频'}
+      {busy ? checking ? '请按上方提示完成检查…' : '正在准备面试…' : checked ? '重新检查设备与权限' : '授权并检查设备与权限'}
     </button>
     {busy && checking && <button type="button" className="link-button audio-check-cancel" onClick={onCancel}>取消检查</button>}
     {isMac && onRestart && Object.values(steps).some(step => ['error', 'quiet'].includes(step.status)) && <details className="permission-help">
