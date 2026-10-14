@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
+import {act, cleanup, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {MemoryRouter} from 'react-router-dom';
@@ -62,4 +62,82 @@ it('completed interview remains read-only', async () => {
   await screen.findByText('原答案');
   expect(screen.queryByRole('button', {name: '编辑问题'})).toBeNull();
   expect(within(screen.getByRole('region', {name: '本次回答的问题'})).getByText('原始问题')).toBeTruthy();
+});
+
+it('allows consecutive edits while streaming, after completion, cancellation and failure', async () => {
+  const pending: {receive: Parameters<typeof streamJSON>[2]; signal: AbortSignal; resolve: () => void; reject: (error: Error) => void}[] = [];
+  vi.mocked(streamJSON).mockImplementation((_path, _body, receive, signal) => new Promise<void>((resolve, reject) => {
+    pending.push({receive, signal, resolve, reject});
+  }));
+  setup();
+  await screen.findByText('原答案');
+  let currentQuestion = '原始问题';
+  const edit = async (question: string) => {
+    const nextRequest = pending.length + 1;
+    const button = screen.getByRole('button', {name: '编辑问题'}) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    await userEvent.click(button);
+    expect((screen.getByRole('textbox', {name: '编辑本次问题'}) as HTMLTextAreaElement).value).toBe(currentQuestion);
+    fireEvent.change(screen.getByRole('textbox', {name: '编辑本次问题'}), {target: {value: question}});
+    await userEvent.click(screen.getByRole('button', {name: '重新生成'}));
+    await waitFor(() => expect(pending).toHaveLength(nextRequest));
+    expect(within(screen.getByRole('region', {name: '本次回答的问题'})).getByText(question)).toBeTruthy();
+    currentQuestion = question;
+  };
+  await edit('第一次修改');
+  act(() => pending[0]!.receive({type: 'delta', text: '第一次的部分回答'}));
+  // Editing and cancelling the draft must not interrupt the existing stream.
+  await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
+  expect(pending[0]!.signal.aborted).toBe(false);
+  fireEvent.change(screen.getByRole('textbox'), {target: {value: '不提交的修改'}});
+  await userEvent.click(screen.getByRole('button', {name: '取消'}));
+  expect(pending[0]!.signal.aborted).toBe(false);
+  expect(streamJSON).toHaveBeenCalledTimes(1);
+
+  await edit('第二次修改');
+  expect(pending[0]!.signal.aborted).toBe(true);
+  await act(async () => {
+    // Late chunks from an aborted generation cannot replace the new question or answer.
+    pending[0]!.receive({type: 'delta', text: '旧请求迟到的内容'});
+    pending[0]!.receive({type: 'done', text: '', status: 'completed'});
+    pending[0]!.resolve();
+    pending[1]!.receive({type: 'delta', text: '第二次完整回答'});
+    pending[1]!.receive({type: 'done', text: '', status: 'completed'});
+    pending[1]!.resolve();
+  });
+  expect(screen.queryByText('旧请求迟到的内容')).toBeNull();
+  await edit('第三次修改');
+  await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
+  fireEvent.change(screen.getByRole('textbox'), {target: {value: '第四次修改'}});
+  await userEvent.click(screen.getByRole('button', {name: '停止生成'}));
+  expect(pending[2]!.signal.aborted).toBe(true);
+  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('第四次修改');
+  await userEvent.click(screen.getByRole('button', {name: '重新生成'}));
+  currentQuestion = '第四次修改';
+  await act(async () => {pending[2]!.resolve(); pending[3]!.reject(new Error('测试连接中断'));});
+  await screen.findByText('测试连接中断');
+  await edit('第五次修改');
+  await act(async () => {
+    pending[4]!.receive({type: 'delta', text: '第五次完整回答'});
+    pending[4]!.receive({type: 'done', text: '', status: 'completed'});
+    pending[4]!.resolve();
+  });
+  // Reopening after every completed answer also has no one-edit limit.
+  for (const question of ['第六次修改', '第七次修改']) {
+    await edit(question);
+    await act(async () => {
+      pending.at(-1)!.receive({type: 'delta', text: `完整回答：${question}`});
+      pending.at(-1)!.receive({type: 'done', text: '', status: 'completed'});
+      pending.at(-1)!.resolve();
+    });
+  }
+  expect(streamJSON).toHaveBeenCalledTimes(7);
+  vi.mocked(streamJSON).mock.calls.forEach((call, index) => {
+    expect(call[1]).toMatchObject({question_text: ['第一次修改', '第二次修改', '第三次修改', '第四次修改', '第五次修改', '第六次修改', '第七次修改'][index],
+      source_message_ids: ['one'], source_revisions: [1], context: {question_edited: true}});
+  });
+  // Original transcript and its answer remain available after all edits.
+  await userEvent.click(screen.getByText('原始问题'));
+  await screen.findByText('原答案');
+  expect(streamJSON).toHaveBeenCalledTimes(7);
 });

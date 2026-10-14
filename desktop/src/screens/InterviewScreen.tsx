@@ -1113,7 +1113,7 @@ export default function InterviewScreen() {
               <div
                 className={`answer-document${generating && !answer.text ? ' answer-document-waiting' : ''}`}>
                 <AnswerQuestion key={answer.id} question={answer.question_text}
-                  edited={!!answer.context_snapshot?.question_edited} editable={canAnswer} busy={generating} onEditingChange={setQuestionEditing}
+                  edited={!!answer.context_snapshot?.question_edited} editable={canAnswer} generating={generating} onEditingChange={setQuestionEditing}
                   onGenerate={question => !!request(answer.source_message_ids, undefined, question)} />
                 <div className="answer-format-label">
                   {answer.context_snapshot?.supplement_instruction ? '深入补充 · ' : ''}{answerStyleLabel(answer.context_snapshot?.answer_style)}
@@ -1180,12 +1180,12 @@ export default function InterviewScreen() {
                 ? ` · 首字 ${((answer.first_token_at - answer.timestamp) / 1000).toFixed(1)}s`
                 : ''}
             </span>
-            {answer && !questionEditing &&
+            {answer &&
               (generating ? (
                 <button className="link-button" onClick={() => cancelAnswer(answer.request_id)}>
                   停止生成
                 </button>
-              ) : (
+              ) : !questionEditing ? (
                 <button
                   className="link-button"
                   disabled={!canAnswer}
@@ -1193,7 +1193,7 @@ export default function InterviewScreen() {
                   {answer.context_snapshot?.answer_style !== session.preferences.answer_style
                     ? `按${answerStyleLabel(session.preferences.answer_style)}回答` : '重新回答'}
                 </button>
-              ))}
+              ) : null)}
           </footer>
         </div>
       </SessionSplit>

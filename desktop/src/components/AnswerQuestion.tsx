@@ -1,11 +1,11 @@
 import {useEffect, useRef, useState} from 'react';
 import {Pencil, RotateCcw} from 'lucide-react';
 
-export function AnswerQuestion({question, edited = false, editable, busy, onGenerate, onEditingChange}: {
+export function AnswerQuestion({question, edited = false, editable, generating, onGenerate, onEditingChange}: {
   question: string;
   edited?: boolean;
   editable: boolean;
-  busy: boolean;
+  generating: boolean;
   onGenerate: (question: string) => boolean;
   onEditingChange?: (editing: boolean) => void;
 }) {
@@ -21,7 +21,7 @@ export function AnswerQuestion({question, edited = false, editable, busy, onGene
   }, [editing, editable, onEditingChange]);
   const open = () => {setDraft(question); setError(''); setEditing(true);};
   const generate = () => {
-    if (submitting.current || !editable || busy) return;
+    if (submitting.current || !editable) return;
     const value = draft.trim();
     if (!value || value.length > 16000) {
       setError(!value ? '请填写问题后再生成。' : '问题最多 16000 字，请精简后再生成。');
@@ -37,14 +37,14 @@ export function AnswerQuestion({question, edited = false, editable, busy, onGene
   return <section className="answer-question-block" aria-label="本次回答的问题">
     <div className="answer-question-heading">
       <span>本次问题{edited ? ' · 已编辑' : ''}</span>
-      {editable && !editing && <button type="button" className="btn btn-quiet" disabled={busy} onClick={open}>
+      {editable && !editing && <button type="button" className="btn btn-quiet" onClick={open}>
         <Pencil size={13} />编辑问题
       </button>}
     </div>
     {editing && editable ? <form className="answer-question-editor" onSubmit={event => {event.preventDefault(); generate();}}>
       <label htmlFor="answer-question-input" className="sr-only">编辑本次问题</label>
       <textarea id="answer-question-input" ref={input}
-        rows={4} value={draft} disabled={busy} aria-invalid={!!error}
+        rows={4} value={draft} aria-invalid={!!error}
         aria-describedby={error ? 'answer-question-error' : 'answer-question-hint'}
         onChange={event => {setDraft(event.target.value); setError('');}}
         onKeyDown={event => {
@@ -53,10 +53,10 @@ export function AnswerQuestion({question, edited = false, editable, busy, onGene
           else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {event.preventDefault(); generate();}
         }} />
       {error && <p id="answer-question-error" className="field-error" role="alert">{error}</p>}
-      <p id="answer-question-hint" className="muted small">原始对话和旧答案会保留。</p>
+      <p id="answer-question-hint" className="muted small">{generating ? '提交后停止当前生成，按新问题重新回答。' : ''}原始对话和旧答案会保留。</p>
       <div className="answer-question-actions">
-        <button type="button" className="btn" disabled={busy} onClick={() => {setEditing(false); setError('');}}>取消</button>
-        <button type="submit" className="btn btn-primary" disabled={busy}><RotateCcw size={14} />重新生成</button>
+        <button type="button" className="btn" onClick={() => {setEditing(false); setError('');}}>取消</button>
+        <button type="submit" className="btn btn-primary"><RotateCcw size={14} />重新生成</button>
       </div>
     </form> : <div className="answer-question">{question}</div>}
   </section>;

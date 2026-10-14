@@ -6,7 +6,7 @@ import {AnswerQuestion} from './AnswerQuestion';
 afterEach(cleanup);
 it('edits inline, cancels without changing the displayed question, and generates the trimmed draft', async () => {
   const generate = vi.fn(() => true);
-  render(<AnswerQuestion question="原始问题" editable busy={false} onGenerate={generate} />);
+  render(<AnswerQuestion question="原始问题" editable generating={false} onGenerate={generate} />);
   await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
   const field = screen.getByRole('textbox', {name: '编辑本次问题'});
   expect(document.activeElement).toBe(field);
@@ -22,7 +22,7 @@ it('edits inline, cancels without changing the displayed question, and generates
 });
 it('validates empty/oversized questions inline and preserves the draft on a rejected request', async () => {
   const generate = vi.fn(() => false);
-  render(<AnswerQuestion question="原问题" editable busy={false} onGenerate={generate} />);
+  render(<AnswerQuestion question="原问题" editable generating={false} onGenerate={generate} />);
   await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
   const field = screen.getByRole('textbox');
   fireEvent.change(field, {target: {value: '   '}});
@@ -37,20 +37,20 @@ it('validates empty/oversized questions inline and preserves the draft on a reje
   expect(screen.getByRole('alert').textContent).toContain('暂时无法生成');
   expect((field as HTMLTextAreaElement).value).toBe('保留这份草稿');
 });
-it('blocks editing during generation or after completion, including an already open editor', async () => {
+it('allows editing during generation but becomes read-only after interview completion', async () => {
   const generate = vi.fn(() => true);
-  const {rerender} = render(<AnswerQuestion question="问题" editable busy onGenerate={generate} />);
-  expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(true);
-  rerender(<AnswerQuestion question="问题" editable busy={false} onGenerate={generate} />);
+  const {rerender} = render(<AnswerQuestion question="问题" editable generating onGenerate={generate} />);
+  expect((screen.getByRole('button') as HTMLButtonElement).disabled).toBe(false);
   await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
-  rerender(<AnswerQuestion question="问题" editable={false} busy={false} onGenerate={generate} />);
+  expect(screen.getByText('提交后停止当前生成，按新问题重新回答。原始对话和旧答案会保留。')).toBeTruthy();
+  rerender(<AnswerQuestion question="问题" editable={false} generating={false} onGenerate={generate} />);
   expect(screen.queryByRole('textbox')).toBeNull();
   expect(screen.queryByRole('button')).toBeNull();
   expect(generate).not.toHaveBeenCalled();
 });
 it('supports multiline typing, ignores IME confirmation, and submits only the explicit shortcut', async () => {
   const generate = vi.fn(() => true);
-  render(<AnswerQuestion question="问题" editable busy={false} onGenerate={generate} />);
+  render(<AnswerQuestion question="问题" editable generating={false} onGenerate={generate} />);
   await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
   const field = screen.getByRole('textbox');
   fireEvent.keyDown(field, {key: 'Enter'});
