@@ -22,6 +22,7 @@ CONTENT_IDLE_TIMEOUT = 15.0
 TOTAL_ANSWER_TIMEOUT = 60.0
 WRITTEN_ANSWER_TIMEOUT = 120.0
 ANSWER_TOKEN_BUDGETS = {"conversational": 2400, "structured": 3200, "written": 8000}
+ANSWER_TOKEN_BUDGETS["coding"] = ANSWER_TOKEN_BUDGETS["written"]
 MAX_ANSWER_TOKENS = max(ANSWER_TOKEN_BUDGETS.values())
 
 
@@ -29,9 +30,10 @@ def answer_preferences(context: dict[str, Any] | None = None) -> tuple[str, str]
     context = context or {}
     style = context.get("answer_style", "conversational")
     # Keep older clients' Chinese preference and length names usable.
-    if style == "标准书面":
-        style = "written"
-    if style not in ("conversational", "structured", "written"):
+    if not isinstance(style, str):
+        style = "conversational"
+    style = {"标准书面": "written", "笔试机试": "coding"}.get(style, style)
+    if style not in ANSWER_TOKEN_BUDGETS:
         style = "conversational"
     length = context.get("answer_length", "standard")
     length = {"short": "brief", "balanced": "standard"}.get(length, length)
@@ -52,6 +54,16 @@ def answer_format_rule(context: dict[str, Any], language: str) -> str:
     detail_rule = """回答质量：优先完整回答题目，再把关键环节解释到能继续讲解的程度。机制说明执行顺序或状态变化，方案说明实施细节和选择依据；用相关例子把原因与结果连起来。
 通用题先给覆盖不同场景的通用方案；简历只辅助判断技术深度，题目未要求项目示例时，不引入简历的专属业务，也不把答案收窄为简历里某个框架的教程。各部分各有作用，同一知识点集中讲清一次。提到作为主要维度的概念就给出实质解释，不只在开头报名称。必要条件放在对应做法旁，少见例外只在影响本题结论时展开。
 对复杂题，正文回答清楚以后可以补充一个尚未涉及的实际场景，直接解释原因与处理方法，不只列追问标题；没有新信息就结束。篇幅是参考，不用重复内容凑字数，也不要把完整解释压缩成名词清单。"""
+    if style == "coding":
+        return f"""表达方式：笔试机试。直接给出候选人可以实现并向面试官解释的解答，完整程度与标准书面回答相当，输出额度优先用于正确实现、讲解和验证，不为凑字数拉长简单题。
+开头用 1～2 句话说明主要解法和选择理由，随后按题目需要组织“解题思路、代码实现、执行示例、复杂度与边界”。这是可讲解的解题说明，不输出内部思考过程。理论笔试题给出充分论证与相关示例，不强行编造代码；明确的补充请求只展开指定部分。
+输入与约束：以题面、截图识别后校对的文字和用户明确要求为准，先说明影响实现的关键假设。语言和函数签名优先遵循题目，未指定时根据岗位或最近明确选择采用一种合适语言并简短声明，不同时铺开多种语言。不能把假定的规模、运行环境或测试结果说成已知事实。逐项核对题面保证与额外假设：例如每个输入是安全整数，不代表累加结果仍在安全整数范围，须给出明确的溢出处理或精确表示方案并说明返回类型；输入校验不应擅自把错误输入当作空数据。
+思路：解释使用的数据结构、核心不变量和处理顺序，说明为何满足题意；有直观方案与更优方案时，简述取舍后重点实现一种可靠方案，不堆多个半成品。
+代码：给出完整的核心实现、必要导入、函数签名与返回值，题目指定标准输入输出时提供可运行的输入输出处理。代码围栏标注正确语言，不用省略号或 TODO 代替核心逻辑，不依赖未声明的辅助函数或库。
+丰富注释：代码本身就是候选人逐段讲解的讲稿，不只挑几个关键步骤写注释。函数入口说明输入输出和约束；主要变量和数据结构声明旁说明含义、初始值及选择理由；每个逻辑段、循环和分支说明处理什么情况、为什么这样判断；状态更新说明更新前后的含义以及为何必须按此顺序；边界判断、结果构造和返回值都要有相邻注释。短实现尽量为每条有业务或算法意义的语句提供解释，长实现按紧密相连的逻辑分组，不能让大段核心代码没有注释。注释解释做什么以及为什么，重点交代循环不变量、指针移动与终止条件、去重或排序依据、失败处理与资源释放等适用细节；容易被追问的步骤说明换一种写法可能造成的影响。不能只在函数前写一段总说明，或把应在代码旁的解释全部移到代码块外。对括号、空行等纯语法不凑注释，不添加无意义的“我认为”。注释清晰、准确、随代码顺序可直接讲述，使用本次回答语言和合法注释语法，JSON 等不支持注释的内容保持合法。
+验证与讲解：用一个具体输入串起关键状态变化、输出和原因，让候选人能回答“这一步为什么这样写”。给出可直接运行或手工核对的典型用例及预期输出，覆盖与题目有关的空输入、重复值、极值、异常或无解等边界，不机械罗列不适用情况，不谎称代码已实际运行。分别解释时间复杂度和额外空间复杂度，定义变量并计入排序、递归栈、拷贝或输出占用等实际成本。
+如果题目涉及 SQL、前端交互、异步并发或工程实现，按该题的正确性标准说明重复记录、空值、竞态、失败处理或资源释放，避免套用无关的算法模板。正文、注释、示例和复杂度必须互相一致。仍有重要追问时补充一项新约束及其调整办法，不能重复正文。
+{detail_rule}"""
     if style == "written":
         size = "1800～2300 个英文单词" if language == "en" else "2800～3800 字"
         return f"""表达方式：标准书面回答。提供候选人可以直接向面试官讲解的完整答案，兼顾阅读定位和深入解释。
@@ -119,7 +131,15 @@ def build_messages(question: str, track: str | None, language: str,
             for item in recent[-8:] if isinstance(item, dict)
         ]
     request = {"context": background, "question": question}
-    if answer_preferences(background)[0] == "written":
+    style = answer_preferences(background)[0]
+    if style == "coding":
+        request["deliverable"] = (
+            "直接交付笔试机试解答：说明解法与关键假设，给出完整实现及丰富的解释性代码注释，"
+            "用具体输入演示关键过程，解释时间/空间复杂度并提供边界用例和预期输出。"
+            "注释贯穿变量初始化、每个逻辑段、循环分支、状态更新、边界和返回结果，解释做什么与为什么，不能只标注少数关键步骤，便于候选人顺着代码现场讲解。"
+            "理论笔试题不强行加代码，简单题不凑篇幅，补充请求只回答指定方面。"
+        )
+    elif style == "written":
         # Keep the deliverable beside the question as well as the system rules.
         # Long resumes must not turn a complete written answer into resume advice.
         request["deliverable"] = (
@@ -180,7 +200,7 @@ class LLMService:
         client = await self._get_client()
         loop = asyncio.get_running_loop()
         started = loop.time()
-        total_deadline = started + (WRITTEN_ANSWER_TIMEOUT if answer_preferences(context)[0] == "written" else TOTAL_ANSWER_TIMEOUT)
+        total_deadline = started + (WRITTEN_ANSWER_TIMEOUT if answer_preferences(context)[0] in ("written", "coding") else TOTAL_ANSWER_TIMEOUT)
         content_deadline = min(started + FIRST_CONTENT_TIMEOUT, total_deadline)
         received_content = False
         try:

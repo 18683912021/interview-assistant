@@ -141,6 +141,8 @@ export default function InterviewScreen() {
     [manualText, setManualText] = useState('');
   const [manualRecognizing, setManualRecognizing] = useState(false);
   const manualInput = useRef<HTMLTextAreaElement>(null);
+  const manualSubmitted = useRef(false);
+  useEffect(() => {if (manual) manualSubmitted.current = false;}, [manual]);
   useEffect(() => {
     if (manual && !manualRecognizing) manualInput.current?.focus();
   }, [manual, manualRecognizing]);
@@ -381,9 +383,9 @@ export default function InterviewScreen() {
   const live = state.captureState === 'capturing';
   const generating = answer?.status === 'loading' || answer?.status === 'streaming';
   const canAnswer = !!session && session.status !== 'completed' && state.captureState !== 'completed' && !busy;
-  const request = (ids: string[], instruction?: string, questionOverride?: string) => {
+  const request = (source: string[] | ConversationMessage, instruction?: string, questionOverride?: string) => {
     if (!session || !canAnswer) return null;
-    const id = sendLLMQuery(session.id, ids, {
+    const id = sendLLMQuery(session.id, source, {
       role: session.role,
       job_description: session.job_description,
       resume_text: session.resume_snapshot?.text || '',
@@ -393,10 +395,23 @@ export default function InterviewScreen() {
     }, instruction && answer ? {text: answer.text, instruction} : undefined, questionOverride);
     if (id) {
       setAnswerId(id);
-      setSelected(ids);
+      setSelected(Array.isArray(source) ? source : [source.id]);
       setPane('answer');
     }
     return id;
+  };
+  const submitManualQuestion = () => {
+    const text = manualText.trim();
+    if (!text || !canAnswer || manualRecognizing || manualSubmitted.current) return;
+    manualSubmitted.current = true;
+    const id = request({
+      id: genId('manual'), role: 'interviewer', text,
+      status: 'done', timestamp: Date.now(), revision: 1,
+    });
+    if (!id) {manualSubmitted.current = false; return;}
+    setManualText('');
+    setManual(false);
+    setMulti(false);
   };
   const answerQuestionOverride = answer?.context_snapshot?.question_edited ? answer.question_text : undefined;
   const clickMessage = (id: string) => {
@@ -1412,22 +1427,8 @@ export default function InterviewScreen() {
             <button
               className="btn btn-primary"
               disabled={!manualText.trim() || !canAnswer || manualRecognizing}
-              onClick={() => {
-                dispatch({
-                  type: 'add_message',
-                  message: {
-                    id: genId('manual'),
-                    role: 'interviewer',
-                    text: manualText.trim(),
-                    status: 'done',
-                    timestamp: Date.now(),
-                    revision: 1,
-                  },
-                });
-                setManualText('');
-                setManual(false);
-              }}>
-              添加到对话
+              onClick={submitManualQuestion}>
+              提交并回答
             </button>
           </div>
         </Modal>

@@ -13,7 +13,7 @@ import {messageOf} from '../utils/error-message';
 import {streamJSON} from '../api/stream';
 import {resumeExcerpt, questionContext, previousReference} from '../services/answer-context';
 import type {Settings} from '../api/workspace';
-import type {ConversationAnswer} from '../store/types';
+import type {ConversationAnswer, ConversationMessage} from '../store/types';
 import {microphoneEchoMode, type MicrophoneEchoMode} from '../services/microphone-capture';
 import {
   assertSystemOutput,
@@ -451,9 +451,15 @@ export function useAudioCapture() {
   );
 
   const sendLLMQuery = useCallback(
-    (sessionId: string, messageIds: string[], context: AnswerContext, supplement?: {text: string; instruction: string}, questionOverride?: string): string | null => {
+    (sessionId: string, source: string[] | ConversationMessage, context: AnswerContext, supplement?: {text: string; instruction: string}, questionOverride?: string): string | null => {
       if (stateRef.current.captureState === 'completed') return null;
-      const selected = stateRef.current.conversation.filter(message =>
+      // A submitted draft must be available to this request immediately, before React
+      // renders the queued add_message action. Use the same snapshot for its context.
+      const newMessage = Array.isArray(source) ? undefined : source;
+      const messageIds = Array.isArray(source) ? source : [source.id];
+      const conversation = newMessage
+        ? [...stateRef.current.conversation, newMessage] : stateRef.current.conversation;
+      const selected = conversation.filter(message =>
         messageIds.includes(message.id),
       );
       if (!selected.length) return null;
@@ -482,8 +488,8 @@ export function useAudioCapture() {
         role: context.role.slice(0, 300),
         job_description: context.job_description.slice(0, 5000),
         resume_text: resumeExcerpt(context.resume_text, question),
-        recent_messages: questionContext(stateRef.current.conversation, messageIds),
-        previous_reference_answer: previousReference(stateRef.current.conversation, stateRef.current.answers, messageIds),
+        recent_messages: questionContext(conversation, messageIds),
+        previous_reference_answer: previousReference(conversation, stateRef.current.answers, messageIds),
         ...(supplement ? {previous_answer: supplement.text.slice(0, 12000), supplement_instruction: supplement.instruction} : {}),
       };
       const answer: ConversationAnswer = {
@@ -498,6 +504,7 @@ export function useAudioCapture() {
         context_version: context.context_version,
         context_snapshot: snapshot,
       };
+      if (newMessage) dispatch({type: 'add_message', message: newMessage});
       dispatch({type: 'answer_requested', answer});
       const controller = new AbortController();
       answerRequests.current.set(requestId, controller);

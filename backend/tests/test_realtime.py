@@ -139,7 +139,7 @@ async def test_llm_wire_thinking_disabled_context_and_truncation(monkeypatch):
     await service.close()
 
 
-@pytest.mark.parametrize("style", ["conversational", "structured", "written"])
+@pytest.mark.parametrize("style", ["conversational", "structured", "written", "coding"])
 @pytest.mark.parametrize("length", ["brief", "standard", "detailed"])
 def test_answer_format_and_output_budget_are_consistent(style, length):
     context = {"answer_style": style, "answer_length": length, "resume_text": "负责订单系统，不提供虚构指标"}
@@ -152,12 +152,21 @@ def test_answer_format_and_output_budget_are_consistent(style, length):
         assert "控制在约 300 字" not in prompt["content"]
         assert llm_module.answer_token_budget(context) == 8000
         assert "可进一步补充" in prompt["content"]
+    elif style == "coding":
+        assert "笔试机试" in prompt["content"]
+        assert "丰富注释" in prompt["content"] and "不变量" in prompt["content"]
+        assert "不只挑几个关键步骤写注释" in prompt["content"]
+        assert "主要变量和数据结构声明旁" in prompt["content"]
+        assert "边界判断、结果构造和返回值都要有相邻注释" in prompt["content"]
+        assert "不谎称代码已实际运行" in prompt["content"]
+        assert llm_module.answer_token_budget(context) == llm_module.answer_token_budget({"answer_style": "written"})
+        assert "完整实现" in json.loads(background["content"])["deliverable"]
     else:
         assert "标准书面回答" not in prompt["content"]
         assert llm_module.answer_token_budget(context) == {"conversational": 2400, "structured": 3200}[style]
 
 
-@pytest.mark.parametrize("style", ["conversational", "structured", "written"])
+@pytest.mark.parametrize("style", ["conversational", "structured", "written", "coding"])
 def test_mode_depth_cannot_be_silently_shortened_by_old_preferences(style):
     # Installed clients and historical sessions can still send a hidden brief value.
     prompts = [llm_module.build_messages("解释缓存一致性", None, "zh", {
@@ -168,7 +177,7 @@ def test_mode_depth_cannot_be_silently_shortened_by_old_preferences(style):
     assert "假设例子要明确标注" in prompts[0][0]["content"]
 
 
-@pytest.mark.parametrize("style", ["conversational", "structured", "written"])
+@pytest.mark.parametrize("style", ["conversational", "structured", "written", "coding"])
 @pytest.mark.parametrize("language", ["zh", "en"])
 def test_code_examples_include_candidate_explanation_rules(style, language):
     prompt = llm_module.build_messages("实现 LRU 缓存并解释", "backend", language,
@@ -190,7 +199,7 @@ def test_written_english_and_legacy_preferences():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("style,budget", [("conversational", 2400), ("structured", 3200), ("written", 8000)])
+@pytest.mark.parametrize("style,budget", [("conversational", 2400), ("structured", 3200), ("written", 8000), ("coding", 8000)])
 async def test_answer_modes_stream_before_completion_with_larger_budget(monkeypatch, style, budget):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     gate = asyncio.Event()

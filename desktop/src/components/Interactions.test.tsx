@@ -52,7 +52,7 @@ describe('desktop interaction contracts', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('shows written mode directly and supports radio keyboard selection', async () => {
+  it('exposes written and coding modes and supports keyboard selection across all four', async () => {
     const user = userEvent.setup();
     function Picker() {
       const [style, setStyle] = useState<Settings['answer_style']>('conversational');
@@ -62,6 +62,9 @@ describe('desktop interaction contracts', () => {
     expect(screen.getByRole('radio', {name: '标准书面'})).toBeTruthy();
     await user.tab();
     await user.keyboard('{End}');
+    expect(screen.getByRole('radio', {name: '笔试机试'}).getAttribute('aria-checked')).toBe('true');
+    expect(document.activeElement).toBe(screen.getByRole('radio', {name: '笔试机试'}));
+    await user.keyboard('{ArrowLeft}');
     expect(screen.getByRole('radio', {name: '标准书面'}).getAttribute('aria-checked')).toBe('true');
     expect(document.activeElement).toBe(screen.getByRole('radio', {name: '标准书面'}));
   });

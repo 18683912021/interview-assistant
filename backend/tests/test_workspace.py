@@ -148,9 +148,10 @@ async def test_parallel_saves_and_settings_do_not_overwrite_new_data(environment
 
 
 @pytest.mark.asyncio
-async def test_written_preference_settings_and_history_round_trip(environment):
+@pytest.mark.parametrize("style", ["written", "coding"])
+async def test_detailed_preference_settings_and_history_round_trip(environment, style):
     client, _ = environment
-    preferences = {"language": "zh", "answer_length": "detailed", "answer_style": "written"}
+    preferences = {"language": "zh", "answer_length": "detailed", "answer_style": style}
     assert (await client.put("/api/workspace/settings", json=preferences)).status_code == 200
     settings = (await client.get("/api/workspace/settings")).json()
     assert all(settings[key] == value for key, value in preferences.items())
@@ -705,7 +706,7 @@ async def test_typed_materials_and_ended_session_guard(environment):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("style,budget", [("conversational", 2400), ("structured", 3200), ("written", 8000)])
+@pytest.mark.parametrize("style,budget", [("conversational", 2400), ("structured", 3200), ("written", 8000), ("coding", 8000)])
 async def test_paused_answers_stream_without_audio_and_ground_resume(environment, monkeypatch, style, budget):
     from app.services.llm_service import LLMService
     captured = []

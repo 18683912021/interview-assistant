@@ -38,5 +38,33 @@ it('never requests an answer for empty/oversized overrides or a completed interv
   });
   act(() => result.current.dispatch({type: 'captureState', value: 'completed'}));
   act(() => expect(result.current.sendLLMQuery('session', ['m1'], context, undefined, '新问题')).toBeNull());
+  act(() => expect(result.current.sendLLMQuery('session', {...message, id: 'new'}, context)).toBeNull());
+  expect(result.current.state.conversation).toEqual([message]);
   expect(streamJSON).not.toHaveBeenCalled();
+});
+
+it('answers a new question during streaming without losing the previous partial answer or accepting late chunks', async () => {
+  const pending: {receive: Parameters<typeof streamJSON>[2]; signal: AbortSignal; resolve: () => void}[] = [];
+  vi.mocked(streamJSON).mockImplementation((_url, _body, receive, signal) => new Promise(resolve => {
+    pending.push({receive, signal, resolve});
+  }));
+  const {result} = renderHook(() => useAudioCapture());
+  act(() => result.current.dispatch({type: 'hydrate', conversation: [message], answers: []}));
+  act(() => {result.current.sendLLMQuery('session', ['m1'], context);});
+  act(() => pending[0]!.receive({type: 'delta', text: '已生成的部分答案'}));
+  const added = {...message, id: 'manual', text: '补充问题', revision: 1, timestamp: Date.now()};
+  act(() => {expect(result.current.sendLLMQuery('session', added, context)).toBeTruthy();});
+  expect(pending[0]!.signal.aborted).toBe(true);
+  await act(async () => {
+    pending[0]!.receive({type: 'delta', text: '旧请求迟到的内容'});
+    pending[0]!.resolve();
+    pending[1]!.receive({type: 'delta', text: '补充问题的新答案'});
+    pending[1]!.receive({type: 'done', text: '', status: 'completed'});
+    pending[1]!.resolve();
+  });
+  expect(result.current.state.conversation).toEqual([message, added]);
+  expect(result.current.state.answers).toMatchObject([
+    {text: '已生成的部分答案', status: 'cancelled'},
+    {question_text: '补充问题', text: '补充问题的新答案', source_message_ids: ['manual'], source_revisions: [1], status: 'done'},
+  ]);
 });

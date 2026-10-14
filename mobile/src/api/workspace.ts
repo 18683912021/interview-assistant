@@ -24,7 +24,7 @@ export interface Settings {
   language: 'zh' | 'en' | 'auto';
   /** Legacy field retained for saved-session compatibility; depth now follows answer_style. */
   answer_length: 'brief' | 'standard' | 'detailed';
-  answer_style: 'conversational' | 'structured' | 'written';
+  answer_style: 'conversational' | 'structured' | 'written' | 'coding';
   microphone_id: string;
   system_device_id: string;
 }
@@ -43,6 +43,11 @@ export const ANSWER_STYLES = [
     value: 'written',
     label: '标准书面',
     description: '充分展开原理、步骤、例子与取舍，备好深入补充',
+  },
+  {
+    value: 'coding',
+    label: '笔试机试',
+    description: '完整解题与实现，注释解释关键步骤、边界和取舍',
   },
 ] as const;
 export const answerStyleLabel = (style: unknown) =>
