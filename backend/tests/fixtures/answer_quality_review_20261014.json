@@ -125,9 +125,8 @@
       }
     ],
     "deployment": {
-      "status": "deployed",
-      "local_health": "ok",
-      "public_health": "ok",
+      "status": "pending_active_connections",
+      "production_unchanged": true,
       "tests_passed": 162,
       "tests_skipped": 1
     }
