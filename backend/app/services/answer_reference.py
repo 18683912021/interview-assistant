@@ -25,10 +25,11 @@ _SEO_QUESTION = re.compile(r"(?<![a-z0-9_])seo(?![a-z0-9_])|搜索引擎优化|s
 _SEO_NOTES = r"""
 已核对的 SEO 事实边界（用于校准相关表述，不是答案提纲；按需融入，不逐条复述，不改变回答语言或篇幅要求）：
 综合题先讲 SSG、SSR、CSR 和已有 SPA 的不同适用场景，再覆盖内容结构、元数据、抓取索引、体验与验收。不默认限定 Next.js，不把以下框架例外展开成主要内容。
+通用 SEO 题的示例优先展示一小段静态 HTML head（title、description、绝对 canonical 等），不为展示标签搭建整页动态取数。只有题目明确要求框架实现才展开动态页面。SSG 的优势是可预生成和缓存，不代表所有情况下首屏最快；个性化/登录态是否使用 SSR 是渲染决策，不等于有公开收录需求。
 - Google 能执行 JavaScript，CSR 并非无法索引；原始 HTML 或关闭 JS 检查只能确认预渲染内容，不能独立判定索引结果。Search Console 实时测试/渲染快照用于排查可访问和渲染问题，不代表已经收录；索引状态要看索引数据/页面索引报告。其他爬虫能力可能不同。
 - robots.txt 管抓取，不是鉴权或可靠禁止索引。要让爬虫读取 noindex，不能同时屏蔽该页面抓取；私密数据靠服务端鉴权保护。公开营销页与登录后业务页分别处理。
 - canonical 是规范页信号，不能保证搜索引擎一定采纳；带查询参数不等于不能收录。描述长度没有通用硬上限，展示可能截断或改写；结构化数据不保证出现富媒体结果。sitemap 不保证收录，只放希望索引的有效规范 URL；处理真实 404，避免 fallback 把所有不存在的路径返回 200。
-- Next.js 示例注明 App Router 或 Pages Router：App Router 用 metadata/generateMetadata，不混用 getStaticProps/getServerSideProps。Next.js 15+ 动态 params 按 Promise await；相对 metadata URL 需 metadataBase 或直接用绝对 URL。动态 metadata 可流式输出，不能一概声称在所有正文渲染之前同步完成。
+- 仅在需要 Next.js 代码时：App Router 用 metadata/generateMetadata，不混用 Pages Router 的 getStaticProps/getServerSideProps。Next.js 15+ 动态 params 按 Promise await；示例使用绝对 canonical URL，或同时提供必要 metadataBase 配置，不将缺失的必需配置留给读者猜。动态 metadata 可流式输出，不能一概声称在所有正文渲染之前同步完成。
 - Client Component 也可在初次访问时预渲染，use client 不等于自动变成纯 CSR；关键是正文取数和渲染时机。若示例用 notFound，应导入并实际调用，不能用 return {} 假装触发错误页；在流式响应已开始后可能保持 200 并附加 noindex。不为展示 SEO 加入未经清洗的 HTML 注入，正文使用 React 文本节点。
 - 分页各页通常展示不同内容，应有独立 URL 和自指 canonical，不能把所有分页都归到第一页。参数是否需要规范化取决于实际内容，不能一刀切。
 - 首屏 LCP 图片不要懒加载，延迟加载用于非首屏资源；字体或图片预加载只用于真正关键且发现较晚的资源，滥用会争抢带宽。说明性能措施的条件与验证，不列无条件的优化清单。

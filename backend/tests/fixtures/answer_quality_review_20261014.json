@@ -134,5 +134,101 @@
       "tests_passed": 162,
       "tests_skipped": 1
     }
+  },
+  "density_followup": {
+    "source_sha256": {
+      "llm_service.py": "e3414c02d56bf30adb5f215a851f503f6962185bfebeaa517361523db5489a93",
+      "answer_reference.py": "87bea24d1841635eb2da808c615867a6ab900fa781f72ec1fdfa15da81f82dd5"
+    },
+    "scope": "Real configured-provider calls with synthetic data. HTTP function executed with mocked fetch; other generated examples not compiled.",
+    "improvements": [
+      "Both SEO samples use one short static head example instead of a full dynamic Next.js page.",
+      "No duplicated mandatory supplement section in the SEO samples.",
+      "SEO with Next.js resume still starts with general rendering choices.",
+      "Generated getProduct distinguishes 404, HTTP errors, network failure and invalid JSON."
+    ],
+    "remaining": [
+      "Performance sample still combines lazy rendering and data loading and exceeds the short-code guideline.",
+      "Performance supplement partially overlaps earlier diagnosis; deduplication is not guaranteed.",
+      "Some universal language remains in rendering recommendations; answer correctness still needs review.",
+      "HTTP sample includes raw error response text: callers should not expose internal upstream details to users."
+    ],
+    "runtime_checks": [
+      {
+        "case": 200,
+        "status": "passed"
+      },
+      {
+        "case": 404,
+        "status": "passed"
+      },
+      {
+        "case": 401,
+        "status": "passed"
+      },
+      {
+        "case": 403,
+        "status": "passed"
+      },
+      {
+        "case": 429,
+        "status": "passed"
+      },
+      {
+        "case": 500,
+        "status": "passed"
+      },
+      {
+        "case": "network",
+        "status": "passed"
+      },
+      {
+        "case": "invalid_json",
+        "status": "passed"
+      }
+    ],
+    "samples": [
+      {
+        "case": "seo",
+        "first_seconds": 1.25,
+        "total_seconds": 9.85,
+        "chunks": 1301,
+        "chars": 2504,
+        "finish": "stop",
+        "answer": "前端 SEO 的核心是让搜索引擎能稳定抓取、正确理解并愿意收录页面，同时保证真实用户的首屏和交互体验。优化要按“渲染与收录策略 → 内容结构 → 元数据 → 抓取与索引控制 → 性能与体验 → 验证”这条链路推进，而不是堆标签。\n\n## 1. 先确定渲染与收录策略\n\n- **公开内容优先预渲染**：营销页、文章、商品详情这类内容相对稳定、需要被收录的页面，用 SSG 在构建时生成 HTML，或用 SSR 在请求时生成完整 HTML。这样爬虫拿到的首屏就包含正文，不依赖 JS 执行。\n- **CSR 并非无法索引**：Google 能执行 JavaScript，但渲染有延迟、成本高，且其他爬虫能力可能不同。对收录有要求的页面，不应把正文完全交给客户端异步取数。\n- **按页面性质分流**：登录后的业务页、个性化推荐不需要公开收录，用 CSR 或 SSR 都行，重点转向体验；公开营销页和内容页才需要预渲染和索引控制。是否使用 SSR 是渲染决策，不等于该页面有公开收录需求。\n\n## 2. 内容结构与语义\n\n- **保证正文在原始 HTML 中可见**：标题、正文、关键链接应是服务端输出或预渲染结果，而不是等接口返回后才插入。可以用“禁用 JS 后查看页面源码”确认预渲染内容，但这只能验证可访问和渲染，不能独立判定是否被索引。\n- **用语义化标签组织层级**：每页一个 `h1`，`h2/h3` 按内容层级递进，列表用 `ul/ol`，正文用 `p`。语义结构帮助爬虫理解页面主题和内容关系。\n- **内部链接用可抓取的 `<a href>`**：导航、面包屑、相关推荐用真实链接，不要用 `onclick` 跳转或纯 `div`。链接锚文本要描述目标内容，避免“点击这里”。\n\n## 3. 元数据与结构化数据\n\n- **每页独立的 title 和 description**：title 概括页面主题，description 写清页面价值，两者都随页面变化，不要全站复用。描述长度没有通用硬上限，展示时可能被截断或改写。\n- **设置绝对 canonical**：规范页用绝对 URL 指向自身，避免带参数或重复路径产生多个版本。canonical 是规范页信号，不能保证搜索引擎一定采纳；带查询参数也不等于不能收录，是否需要规范化取决于实际内容。\n- **按需添加结构化数据**：文章、商品、FAQ 等可以用 JSON-LD 标注，帮助搜索引擎理解实体。结构化数据不保证出现富媒体结果，只作为增强信号。\n\n一个静态页面的 head 示例：\n\n```html\n<head>\n  <!-- 每页独立的标题和描述，概括当前页面主题 -->\n  <title>前端 SEO 优化实践 - 示例站点</title>\n  <meta name=\"description\" content=\"介绍前端 SEO 的渲染策略、内容结构、元数据与抓取控制。\" />\n  <!-- canonical 用绝对 URL 指向规范页，减少重复内容信号 -->\n  <link rel=\"canonical\" href=\"https://example.com/seo/frontend\" />\n  <!-- 结构化数据用 JSON-LD，序列化时转义 < 防止提前闭合 script -->\n  <script type=\"application/ld+json\">\n    {\"@context\":\"https://schema.org\",\"@type\":\"Article\",\"headline\":\"前端 SEO 优化实践\"}\n  </script>\n</head>\n```\n\n如果 JSON-LD 内容来自不可信输入，`JSON.stringify` 后至少要把 `<` 替换为 `\\u003c`，否则字符串里的 `</script>` 会提前闭合脚本标签。\n\n## 4. 抓取与索引控制\n\n- **robots.txt 管抓取，不管鉴权**：它控制爬虫能否访问路径，不是可靠的禁止索引手段，也不能保护私密数据。要让爬虫读到 `noindex`，就不能同时屏蔽该页面抓取，否则爬虫看不到这个指令。\n- **私密数据靠服务端鉴权**：登录后内容、用户数据必须由服务端校验身份后返回，不能依赖前端隐藏或 robots.txt。\n- **sitemap 只放希望索引的有效规范 URL**：它帮助发现页面，但不保证收录。定期清理失效链接。\n- **正确处理 404 与 200**：真实不存在的路径返回 404，不要用 fallback 把所有未知路径都返回 200，否则会产生大量低质量页面。分页各页展示不同内容时，应有独立 URL 和自指 canonical，不能都归到第一页。\n\n## 5. 性能与体验\n\n- **首屏 LCP 图片不要懒加载**：延迟加载用于非首屏资源，首屏关键图片应正常加载，否则会拖慢最大内容绘制。\n- **关键资源按需预加载**：字体或图片预加载只用于真正关键且发现较晚的资源，滥用会争抢带宽。\n- **减少阻塞渲染的资源**：关键 CSS 内联或优先加载，非关键脚本用 `defer`/`async`，避免长任务阻塞主线程。性能措施要说明适用条件，并用 Lighthouse、Search Console 等验证效果。\n\n## 6. 验证与排查\n\n- **Search Console 实时测试/渲染快照**：用于排查页面是否可访问、能否正确渲染，不代表已经收录。\n- **索引状态看索引数据/页面索引报告**：确认页面是否被收录、是否有抓取或规范化问题。\n- **对比原始 HTML 与渲染后 DOM**：确认正文、标题、canonical 在预渲染结果中已存在，而不是仅靠客户端插入。\n\n整体上，先解决“爬虫能否拿到并理解正文”这个主要障碍，再处理元数据、抓取控制和性能优化。不同渲染策略的取舍取决于页面是否需要公开收录、内容更新频率和个性化程度，而不是默认所有页面都用同一种方案。"
+      },
+      {
+        "case": "seo_resume",
+        "first_seconds": 0.39,
+        "total_seconds": 8.79,
+        "chunks": 1258,
+        "chars": 2452,
+        "finish": "stop",
+        "answer": "前端 SEO 的核心是让爬虫能拿到有价值的正文和元数据，同时让用户获得可用的首屏体验。做法要按渲染方式、页面类型和收录目标来选择，不能把某一种技术当成通用答案。\n\n## 1. 先按页面类型选渲染方式\n\n- **公开内容页优先 SSG 或 ISR**：文章、商品详情、营销页这类内容相对稳定，构建时预生成 HTML 并配合缓存，爬虫拿到的是完整正文，用户首屏也少一次数据往返。它的前提是内容可预生成、更新可接受延迟；强个性化或秒级变价的内容不适合直接套用。\n- **需要登录态或实时数据的页面用 SSR**：SSR 在请求时生成 HTML，适合购物车、订单、个性化推荐。但登录后页面通常不需要公开收录，SSR 在这里是渲染决策，不是 SEO 手段。\n- **已有 SPA 可以保留 CSR，但要补预渲染**：Google 能执行 JavaScript，CSR 并非无法索引，但预渲染能降低渲染失败和延迟带来的不确定性。可以用 SSG 或 SSR 输出首屏关键内容，交互部分继续由客户端接管。\n- **选择依据是内容是否公开、更新频率和个性化程度**：公开且稳定选 SSG，公开且实时选 SSR，纯交互后台选 CSR。三者可以混用，不必全站统一。\n\n## 2. 把内容结构做对\n\n- **语义化 HTML**：用 `header`、`main`、`article`、`h1` 到 `h3` 表达层级，让爬虫和辅助技术都能理解页面结构。标题层级要反映内容层级，不要为了样式跳级。\n- **正文可被抓取**：关键正文放在服务端输出的 HTML 里，不要只靠客户端异步填充。图片用有意义的 `alt`，链接用可识别的锚文本，避免整页都是 `div` 加点击事件。\n- **URL 可读且稳定**：路径体现内容层级，避免无意义参数。分页各页展示不同内容，应有独立 URL 和自指 canonical，不能把所有分页都归到第一页。\n\n## 3. 元数据与规范化\n\n- **title 和 description 逐页定制**：title 概括页面主题，description 是摘要，长度没有通用硬上限，展示时可能被截断或改写，所以把关键信息放前面。\n- **canonical 指向规范 URL**：同一内容有多个入口时，用绝对 URL 的 canonical 声明首选版本。它是规范页信号，不能保证搜索引擎一定采纳，所以还要配合内链和 sitemap。\n- **结构化数据按需添加**：商品、文章、面包屑可以用 JSON-LD 描述，但结构化数据不保证出现富媒体结果，只作为理解辅助。\n\n一个静态页面的 head 可以这样写：\n\n```html\n<head>\n  <meta charset=\"utf-8\" />\n  <!-- 视口保证移动端按设备宽度渲染，是移动友好的前提 -->\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n  <title>商品名称 - 站点名</title>\n  <meta name=\"description\" content=\"商品的核心卖点与规格摘要\" />\n  <!-- canonical 用绝对 URL，避免相对路径在不同入口下解析出不同规范页 -->\n  <link rel=\"canonical\" href=\"https://example.com/products/123\" />\n</head>\n```\n\n## 4. 抓取与索引控制\n\n- **robots.txt 管抓取，不管鉴权**：它告诉爬虫哪些路径不必抓取，但不能阻止页面被索引，也不是私密数据的保护手段。要让爬虫读到 noindex，就不能同时屏蔽该页面抓取。\n- **noindex 用于不该收录的页面**：搜索结果页、筛选组合页、登录后页面可以加 noindex。私密数据必须靠服务端鉴权保护，不能依赖前端隐藏。\n- **sitemap 只放希望索引的有效规范 URL**：它帮助发现页面，但不保证收录。真实不存在的路径要返回 404，避免 fallback 把所有路径都返回 200，否则会制造大量低质页面。\n- **验证收录看索引数据**：Search Console 的实时测试和渲染快照用于排查可访问与渲染问题，不代表已经收录；索引状态要看页面索引报告。\n\n## 5. 性能与体验\n\n- **首屏 LCP 图片不要懒加载**：延迟加载用于非首屏资源，首屏主图应正常加载，必要时预加载。字体或图片预加载只用于真正关键且发现较晚的资源，滥用会争抢带宽。\n- **减少阻塞渲染的资源**：关键 CSS 内联或优先加载，非关键脚本用 `defer` 或 `async`，避免长任务阻塞主线程。这些措施要结合真实指标验证，不能默认一定更快。\n- **移动友好与可访问性**：响应式布局、足够的点击区域、合理的对比度，既影响用户体验，也影响移动端评估。\n\n## 6. 验收与迭代\n\n- **用真实工具验证**：Lighthouse 看性能与基础 SEO 检查，Search Console 看抓取和索引状态，富媒体测试工具验证结构化数据。\n- **区分信号与保证**：canonical、sitemap、结构化数据都是信号，最终收录和展示由搜索引擎决定。持续观察索引覆盖和查询表现，再调整策略。\n\n如果项目使用 Next.js App Router，元数据通过 `metadata` 或 `generateMetadata` 导出，动态路由参数在 Next.js 15+ 需要按 Promise 处理，canonical 用绝对 URL 或配置 `metadataBase`。Client Component 在初次访问时也可以被预渲染，`use client` 不等于纯 CSR，关键是正文取数和渲染时机。"
+      },
+      {
+        "case": "http_errors",
+        "first_seconds": 0.68,
+        "total_seconds": 4.06,
+        "chunks": 568,
+        "chars": 1215,
+        "finish": "stop",
+        "answer": "核心结论：`404` 返回 `null`，其他非 2xx 状态、网络异常和 JSON 解析失败都应抛出带上下文的错误，让调用方决定重试、提示还是上报。\n\n```js\nasync function getProduct(id) {\n  const res = await fetch(`/api/products/${encodeURIComponent(id)}`);\n\n  // 404 是业务约定的“不存在”，转成 null 让调用方走空态\n  if (res.status === 404) return null;\n\n  // 其他非 2xx 保留状态码和响应体，便于区分鉴权失败、限流、上游故障\n  if (!res.ok) {\n    const body = await res.text().catch(() => '');\n    throw new Error(`获取商品失败: ${res.status} ${res.statusText} ${body}`);\n  }\n\n  // 解析失败会自然抛出 SyntaxError，不吞掉\n  return res.json();\n}\n```\n\n关键点：\n\n- **只把 404 映射为 null**：`null` 表示“资源确实不存在”，调用方可以展示空态。把 401、403、429、500 也转成 `null` 会掩盖真实故障，导致用户看到“商品不存在”而实际是服务异常。\n- **`res.ok` 覆盖 200–299**：非 2xx 时读取响应体并抛出，保留状态码和错误信息，方便上层按状态分类处理。\n- **`encodeURIComponent(id)`**：防止 id 含 `/`、`?` 等字符破坏 URL 结构。\n- **网络异常不捕获**：`fetch` 本身在断网、DNS 失败时 reject，直接向上抛，与 HTTP 错误区分开。\n- **JSON 解析失败不吞**：`res.json()` 失败会抛 `SyntaxError`，说明服务端返回了非预期格式，属于需要暴露的问题。\n\n调用方可以这样区分：\n\n```js\ntry {\n  const product = await getProduct(id);\n  if (product === null) {\n    // 商品不存在，展示空态\n  } else {\n    // 正常渲染\n  }\n} catch (err) {\n  // 网络错误、鉴权失败、限流、上游故障等，统一走错误提示或重试\n}\n```\n\n如果业务需要区分“可重试”和“不可重试”，可以在抛出前根据状态码打标记，例如 429、503 标记为可重试，401、403 标记为需重新登录或无权限，而不是在 `getProduct` 内部直接重试——重试策略属于调用方的职责，放在这里会让函数职责变重且难以测试。"
+      },
+      {
+        "case": "performance",
+        "first_seconds": 0.73,
+        "total_seconds": 9.93,
+        "chunks": 1236,
+        "chars": 2491,
+        "finish": "stop",
+        "answer": "首屏慢要先量化再拆解，不能凭感觉直接上优化手段。核心思路是：先用真实用户指标和网络瀑布定位瓶颈在“下载、解析、渲染还是接口”，再按收益从大到小处理关键路径，最后用同一套指标回归验证。\n\n1. **建立可对比的度量基线**\n   - **采集真实用户指标**：用 Web Vitals 关注 LCP、INP、CLS，其中首屏主要看 LCP；同时记录 TTFB、FCP 作为分段依据。实验室数据用 Lighthouse 或 Performance 面板复现，但结论以真实用户分布为准，因为设备、网络、地域差异很大。\n   - **区分冷启动与缓存命中**：首次访问和二次访问的瓶颈往往不同。缓存命中时慢，多半是接口或渲染问题；冷启动慢，才更可能是资源体积和请求链路过长。\n   - **固定对比条件**：优化前后要在同一网络限速、同一设备档位、同一账号状态下测，否则数字没有可比性。\n\n2. **用瀑布图定位关键路径**\n   - **看请求时序**：在 Network 面板按时间排序，确认首屏关键资源是否串行、是否被非关键脚本阻塞。常见问题是主包过大、字体或图片阻塞渲染、接口在 JS 执行后才发起。\n   - **看主线程**：Performance 面板里长任务会推迟渲染。如果 LCP 元素早已下载完却迟迟不出现，通常是主线程被同步脚本或大量计算占住。\n   - **看依赖关系**：区分“首屏必需”和“可延后”。例如管理后台的首屏通常只需要框架、路由和当前页面，图表库、富文本编辑器、导出模块往往可以等交互时再加载。\n\n3. **压缩关键资源体积**\n   - **路由级代码分割**：按页面拆分 chunk，首屏只加载当前路由。React 中可用 `React.lazy` 配合 `Suspense`，但要注意加载态不能造成布局跳动。\n   - **第三方库按需引入**：例如图表、日期、图标库只引具体模块，避免整包进入主 bundle。选择依据是这些库是否在首屏渲染路径上；如果只在弹窗里用，就应动态导入。\n   - **开启压缩与长效缓存**：构建产物用 gzip 或 brotli，静态资源带内容哈希并设置长缓存。适用条件是资源可公开缓存；带用户隐私的接口响应不能套用同一策略。\n\n4. **优化加载与渲染顺序**\n   - **关键资源优先**：首屏必需的 CSS 内联或提前加载，非关键脚本用 `defer` 或动态导入，避免阻塞 HTML 解析。\n   - **图片与字体处理**：首屏大图用合适尺寸和现代格式，设置宽高避免 CLS；字体可用 `font-display: swap`，但要接受短暂回退字体。反例是首屏核心文案依赖自定义字体时，swap 可能造成明显跳动，需要权衡。\n   - **接口并行与预取**：首屏需要的多个接口尽量并行发起，能在路由层预取的提前触发。下面是一个按路由懒加载并并行取数的简化写法：\n\n```tsx\n// 路由级懒加载：首屏只下载当前页面代码，其他页面等访问时再加载\nconst Dashboard = React.lazy(() => import('./pages/Dashboard'));\n\nfunction App() {\n  return (\n    <Suspense fallback={<PageSkeleton />}>\n      <Dashboard />\n    </Suspense>\n  );\n}\n\n// 页面内并行请求：两个接口互不依赖，用 Promise.all 缩短总等待时间\nasync function loadDashboardData() {\n  const [stats, notices] = await Promise.all([\n    fetch('/api/stats').then((r) => {\n      // 只有约定的 404 才当作空数据，其他失败必须抛出，避免把故障伪装成“没有数据”\n      if (r.status === 404) return null;\n      if (!r.ok) throw new Error(`stats failed: ${r.status}`);\n      return r.json();\n    }),\n    fetch('/api/notices').then((r) => {\n      if (!r.ok) throw new Error(`notices failed: ${r.status}`);\n      return r.json();\n    }),\n  ]);\n  return { stats, notices };\n}\n```\n\n5. **服务端与传输层配合**\n   - **缩短 TTFB**：如果 TTFB 占比高，问题可能在服务端或 CDN。静态资源走 CDN，接口做缓存或分页，减少首屏一次拉取的数据量。\n   - **启用 HTTP/2 或 HTTP/3**：多资源场景下减少连接开销，但它不能替代减少请求数量和体积。\n   - **SSR 或预渲染的取舍**：内容型首屏用 SSR 能更快出可见内容，但会增加服务端复杂度和缓存要求；管理后台这类登录后页面收益有限，通常优先做代码分割和接口优化。\n\n6. **验证与防止回退**\n   - **回归同一指标**：优化后重测 LCP、FCP、TTFB，确认改善来自目标环节，而不是测试环境波动。\n   - **设置性能预算**：对主包体积、首屏请求数设阈值，在 CI 中拦截明显回退。\n   - **持续监控**：上线后按真实用户分位数观察，避免只在开发机上“看起来快了”。\n\n可进一步补充：如果优化后 LCP 仍不稳定，可以按“资源是否已下载但未渲染”和“资源本身下载慢”两类分别排查，前者查主线程长任务，后者查网络和缓存命中；验证时对比同一用户群体的 P75 而非平均值，因为平均值容易被少数快样本拉低。"
+      }
+    ],
+    "deployment": {
+      "status": "pending_active_audio_stream",
+      "tests_passed": 162,
+      "tests_skipped": 1
+    }
   }
 }
