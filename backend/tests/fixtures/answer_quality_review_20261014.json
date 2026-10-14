@@ -226,7 +226,12 @@
       }
     ],
     "deployment": {
-      "status": "pending_active_audio_stream",
+      "status": "deployed",
+      "local_health": "ok",
+      "public_health": "ok",
+      "production_prompt_import": "verified",
+      "client_reinstall_required": false,
+      "backup": "/www/backups/interview-assistant/20261014-written-density",
       "tests_passed": 162,
       "tests_skipped": 1
     }
