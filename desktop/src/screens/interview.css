@@ -501,3 +501,65 @@ button.bubble-answer-count:hover {
 .audio-readiness .audio-check {width: 100%; font-size: 11px; margin-top: 2px;}
 
 .audio-check-cancel { display: block; margin: 8px auto 0; font-size: 11px; }
+
+/* Keep the active interview usable with native window chrome and Windows scaling. */
+.session-toolbar-main, .session-toolbar-controls {display:flex; align-items:center; gap:10px; min-width:0;}
+.session-toolbar-main {flex:1; overflow:hidden;}
+.session-toolbar-main > .icon-btn, .session-toolbar-main > .session-heading-icon {flex-shrink:0;}
+.session-toolbar-main h1, .session-toolbar-main .session-context {min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;}
+.session-toolbar-controls {flex-shrink:0;}
+.session-capture-label {overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.session-toolbar-controls .btn {min-width:0;}
+.session-toolbar-controls .btn svg {flex-shrink:0;}
+.split-tabs, .answer-preferences {flex-shrink:0;}
+.panel-header strong, .panel-header > svg, .panel-header > .icon-btn {flex-shrink:0;}
+.panel-header .select-trigger {min-width:0; flex-shrink:1;}
+.answer-footer {flex-wrap:wrap; gap:6px 10px;}
+.answer-footer > span {flex:1 1 130px; min-width:0; overflow-wrap:anywhere;}
+.answer-footer > button {flex-shrink:0; white-space:nowrap;}
+.session-status {min-width:0;}
+.audio-status {min-width:0; flex-wrap:wrap;}
+.save-status {white-space:nowrap; flex-shrink:0;}
+.session-alert {max-height:120px; overflow:auto; overscroll-behavior:contain;}
+.answer-document details p, .overlay-question, .overlay-body {overflow-wrap:anywhere;}
+@media (max-width:760px) {
+  .session-toolbar-live {gap:6px;}
+  .session-toolbar-live .session-toolbar-main {flex:1 1 100%;}
+  .session-toolbar-main h1 {max-width:none;}
+  .session-toolbar-controls {width:100%; gap:8px;}
+  .session-toolbar-controls .session-clock {margin-right:auto; padding-right:0;}
+  .session-toolbar-controls .btn {font-size:11px;}
+  .session-toolbar-controls .session-capture-label {max-width:125px;}
+  .answer-preferences {padding:6px 12px; gap:4px;}
+  .answer-preferences .answer-style-picker {width:100%; flex-wrap:nowrap;}
+  .answer-preferences .answer-style-picker button {flex:1; padding:6px 3px;}
+  .answer-preferences .answer-style-title {justify-content:center; font-size:11px;}
+  .answer-preferences .preference-idle {display:none;}
+  .panel-footer {padding-inline:12px;}
+}
+/* Compact mode has one task bar, one content viewport and a capture footer. */
+.is-compact .compact-session-nav {display:flex; flex-shrink:0; gap:4px; padding:7px 12px; align-items:center; border-bottom:1px solid var(--line);}
+.is-compact .compact-session-nav > .btn {flex:0 0 auto; min-width:44px; justify-content:center; font-size:12px; min-height:30px; padding:5px 8px; border-color:transparent; background:transparent; box-shadow:none;}
+.is-compact .compact-session-nav > .btn.active {background:var(--accent-soft); color:var(--accent);}
+.is-compact .compact-session-nav > .select-trigger {margin-left:auto; width:123px; min-width:0; min-height:30px; padding:5px 8px; font-size:11px;}
+.is-compact .compact-session-nav > .icon-btn {flex-shrink:0; width:30px; height:30px;}
+.is-compact .session-grid {grid-template-columns:minmax(0,1fr);}
+.is-compact .session-divider, .is-compact .session-grid[data-pane='chat'] .answer-column,
+.is-compact .session-grid[data-pane='answer'] .chat-column {display:none;}
+.is-compact .session-grid .panel-header {min-height:39px; padding:0 12px; gap:6px;}
+.is-compact .session-grid .answer-document {padding:12px 14px;}
+.is-compact .answer-question-block {margin-bottom:12px;}
+.is-compact .answer-format-label {margin-bottom:10px;}
+.is-compact .panel-footer {padding:5px 12px; min-height:32px; font-size:10px;}
+.is-compact .answer-footer > .icon-btn {width:24px; height:24px; padding:4px;}
+.is-compact .answer-footer > span {flex-basis:90px;}
+.compact-session-footer {flex-shrink:0; padding:6px 12px; border-top:1px solid var(--line); background:var(--bg);}
+.compact-session-footer .session-toolbar-controls {width:100%; gap:8px;}
+.compact-session-footer .session-clock {margin-right:auto; padding-right:0; font-size:11px;}
+.compact-session-footer .btn {min-height:28px; padding:4px 8px; font-size:11px;}
+.compact-session-footer .session-capture-label {max-width:125px;}
+.is-compact .session-alert {padding:6px 12px; max-height:82px; font-size:11px;}
+.chat-bubble.multi-select {display:grid; grid-template-columns:18px minmax(0,1fr); gap:9px; max-width:100%;}
+.bubble-selection {display:grid; place-items:center; width:18px; height:18px; margin-top:3px; border:1px solid var(--line-strong); border-radius:5px; background:var(--bg);}
+.chat-bubble.multi-select[aria-pressed='true'] {background:var(--accent-soft); border-color:var(--accent);}
+.chat-bubble[aria-pressed='true'] .bubble-selection {color:#fff; background:var(--accent); border-color:var(--accent);}

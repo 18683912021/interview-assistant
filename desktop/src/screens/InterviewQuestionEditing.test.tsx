@@ -7,6 +7,7 @@ import InterviewScreen from './InterviewScreen';
 import {ToastProvider} from '../components/Toast';
 import {DEFAULT_SETTINGS, getWorkspaceInterview, type WorkspaceSession} from '../api/workspace';
 import {streamJSON} from '../api/stream';
+import {WindowModeContext} from '../utils/WindowModeContext';
 vi.mock('../config', () => ({API_BASE: '', MAIN_STREAM_URL: '', STREAM_DIRECT_ADDRESS: ''}));
 vi.mock('../api/workspace', async original => {
   const actual = await original<typeof import('../api/workspace')>();
@@ -34,6 +35,55 @@ beforeEach(() => {
 });
 afterEach(() => {cleanup(); vi.unstubAllGlobals();});
 const setup = () => render(<MemoryRouter initialEntries={['/interview?session=session']}><ToastProvider><InterviewScreen /></ToastProvider></MemoryRouter>);
+it('toggles selected questions with visible checkmarks and leaves selection mode after submitting the merged question', async () => {
+  vi.mocked(getWorkspaceInterview).mockResolvedValue({...session, conversation:[...session.conversation,
+    {...session.conversation[0]!, id:'two', text:'第二个问题'}]});
+  setup();
+  await userEvent.click(await screen.findByRole('button', {name:'合并提问'}));
+  const first=screen.getByRole('button', {name:'原始问题'});
+  const second=screen.getByRole('button', {name:'第二个问题'});
+  expect(first.querySelector('.bubble-selection svg')).toBeNull();
+  await userEvent.click(first);
+  await userEvent.click(second);
+  expect(first.getAttribute('aria-pressed')).toBe('true');
+  expect(first.querySelector('.bubble-selection svg')).toBeTruthy();
+  expect(screen.getByText('已选 2 句')).toBeTruthy();
+  await userEvent.click(first);
+  expect(first.querySelector('.bubble-selection svg')).toBeNull();
+  expect(screen.getByText('已选 1 句')).toBeTruthy();
+  await userEvent.click(first);
+  await userEvent.click(screen.getByRole('button', {name:'合并回答'}));
+  await waitFor(()=>expect(streamJSON).toHaveBeenCalledOnce());
+  expect(vi.mocked(streamJSON).mock.calls[0]![1].source_message_ids).toEqual(['one','two']);
+  expect(screen.queryByRole('button', {name:'退出多选'})).toBeNull();
+});
+it('keeps compact mode focused, retains all answer modes and preserves edits when restoring the window', async () => {
+  HTMLElement.prototype.hasPointerCapture = vi.fn();
+  HTMLElement.prototype.setPointerCapture = vi.fn();
+  HTMLElement.prototype.releasePointerCapture = vi.fn();
+  const view = (compact: boolean) => <MemoryRouter initialEntries={['/interview?session=session']}><ToastProvider>
+    <WindowModeContext.Provider value={{compact}}><InterviewScreen /></WindowModeContext.Provider>
+  </ToastProvider></MemoryRouter>;
+  const rendered = render(view(true));
+  await screen.findByText('原答案');
+  expect(screen.getByRole('button', {name: '回答'}).getAttribute('aria-pressed')).toBe('true');
+  expect(screen.queryByRole('button', {name: '调整设备'})).toBeNull();
+  expect(screen.queryByRole('combobox', {name: '选择已生成的回答'})).toBeNull();
+  await userEvent.click(screen.getByRole('combobox', {name: '回答方式'}));
+  for (const name of ['自然口述', '结构化要点', '标准书面', '笔试机试']) expect(screen.getByRole('option', {name})).toBeTruthy();
+  await userEvent.click(screen.getByRole('option', {name: '标准书面'}));
+  await userEvent.click(screen.getByRole('button', {name: '编辑问题'}));
+  fireEvent.change(screen.getByRole('textbox', {name: '编辑本次问题'}), {target: {value: '跨窗口保留的问题'}});
+  expect((screen.getByRole('combobox', {name: '回答方式'}) as HTMLButtonElement).disabled).toBe(true);
+  rendered.rerender(view(false));
+  expect((screen.getByRole('textbox', {name: '编辑本次问题'}) as HTMLTextAreaElement).value).toBe('跨窗口保留的问题');
+  expect(screen.getByRole('radio', {name: '标准书面'}).getAttribute('aria-checked')).toBe('true');
+  await userEvent.click(screen.getByRole('button', {name: '重新生成'}));
+  await screen.findByText('新答案：跨窗口保留的问题');
+  expect(vi.mocked(streamJSON).mock.calls[0]![1]).toMatchObject({context: {answer_style: 'written'}});
+  await userEvent.click(screen.getByRole('button', {name: '调整设备'}));
+  expect(screen.getByRole('combobox', {name: '恢复采集的音频来源'})).toBeTruthy();
+});
 it('edits the question in place and keeps it for regeneration and supplements, without rewriting dialogue', async () => {
   setup();
   await userEvent.click(await screen.findByRole('button', {name: '编辑问题'}));

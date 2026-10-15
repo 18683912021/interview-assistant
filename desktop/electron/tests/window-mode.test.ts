@@ -78,4 +78,16 @@ describe.each(['darwin', 'win32'] as const)('%s window modes', platform => {
     expect(win.bounds.x + win.bounds.width).toBeLessThanOrEqual(1280);
     expect(win.bounds.y + win.bounds.height).toBeLessThanOrEqual(800);
   });
+  it('does not force compact mode below the taskbar on a scaled short display', async () => {
+    const win = setup();
+    screenMock.area = {x: -1100, y: 40, width: 1024, height: 480};
+    await setWindowCompact(win.asWindow(), true);
+    expect(win.setMinimumSize).toHaveBeenLastCalledWith(360, 480);
+    expect(win.bounds.y).toBeGreaterThanOrEqual(40);
+    expect(win.bounds.y + win.bounds.height).toBeLessThanOrEqual(520);
+    expect(win.bounds.x).toBeGreaterThanOrEqual(-1100);
+    await setWindowCompact(win.asWindow(), false);
+    expect(win.setMinimumSize).toHaveBeenLastCalledWith(480, 400);
+    expect(win.bounds.y + win.bounds.height).toBeLessThanOrEqual(520);
+  });
 });

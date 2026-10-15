@@ -1,6 +1,6 @@
 # macOS system audio
 
-The default route uses public Core Audio process taps (macOS 14.2+), inside the main app process. It creates a private audio tap and aggregate audio device, copies float PCM through a bounded N-API queue, and reuses the streaming resampler / 40 ms transport frames. It never enumerates a display, creates a video track, saves video, or calls ScreenCaptureKit.
+This directory retains the optional Core Audio process-tap route (macOS 14.2+), inside the main app process. The desktop default is now the Electron screen/system-audio route (`__screen_capture__`), shared with screenshot permission preparation; see [desktop usage](../../../README.md). The statements below apply only when the tap route is selected. It creates a private audio tap and aggregate audio device, copies float PCM through a bounded N-API queue, and reuses the streaming resampler / 40 ms transport frames. It never enumerates a display, creates a video track, saves video, or calls ScreenCaptureKit.
 
 `coreaudio-tap.mm` follows Apple's process tap and aggregate device APIs:
 https://developer.apple.com/documentation/coreaudio/capturing-system-audio-with-core-audio-taps
@@ -13,7 +13,7 @@ Build with `node scripts/ensure-macos-audio.cjs`. Xcode Command Line Tools and o
 - The Core Audio IO procedure is created / started in a background worker: HAL can wait for OS authorization. Stop during startup marks cancellation; when HAL returns, the completion callback tears down every native resource. Concurrent pending startups are rejected.
 - A short local probe precedes interview creation; it opens no backend connection. After native startup completes, the probe automatically plays a one-second local WAV and observes PCM for three seconds. It removes the temporary file and stops playback/capture on success, failure or cancellation. A null callback payload marks native startup readiness; live capture ignores that control event. Silent PCM is reported separately from verified playback, never as proof of permission. Users do not need to play their own audio.
 - Ad-hoc updates may invalidate existing TCC code requirements. An enabled old entry does not prove the installed build is authorized. Re-authorize the installed application and restart it; do not reset permissions for other applications.
-- `__screen_capture__` is an explicit fallback route. Only that choice requests `getDisplayMedia`; it displays the system screen-sharing indicator. A virtual input remains a separate user-selected route.
+- `__screen_capture__` is the current default route, not a tap fallback. That choice requests `getDisplayMedia` and may display the system screen-sharing indicator; its video track is stopped without saving or uploading images. A virtual input remains a separate user-selected route.
 - Renderer system frames are ignored while native capture owns the system track. Generation guards discard callbacks from stopped interviews.
 
 ## Sharing UI

@@ -7,6 +7,7 @@ import {useToast} from './Toast';
 import {messageOf} from '../api/client';
 import {isInterviewActive, onInterviewActiveChange} from '../utils/interviewState';
 import {prepareAppShutdown} from '../services/app-shutdown';
+import {WindowModeContext} from '../utils/WindowModeContext';
 
 export function DesktopFrame({children}: {children: ReactNode}) {
   const api = window.electronAPI?.window;
@@ -60,7 +61,7 @@ export function DesktopFrame({children}: {children: ReactNode}) {
     catch (error) { setQuitting(false); toast(messageOf(error), 'error'); }
   };
   return (
-    <div className={`desktop-frame${mode.compact ? ' is-compact' : ''}`}>
+    <WindowModeContext.Provider value={mode}><div className={`desktop-frame${mode.compact ? ' is-compact' : ''}`}>
       <div className="desktop-window-bar" aria-label="窗口操作">
         <button className="desktop-privacy" onClick={() => setDetails(true)}>
           <Shield size={14} />共享保护<span className="muted"> · 查看说明</span>
@@ -103,6 +104,6 @@ export function DesktopFrame({children}: {children: ReactNode}) {
         </div>
         <div className="modal-actions"><button className="btn primary" onClick={() => setDetails(false)}>知道了</button></div>
       </Modal>}
-    </div>
+    </div></WindowModeContext.Provider>
   );
 }

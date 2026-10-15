@@ -9,8 +9,8 @@
 | 目录 | 端 | 技术栈 |
 |------|-----|--------|
 | `mobile/` | Android App | React Native 0.78.3（纯 CLI）+ Kotlin 原生采集模块 |
-| `desktop/` | PC 桌面端（主力） | Electron 43 + React 19 + Vite + Tailwind + WASAPI/macOS 虚拟声卡音频采集（macOS 需 BlackHole） |
-| `backend/` | 后端服务 | FastAPI + SQLAlchemy async（Postgres/Redis）+ 火山豆包 ASR + DeepSeek LLM |
+| `desktop/` | PC 桌面端（主力） | Electron 43 + React 19 + Vite + Tailwind + Windows WASAPI / macOS 系统音频回环 |
+| `backend/` | 后端服务 | FastAPI + SQLAlchemy async（Postgres/Redis）+ 腾讯 ASR（火山备用）+ DeepSeek / Qwen LLM |
 
 ## 环境要求
 
@@ -43,7 +43,7 @@ pnpm install          # 必须用 pnpm；node_modules 不可跨位置移动
 pnpm dev              # vite + tsc watch + launch-electron（含原生 addon 自动编译）
 ```
 
-后端地址：`src/config.ts` 读取 `VITE_API_HOST`（默认 `interview.iyouzi.cc`，生产走 HTTPS/WSS 经 nginx 反代），可写 `desktop/.env` 覆盖。dev 模式仍直连本地后端（`ws://…:8010`）。
+开发默认访问本机 `127.0.0.1:8010`；打包时显式配置生产 HTTPS/WSS 地址。功能用法、界面截图、项目结构和配置详见 [桌面端 README](desktop/README.md)。
 
 ### mobile（Android）
 
@@ -60,8 +60,8 @@ npm start             # Metro
 
 | 文件 | 用途 |
 |------|------|
-| `desktop/.env` | `VITE_API_HOST`（后端地址）、`ANTHROPIC_MODEL` |
-| `backend/.env` | DeepSeek（`ANTHROPIC_*`）、火山豆包（`VOLC_API_KEY`）、SMTP（验证码邮件）、`DATABASE_URL`/`REDIS_URL` |
+| `desktop/.env` | `VITE_API_BASE` / `VITE_STREAM_URL`（构建期地址，不存模型密钥） |
+| `backend/.env` | DeepSeek / Qwen、腾讯 / 火山语音、SMTP（验证码邮件）、`DATABASE_URL`/`REDIS_URL` |
 
 回答服务支持 Qwen 自动备用，配置 `QWEN_API_KEY`、`QWEN_BASE_URL` 和 `QWEN_MODEL`。
 主备切换与部署步骤见 [后端部署说明](backend/deploy/README.md#deepseek-主服务与-qwen-自动备用)。
@@ -85,10 +85,11 @@ docker compose up -d --build     # 仅兜底/回滚参考；正式迁移见下
 ## 文档索引
 
 - [backend/README.md](backend/README.md) — 后端技术实现、设计取舍与简历项目素材
+- [desktop/README.md](desktop/README.md) — 桌面产品功能、使用截图、开发配置与项目结构
 - [desktop/docs/workspace-setup.md](desktop/docs/workspace-setup.md) — 新版桌面工作区与本地联调
 - [desktop/docs/windows-build.md](desktop/docs/windows-build.md) — Windows 安装包构建与下载
 - `mobile/RN_ANDROID_STUDIO_SETUP.md` — Android 开发环境搭建
 - `mobile/docs/AUDIO_PROTOCOL_V1.md` — 音频流协议 v1（两端 WebSocket 帧约定）
 - `mobile/docs/MIGRATION_MATRIX.md` — 移动端/桌面端功能迁移对照
-- `desktop/docs/macOS音频采集说明.md` — macOS 系统音频采集（BlackHole 虚拟声卡）配置与故障排查
+- `desktop/docs/macOS音频采集说明.md` — 可选的旧虚拟声卡路由说明（非默认采集方式）
 - `desktop/docs/Storybook*.md` — 组件库入门与改造方案

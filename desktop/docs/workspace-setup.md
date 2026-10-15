@@ -1,62 +1,56 @@
-# 桌面工作区运行说明
+# 桌面工作区开发与联调
 
-开发默认连接 `127.0.0.1:8010`。先启动 FastAPI、PostgreSQL 和 Redis，再在 desktop 运行 `pnpm dev`。
+产品说明、完整操作步骤、截图及打包配置见 [桌面端 README](../README.md)。本文保留开发时需要核对的接口和生命周期约定，避免把旧版本行为当作现状。
 
-- `VITE_API_BASE`：HTTP API 的完整源地址，例如 `https://interview.example.com`，不含 `/api`。开发未设置时使用 Vite 同源代理。
-- `VITE_STREAM_URL`：完整实时地址，例如 `wss://interview.example.com/api/ws/audio/stream`。Electron 主进程直连该地址。
-- `VITE_STREAM_DIRECT_IP`：可选，填写同一实时服务的部署 IP。只改变实时连接的 DNS lookup，保留域名、Host、TLS SNI 和证书校验；250 ms 后并行尝试正常 DNS，选中一个连接后才发送会话和音频。开发环境不设置，服务器迁移后更新此项或留空。它不修改系统代理/DNS，也不控制 HTTP API 路由。
-- `VITE_API_HOST`：兼容旧配置，仅填写主机名，默认 `127.0.0.1`。
+## 运行与配置
 
-打包前应在构建环境设置生产 API 和 WebSocket 地址。非本机部署必须使用 HTTPS / WSS；Electron 会拒绝明文公网 WebSocket。省略地址会连接本机服务，不会自动连接任何在线生产账户。
+先启动后端，再在 `desktop` 执行 `pnpm install --frozen-lockfile` 和 `pnpm dev`。开发默认 `127.0.0.1:8010`，线上包须显式设置 `VITE_API_BASE`、`VITE_STREAM_URL`。可选 `VITE_STREAM_DIRECT_IP` 只改变实时连接的地址解析，保留域名、Host、TLS SNI 和证书校验；250ms 后并行尝试正常 DNS，选中连接后才发送会话和音频。
 
-登录、注册和重设密码依赖后端 SMTP 配置。资料解析依赖后端对应文件解析库。工具与复盘依赖服务端模型配置；未配置时显示服务端错误，不展示演示答案。
+登录、注册和密码重设依赖后端 SMTP；资料解析、工具、复盘与回答依赖后端服务。前端不持有供应商密钥，不在服务异常时伪造演示答案。
 
-macOS 默认使用 Electron 的系统音频回环，需要系统的屏幕与系统音频录制权限；应用会明确确认电脑播放声音的采集范围，视频轨道取得后立即关闭，画面不会保存或上传。Electron 43 使用官方的 ScreenCaptureKit 兼容路径，避免系统选择器仅返回画面的问题。也可以在设置中手动选择已配置声音路由的虚拟输入。Windows 使用 WASAPI 回环，可在设置中选择默认输出或具体扬声器/耳机；请选择会议软件实际播放声音的输出。麦克风测试只在本机读取输入，离开设置页时释放设备。设备、系统权限和实际音频路由仍需在对应操作系统上验证。
+桌面页面使用 `file://`，Origin 为 `null`；后端需允许该源和开发源，使用 Bearer token，不依赖跨域 Cookie。独立 Web 部署另在 `CORS_ORIGINS` 添加准确的源地址。
 
-0.5.2 在面试准备页和“设置 → 音频与设备”显示本机权限与“申请权限”按钮：首次麦克风授权使用系统弹框；系统音频通过 Electron 请求屏幕来源，未开启时直接进入对应的 macOS 权限面板。不会自动开启权限或启动录音。已拒绝的权限不能靠重复请求绕过，开启后须完全退出并重新打开应用。当前 Mac 包为 ad-hoc 签名，更新会改变代码签名，可能需要重新授权；正式分发应使用稳定的 Developer ID 签名与公证。
+## 音频与权限
 
-0.5.3 增加「已授权，重启应用」：退出前停止采集、排空本机存储写入，然后重新启动；正在采集时需先暂停。系统开关已开启但进程仍返回 screen=denied 时，先完全退出并重启；如果仍未允许，可使用「重新申请录屏权限」。该操作先要求用户在本机弹框确认，再用固定的 `tccutil reset ScreenCapture com.coagent.audio-capture` 清除本应用的旧录屏授权，重新进入标准授权流程，不改其他应用权限、不直接写 TCC 数据库、不自动授予权限。仅安装版 Mac 客户端提供此入口。不能根据页面异步加载期间暂时没有提示就判定授权成功，应读取最终系统状态。当前机器没有可用代码签名证书，后续更新仍存在 ad-hoc 身份变化的限制。
+Mac 默认 `__screen_capture__`：Electron 屏幕通道获取系统声音，与截图共用录屏权限，视频轨道取得后关闭，音频路径不保存或上传画面。保留可选虚拟输入及旧 Core Audio tap 实现。Windows 通过 WASAPI loopback 采集默认或指定输出，显式选择的输出不会自动跟随默认设备改变。
 
-主窗口恢复为普通 macOS 窗口，保留 Dock 运行标记、应用菜单和 ⌘Q。菜单栏托盘使用可见的波形模板图标，关闭最后一个窗口后仍可「打开主窗口」或「退出面试助手」；关闭窗口会停止采集。浮窗保留跨桌面设置，但使用 skipTransformProcessType，避免 Electron 43 的 visibleOnFullScreen 默认隐藏整个应用 Dock。跨其他应用全屏空间的浮窗显示仍受 macOS 限制，不能为此再次隐藏应用入口。回归命令：先编译 Electron，再运行 `pnpm exec electron scripts/smoke-app-lifecycle.cjs`，使用独立临时用户目录与本地空白页面，不接入音频、用户记录或网络。
+准备页统一检查必填项、麦克风、系统音频和截图权限，面试中不临时弹系统授权。设备检查与正式采集复用实现；检查只在本机进行，静音不等于无权限。设备拔出、默认输出变化或失败应暂停，停止旧资源后允许继续。
 
-0.5.4 移除 Windows/Linux 窗口顶部菜单，Alt 也不会重新展开；macOS 隐藏「编辑、显示、窗口」等菜单，仅保留系统顶栏中的应用菜单用于退出和重新打开。原生编辑及关窗快捷键仍保留，托盘不受影响。
+麦克风优先 `echoCancellation: {exact: 'all'}`、降噪并关闭自动增益，系统音频保留原声。仅在不支持该 AEC 模式时回退；权限/占用错误不能被回退掩盖。设备 ID 留在本机并区分平台，不将 Mac 输入 ID 同步成 Windows 输出 ID。
 
-Electron 43.4.0 在拒绝显示采集时必须回调 `null`；回调空对象会抛出主进程异常并使页面收到 `Invalid capture constraints`。主进程现在按请求 frame 保留权限、取消及来源失败的具体原因，渲染进程在失败后读取并清除，避免不同窗口或重试串用错误。参见 [Electron 屏幕采集 API](https://www.electronjs.org/docs/latest/api/desktop-capturer) 与 [权限 API](https://www.electronjs.org/docs/latest/api/system-preferences)。
+Mac ad-hoc 更新可能使旧 TCC 授权失效。应用提供重启与重新申请本应用录屏权限入口，固定重置本应用标识，不修改其他应用授权，不直接写 TCC 数据库。系统授权由用户完成。Electron 显示采集拒绝回调使用 `null`，不能传空对象导致 `Invalid capture constraints`。
 
-麦克风与系统音频使用不同的处理配置：麦克风优先请求 `echoCancellation: {exact: 'all'}`，消除外部会议软件等系统播放声音的回声，并启用降噪、关闭自动增益；系统音频保留原声。仅在设备明确不支持该回声模式时回退为常规 AEC，并在面试状态栏及输入测试结果中显示实际模式和耳机建议。权限、设备占用等错误不会被回退掩盖。设置中的测试与正式面试共用采集实现；选中同一个输入（包括可解析的默认设备别名）会在开始前报错，不用文本去重或静音整条麦克风轨道来删除重复内容。
+## 对话、回答与保存契约
 
-Electron 43.4.0 对应 Chromium 150，支持标准 `all` 模式，无需额外开关。macOS 的全系统回声消除可能另外请求「系统音频录制」权限；开发启动时授权对象可能是负责启动应用的终端。已允许屏幕录制不代表这项权限已允许。全系统 AEC 的模式协商成功与实际声学效果应分别验证；不同音量、扬声器位置和双人同时说话仍需实机验收。Chromium 默认给此模式的麦克风增加约 170ms 的参考对齐延迟，独立的系统音频转写轨道不经此处理。来源：[Chromium 150 AEC 模式选择](https://chromium.googlesource.com/chromium/src/+/refs/tags/150.0.7871.224/third_party/blink/renderer/platform/mediastream/media_stream_audio_processor_options.cc)、[平台与延迟定义](https://chromium.googlesource.com/chromium/src/+/refs/tags/150.0.7871.224/media/base/media_switches.cc)、[W3C 回声消除定义](https://www.w3.org/TR/mediacapture-streams/#dom-echocancellationmodeenum)。
+- 实时 WebSocket 使用 Bearer 鉴权和已保存的工作区会话；音频为 PCM16、16kHz、单声道、40ms 帧，协议见 [音频协议](../../mobile/docs/AUDIO_PROTOCOL_V1.md)。
+- 中间句用稳定 ID 与递增 revision 更新原气泡，只有供应商确认后标记完成。手动拆句按用户换行，不按英文句点盲拆。
+- 回答由 request_id 独立归档；同问题、偏好和源版本已有回答时复用。编辑问题可连续多次生成，原答案保留生成时的快照。
+- 前端回答接口使用 NDJSON 增量；不要把供应商 SSE 原样当成客户端协议。当前四种方式为 `conversational / structured / written / coding`，篇幅预算见后端 `llm_service.py`。
+- 结束面试后禁止继续现场答案生成，历史详情提供查看、导出和复盘。
+- 保存快照带 `expected_revision`（新建为 0）。本机待同步副本不应因为响应丢失就覆盖服务器更新；恢复时先重试原版本。
+- 删除墓碑拒绝迟到保存，不能为清理历史直接删除墓碑表。服务端已删除但录音清理失败时允许重试清理。
+- 注册/重设验证码分别使用 `purpose=register/reset_password`；不得复用登录验证码场景。
 
-面试期间切换导航与退出账号受到保护；停止采集后仍需等待记录同步成功。音频设备 ID 仅保存在本机，并按平台区分，避免将 Mac 的输入 ID 用作 Windows 输出 ID。旧 Mac 本机选择会继续读取。回答、主题等账户偏好仍通过设置保存接口同步。
+## 窗口与布局
 
-桌面打包后页面使用 `file://`，API 请求的 Origin 为 `null`。后端默认允许该 Origin 及本机 5173 开发地址，使用 Bearer token 鉴权，不启用跨域 Cookie。部署独立 Web 前端时，通过后端 `CORS_ORIGINS` 追加准确的站点源地址（逗号分隔）；桌面客户端仍需保留 `null`。
+主窗口隐藏 Dock/任务栏入口并保留菜单栏/托盘恢复；界面提供隐藏和退出。主窗口关闭前停止采集、保存草稿后退出，回答浮窗关闭不退出主应用。小窗口使用同一个页面和采集会话，自动置顶；恢复时还原进入前的尺寸和置顶状态。高缩放屏幕按实际工作区限制最小尺寸。
 
-实时回答显式关闭深度思考并按内容流式显示。首字耗时显示实际收到正文的时间，不包含状态提示。界面不承诺固定延迟；真实延迟需要使用目标网络、语音服务和模型进行实测。
+小窗口保留回答方式、补充问题和采集操作；设备设置等操作恢复大窗处理。任务栏和操作区固定，中间对话/回答单独滚动。合并提问显示勾选框、已选底色和数量。
 
-接口升级注意：新版 WS 要求 Authorization Bearer 和已保存的 Workspace 会话；保存快照需 `expected_revision`（新建为 0）。发送注册/重设密码验证码时须分别传 `purpose=register/reset_password`。旧移动端尚未适配这些新契约，本次不应单独把新后端替换到仍使用旧协议的线上环境。
+共享保护覆盖窗口内 DOM 提示，避免原生 `title`、独立提示窗或系统通知泄露内容；OS 授权框、托盘菜单不属于窗口保护。不同采集软件可能忽略保护标记，需要在真实会议中核对。
 
-已移除文档转换路由和桌面 LibreOffice 下载/转换能力，保留 PDF、DOCX、TXT 简历解析。旧历史会在数据库首次升级时复制到新版工作区，原表保留；旧系统仅保存的生成后自我介绍不能当作原始简历，需重新上传。
+## 回归检查
 
-Windows 兼容补充（2026-10-10）：默认输出切换、设备拔出或采集失败会停止音频并暂停面试，用户确认设备后继续；显式选定的输出不会跟随系统默认输出改变。暂停后的设备弹窗会在插拔设备或返回窗口时刷新，不可用的原设备会明确标出。系统采集保留静音包时长，按实际位深解码，并连续转换到 16 kHz 单声道，避免分包重采样损失时长及多声道中央声道遗漏。未播放任何声音时 WASAPI 可能完全没有数据包，这种场景的断句和服务端空闲行为仍需 Windows 实机验收。
+```bash
+pnpm typecheck
+pnpm test
+pnpm lint
+pnpm exec tsc -p electron/tsconfig.json
+node scripts/run-smoke-app.cjs
+node scripts/ensure-screenshot.cjs
+node scripts/smoke-screenshot.cjs
+```
 
-当前 Windows 安装目标是 x64。在 Windows x64 环境安装 Node.js、pnpm、Python 及 Visual Studio C++/Windows SDK 构建工具后，执行 `pnpm install`、`pnpm ensure:native`、`pnpm build`。原生模块按锁定的 Electron 版本与目标架构编译，默认加载验证不会打开声音设备。`beforePack` 会校验目标、源码及二进制；缺少匹配产物时会阻止打包，不能将 Mac 上运行通过等同于 Windows 构建成功。显式硬件检查 `pnpm exec electron scripts/smoke-addon.cjs --hardware` 会播放测试音并采集系统声音，执行前需清除 `ELECTRON_RUN_AS_NODE`，只应在准备好的测试环境执行。
+窗口冒烟使用临时用户目录和本地空白页，不接入音频、网络或用户记录。OCR 使用合成中英文与代码图片，验证取消/重试。Windows 原生构建与安装包校验见 [Windows 构建说明](windows-build.md)；真实声卡、外放回声与会议共享仍需要平台实机检查。
 
-Windows 主窗口使用 Electron `loadFile` 处理安装路径中的盘符、空格和中文；Windows 悬浮窗使用不透明无边框窗口以保留缩放能力，Mac 继续使用原透明窗口。安装器不再包含 LibreOffice 清理脚本，卸载不删除用户偏好或系统里独立安装的软件。
-
-参考：[Microsoft WASAPI 设备路由](https://learn.microsoft.com/en-us/windows/win32/coreaudio/stream-routing-implementation-considerations)、[静音包与 GetBuffer](https://learn.microsoft.com/en-us/windows/win32/api/audioclient/nf-audioclient-iaudiocaptureclient-getbuffer)、[Electron 原生模块](https://www.electronjs.org/docs/latest/tutorial/using-native-node-modules)、[透明窗口限制](https://www.electronjs.org/docs/latest/tutorial/custom-window-styles)。本轮验证结果及未覆盖项见 [兼容验证记录](windows-compatibility-results-2026-10-10.json)。
-
-协议核对来源：[DeepSeek 对话补全](https://api-docs.deepseek.com/api/create-chat-completion/)、[火山引擎流式语音识别](https://docs.volcengine.com/docs/DoubaoVoice/bidirectional-streaming-automatic-speech-recognition-websocket?lang=zh)。识别中的句子使用稳定 ID 和递增 revision 更新同一气泡，只有供应商确认的句段才标为完成；回答以 request_id 独立归档。
-
-第二轮补充：气泡下的「修正 / 拆句」支持按用户输入的换行拆成多句，不按英文句点自动截断。原问题与原回答保留其生成时的版本；修正后可重新提问。重复点击同版本、已有回答的气泡只打开该回答，不再发起模型请求。历史详情支持关键词搜索、筛选有回答的原句与定位来源，未确认尾句在历史和文本导出中仍带标记。
-
-本机尚未同步的副本会显示在历史列表。恢复后先重试原版本，再发送后续编辑，避免把丢失响应当作保存失败重复覆盖。损坏的单份副本保留原文件，其他完好副本仍可读取。账号退出会清理工具的内存草稿；切换页面或工具不会丢失本次登录期间的草稿。
-
-后端新增 `004_deleted_workspace_interviews` 迁移与删除记录，用于拒绝迟到的保存请求，不能通过删除该表来清理历史。删除进行中的会话会通知当前进程停止采集；其他工作进程通过低频权限检查停止。若记录已删除但录音文件清理失败，接口返回明确的待清理错误，可重复删除重试清理。复盘按会话版本缓存，重复生成请求不会并行消耗模型调用。
-
-## 0.5.5 回答方式
-
-设置、面试准备和右侧回答栏支持「自然口述 / 结构化要点 / 标准书面」。标准书面用完整段落解释原理、步骤、取舍和例子；简短、适中、详细的中文目标篇幅分别约 500～700、900～1200、1400～1800 字，按问题复杂度调整，不强行凑字数。它使用独立的输出预算（1800 / 3000 / 4500 tokens），不会继承口述模式的 150～300 字限制。
-
-本场切换用于下一次回答；旧回答保留当时的方式及正文，可以从回答列表查看。重复点击气泡仅复用表达方式、长度、语言和问题版本一致的回答。后端先发布以接受新增 `written` 枚举，再安装新版桌面端；无需数据库迁移。
-
-书面回答仍直接转发 SSE 增量，首段先给结论，关闭思考模式。首内容等待 12 秒、内容空闲 15 秒保持不变；书面模式整次生成上限 120 秒，其他模式 60 秒。协议依据：[DeepSeek Chat Completions](https://api-docs.deepseek.com/api/create-chat-completion/)。
+文档转换和 LibreOffice 路由已移除；简历保留 PDF/DOCX/TXT 解析。不要恢复已移除的桌面转换依赖。

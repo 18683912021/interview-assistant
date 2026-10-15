@@ -79,13 +79,16 @@ export function setWindowCompact(win: BrowserWindow, compact: boolean) {
       await changeFullscreen(win, false);
       if (win.isMaximized()) win.unmaximize();
       value.saved = saved;
-      win.setMinimumSize(360, 560);
+      const area = screen.getDisplayMatching(saved.bounds).workArea;
+      // High display scaling can leave less than 560 DIP above the taskbar.
+      // A minimum taller than the work area would override our fitted bounds.
+      win.setMinimumSize(Math.min(360, area.width), Math.min(560, area.height));
       win.setMaximizable(false);
       win.setFullScreenable(false);
-      const area = screen.getDisplayMatching(saved.bounds).workArea;
       win.setBounds(fit({x: area.x + area.width - 436, y: area.y + 16, width: 420, height: Math.min(740, area.height - 32)}));
     } else {
-      win.setMinimumSize(480, 400);
+      const area = screen.getDisplayMatching(value.saved?.bounds ?? win.getNormalBounds()).workArea;
+      win.setMinimumSize(Math.min(480, area.width), Math.min(400, area.height));
       win.setMaximizable(true);
       win.setFullScreenable(true);
       if (value.saved) {

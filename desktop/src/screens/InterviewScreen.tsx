@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import {
   DEFAULT_SETTINGS,
+  ANSWER_STYLES,
   answerStyleLabel,
   getJobs,
   getResumes,
@@ -43,6 +44,7 @@ import {
 } from '../api/workspace';
 import {ApiError, messageOf} from '../api/client';
 import {AuthContext} from '../utils/AuthContext';
+import {WindowModeContext} from '../utils/WindowModeContext';
 import {setInterviewActive} from '../utils/interviewState';
 import {useAudioCapture} from '../hooks/useAudioCapture';
 import {useToast} from '../components/Toast';
@@ -80,6 +82,7 @@ const messageStatus = (value: string): ConversationMessage['status'] =>
     ? (value as ConversationMessage['status'])
     : 'done';
 export default function InterviewScreen() {
+  const {compact} = useContext(WindowModeContext);
   const navigate = useNavigate(),
     [params] = useSearchParams();
   const {profile} = useContext(AuthContext),
@@ -134,6 +137,10 @@ export default function InterviewScreen() {
     [multi, setMulti] = useState(false),
     [answerId, setAnswerId] = useState<string | null>(null);
   const [pane, setPane] = useState<'chat' | 'answer'>('chat');
+  useEffect(() => {
+    // Resize the same workspace; do not restart capture or replace the current answer.
+    if (compact && !loading && stateRef.current.answers.length) setPane('answer');
+  }, [compact, loading]);
   const [questionEditing, setQuestionEditing] = useState(false);
   const [editing, setEditing] = useState<{id: string; text: string} | null>(null),
     [splitEditing, setSplitEditing] = useState(false),
@@ -845,9 +852,62 @@ export default function InterviewScreen() {
       </section>
     );
 
+  const captureControls = <>
+        <span className={`live-indicator ${live ? 'on' : ''}`}>
+          <i />
+          {state.captureState === 'preparing'
+            ? '连接中'
+            : live
+              ? '面试中'
+              : session.status === 'completed'
+                ? '已结束'
+                : '已暂停'}
+        </span>
+        <time className="session-clock">{clock(duration)}</time>
+        {session.status !== 'completed' && (
+          <>
+            {!live && !compact && (
+              <button
+                className="btn btn-quiet"
+                disabled={busy}
+                onClick={() => {
+                  setDeviceModal(true);
+                }}>
+                调整设备
+              </button>
+            )}
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={() => void (live ? pause() : resumeCapture())}>
+              {live ? <Pause /> : <Play />}
+              <span className="session-capture-label">{settling ? '正在停止采集…' : busy ? startStage || '处理中…' : live ? '暂停' : '继续'}</span>
+            </button>
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={() =>
+                confirm('结束这场面试', '完整对话与回答会保留在面试记录中。', () => finish())
+              }>
+              <Square />
+              结束
+            </button>
+          </>
+        )}
+        {session.status === 'completed' && (
+          <button
+            className="btn"
+            disabled={saveState !== 'saved'}
+            onClick={() => navigate(`/history/${session.id}`)}>
+            查看记录 <ArrowUpRight />
+          </button>
+        )}
+  </>;
+
   return (
     <section className="session-page">
-      <header className="session-toolbar">
+      {!compact && <header className="session-toolbar session-toolbar-live">
+        <div className="session-toolbar-main">
         <IconButton
           className="icon-btn"
           aria-label="返回面试记录"
@@ -872,71 +932,11 @@ export default function InterviewScreen() {
             ? `${session.resume_snapshot.filename} · v${session.resume_snapshot.version}`
             : '未关联简历'}
         </span>
-        <span className="spacer" />
-        <span className={`live-indicator ${live ? 'on' : ''}`}>
-          <i />
-          {state.captureState === 'preparing'
-            ? '连接中'
-            : live
-              ? '面试中'
-              : session.status === 'completed'
-                ? '已结束'
-                : '已暂停'}
-        </span>
-        <time className="session-clock">{clock(duration)}</time>
-        {session.status !== 'completed' && (
-          <>
-            {!live && (
-              <Select
-                aria-label="恢复采集的音频来源"
-                disabled={busy}
-                value={source}
-                onValueChange={selectedValue => {
-                  const value = selectedValue as 'mic' | 'both';
-                  setSource(value);
-                  setSession(current => (current ? {...current, capture_source: value} : current));
-                }}>
-                <SelectOption value="both">系统音频 + 麦克风</SelectOption>
-                <SelectOption value="mic">仅麦克风</SelectOption>
-              </Select>
-            )}
-            {!live && (
-              <button
-                className="btn btn-quiet"
-                disabled={busy}
-                onClick={() => {
-                  setDeviceModal(true);
-                }}>
-                调整设备
-              </button>
-            )}
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() => void (live ? pause() : resumeCapture())}>
-              {live ? <Pause /> : <Play />}
-              {settling ? '正在停止采集…' : busy ? startStage || '处理中…' : live ? '暂停' : '继续'}
-            </button>
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() =>
-                confirm('结束这场面试', '完整对话与回答会保留在面试记录中。', () => finish())
-              }>
-              <Square />
-              结束
-            </button>
-          </>
-        )}
-        {session.status === 'completed' && (
-          <button
-            className="btn"
-            disabled={saveState !== 'saved'}
-            onClick={() => navigate(`/history/${session.id}`)}>
-            查看记录 <ArrowUpRight />
-          </button>
-        )}
-      </header>
+        </div>
+        <div className="session-toolbar-controls">
+          {captureControls}
+        </div>
+      </header>}
       {(error || state.error) && (
         <div className="session-alert" role="alert">
           <span>{error || state.error?.message}</span>
@@ -965,17 +965,29 @@ export default function InterviewScreen() {
           </button>
         </div>
       )}
-      <div className="split-tabs">
+      <div className={`split-tabs${compact ? ' compact-session-nav' : ''}`}>
         <button
           className={`btn ${pane === 'chat' ? 'active' : ''}`}
+          aria-pressed={pane === 'chat'}
           onClick={() => setPane('chat')}>
           对话
         </button>
         <button
           className={`btn ${pane === 'answer' ? 'active' : ''}`}
+          aria-pressed={pane === 'answer'}
           onClick={() => setPane('answer')}>
           回答
         </button>
+        {compact && <>
+          <Select aria-label="回答方式" value={session.preferences.answer_style}
+            disabled={busy || generating || questionEditing || session.status === 'completed'}
+            onValueChange={answer_style => setSession(value => value ? {...value,
+              preferences: {...value.preferences, answer_style: answer_style as Settings['answer_style']}} : value)}>
+            {ANSWER_STYLES.map(style => <SelectOption key={style.value} value={style.value} description={style.description}>{style.label}</SelectOption>)}
+          </Select>
+          <IconButton className="icon-btn" aria-label="补充问题" title="输入或截图提问，提交后直接回答"
+            disabled={!canAnswer} onClick={() => setManual(true)}><Plus size={16} /></IconButton>
+        </>}
       </div>
       <SessionSplit pane={pane}>
         <div className="chat-column">
@@ -998,6 +1010,7 @@ export default function InterviewScreen() {
           </header>
           <div
             className="chat-scroll"
+            tabIndex={0} aria-label="现场对话列表"
             ref={chatScroll}
             onScroll={() => {
               const el = chatScroll.current;
@@ -1038,10 +1051,11 @@ export default function InterviewScreen() {
                   </span>
                 </div>
                 <button
-                  className={`chat-bubble ${selected.includes(message.id) ? 'selected' : ''}`}
+                  className={`chat-bubble${multi ? ' multi-select' : ''} ${selected.includes(message.id) ? 'selected' : ''}`}
                   aria-pressed={selected.includes(message.id)}
                   onClick={() => clickMessage(message.id)}>
-                  {message.text}
+                  {multi && <span className="bubble-selection" aria-hidden="true">{selected.includes(message.id) && <Check size={13} strokeWidth={3} />}</span>}
+                  <span>{message.text}</span>
                 </button>
                 <div className="bubble-actions">
                   {state.answers.some(value => value.source_message_ids.includes(message.id)) && (
@@ -1082,7 +1096,7 @@ export default function InterviewScreen() {
                 <button
                   className="btn btn-primary"
                   disabled={!selected.length || !canAnswer}
-                  onClick={() => request(selected)}>
+                  onClick={() => {if (request(selected)) setMulti(false);}}>
                   合并回答
                 </button>
               </>
@@ -1101,7 +1115,7 @@ export default function InterviewScreen() {
           </footer>
         </div>
         <div className="answer-column">
-          <header className="panel-header">
+          {!compact && <header className="panel-header">
             <FileText size={15} />
             <strong>回答参考</strong>
             <span className="spacer" />
@@ -1130,16 +1144,17 @@ export default function InterviewScreen() {
                 <Copy />
               </IconButton>
             )}
-          </header>
-          <div className="answer-preferences">
+          </header>}
+          {!compact && <div className="answer-preferences">
             <AnswerStylePicker compact value={session.preferences.answer_style}
               disabled={busy || generating || questionEditing || session.status === 'completed'}
               onChange={answer_style => setSession(value => value ? {...value,
                 preferences: {...value.preferences, answer_style}} : value)} />
-            <span className="preference-scope">{questionEditing ? '先完成问题编辑' : generating ? '生成完成后可切换' : '用于下一次回答'}</span>
-          </div>
+            <span className={`preference-scope${!questionEditing && !generating ? ' preference-idle' : ''}`}>{questionEditing ? '先完成问题编辑' : generating ? '生成完成后可切换' : '用于下一次回答'}</span>
+          </div>}
           <div
             className="answer-scroll"
+            tabIndex={0} aria-label="回答正文"
             ref={answerScroll}
             onScroll={event => {
               if (answerId) answerPositions.current[answerId] = event.currentTarget.scrollTop;
@@ -1204,8 +1219,10 @@ export default function InterviewScreen() {
               </div>
             )}
           </div>
-          <footer className="panel-footer">
+          <footer className="panel-footer answer-footer">
             <ScrollToTop target={answerScroll} contentKey={answerId} />
+            {compact && answer?.text && <IconButton className="icon-btn" aria-label="复制回答" title="复制当前回答"
+              onClick={() => void navigator.clipboard.writeText(answer.text).then(() => toast('已复制', 'success')).catch(() => toast('复制失败，请手动选择文本', 'error'))}><Copy size={14} /></IconButton>}
             <span>
               {answer
                 ? {
@@ -1239,7 +1256,8 @@ export default function InterviewScreen() {
           </footer>
         </div>
       </SessionSplit>
-      <footer className="session-status">
+      {compact && <footer className="compact-session-footer"><div className="session-toolbar-controls">{captureControls}</div></footer>}
+      {!compact && <footer className="session-status">
         <div className="audio-status">
           <Mic size={13} />
           <span className="mini-meter">
@@ -1270,7 +1288,7 @@ export default function InterviewScreen() {
           {saveState === 'saved' ? <Check size={12} /> : null}
           {saveState === 'saved' ? '已同步' : saveState === 'saving' ? '正在保存…' : '等待同步'}
         </span>
-      </footer>
+      </footer>}
       {editing && (
         <Modal title="修正与拆句" onClose={() => setEditing(null)}>
           <div className="segmented sentence-edit-modes" aria-label="编辑方式">
@@ -1330,10 +1348,22 @@ export default function InterviewScreen() {
         </Modal>
       )}
       {deviceModal && (
-        <Modal title="调整本场音频设备" onClose={() => setDeviceModal(false)}>
+        <Modal title="调整本场音频设备" onClose={() => setDeviceModal(false)}
+          footer={<button className="btn btn-primary" onClick={() => setDeviceModal(false)}>完成</button>}>
           <p className="muted small">
             采集已暂停。修改只应用于本场，点击“继续”后重新获取音频权限。
           </p>
+          <label className="field">
+            音频来源
+            <Select aria-label="恢复采集的音频来源" value={source} onValueChange={selectedValue => {
+              const value = selectedValue as 'mic' | 'both';
+              setSource(value);
+              setSession(current => current ? {...current, capture_source: value} : current);
+            }}>
+              <SelectOption value="both">系统音频 + 麦克风</SelectOption>
+              <SelectOption value="mic">仅麦克风</SelectOption>
+            </Select>
+          </label>
           <label className="field">
             麦克风
             <Select
@@ -1354,7 +1384,7 @@ export default function InterviewScreen() {
               ))}
             </Select>
           </label>
-          {/Mac/i.test(navigator.userAgent) && (
+          {source === 'both' && /Mac/i.test(navigator.userAgent) && (
             <label className="field">
               系统音频
               <Select
@@ -1377,7 +1407,7 @@ export default function InterviewScreen() {
               <small>系统声音通过录屏通道获取，系统可能显示共享提示；画面不保存、不上传。虚拟输入需先配置声音路由。</small>
             </label>
           )}
-          {isWindows && (
+          {source === 'both' && isWindows && (
             <label className="field">
               系统音频输出
               <Select
@@ -1401,15 +1431,14 @@ export default function InterviewScreen() {
             </label>
           )}
           {isWindows && outputError && <ErrorState message={outputError} />}
-          <div className="form-actions">
-            <button className="btn btn-primary" onClick={() => setDeviceModal(false)}>
-              完成
-            </button>
-          </div>
         </Modal>
       )}
       {manual && (
-        <Modal title="补充一个问题" onClose={() => setManual(false)}>
+        <Modal title="补充一个问题" onClose={() => setManual(false)} footer={<>
+          <button className="btn" onClick={() => setManual(false)}>取消</button>
+          <button className="btn btn-primary" disabled={!manualText.trim() || !canAnswer || manualRecognizing}
+            onClick={submitManualQuestion}>提交并回答</button>
+        </>}>
           <ScreenshotQuestion disabled={!canAnswer || !screenshotEnabled} onBusyChange={setManualRecognizing} onText={setManualText} />
           <label className="field">
             面试官的问题
@@ -1424,17 +1453,6 @@ export default function InterviewScreen() {
               maxLength={16000}
             />
           </label>
-          <div className="form-actions">
-            <button className="btn" onClick={() => setManual(false)}>
-              取消
-            </button>
-            <button
-              className="btn btn-primary"
-              disabled={!manualText.trim() || !canAnswer || manualRecognizing}
-              onClick={submitManualQuestion}>
-              提交并回答
-            </button>
-          </div>
         </Modal>
       )}
     </section>
