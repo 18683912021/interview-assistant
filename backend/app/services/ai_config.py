@@ -1,4 +1,4 @@
-"""One explicit DeepSeek/OpenAI-protocol configuration for both answer paths.
+"""Independent DeepSeek and Qwen configurations for both answer paths.
 
 The project's legacy ANTHROPIC_* variables may point to DeepSeek's Anthropic
 compatibility endpoint. They are converted to DeepSeek's chat-completions API,
@@ -10,6 +10,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
+DEFAULT_QWEN_MODEL = "qwen3.8-flash"
+DEFAULT_QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 
 def normalize_model(model: str) -> str:
@@ -61,6 +63,7 @@ class AIConfig:
     proxy: str | None = field(default=None, repr=False)
     trust_env: bool = False
     error: str | None = None
+    provider: str = "deepseek"
 
     @property
     def configured(self) -> bool:
@@ -76,29 +79,67 @@ class AIConfig:
             options["proxy"] = self.proxy
         return options
 
+    def generation_options(self) -> dict:
+        # Raw Chat Completions JSON: extra_body is only an SDK convention.
+        return {"enable_thinking": False} if self.provider == "qwen" else {"thinking": {"type": "disabled"}}
 
-def load_ai_config(*, workspace: bool = False) -> AIConfig:
-    key = (os.getenv("DEEPSEEK_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or "").strip()
-    base = (os.getenv("WORKSPACE_LLM_BASE_URL") if workspace else None) or os.getenv("DEEPSEEK_BASE_URL")
-    if not base:
-        base = os.getenv("ANTHROPIC_BASE_URL") if not os.getenv("DEEPSEEK_API_KEY") else None
-    model = ((os.getenv("WORKSPACE_LLM_MODEL") if workspace else None)
-             or os.getenv("DEEPSEEK_MODEL") or DEFAULT_MODEL).strip()
+
+def load_ai_config(*, workspace: bool = False, provider: str | None = None) -> AIConfig:
+    provider = (provider or os.getenv("AI_PROVIDER", "deepseek")).strip().lower()
+    if provider not in {"deepseek", "qwen"}:
+        return AIConfig(api_key="", error="AI_PROVIDER 必须为 deepseek 或 qwen")
+    if provider == "qwen":
+        key = (os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY") or "").strip()
+        base = os.getenv("QWEN_BASE_URL") or DEFAULT_QWEN_BASE_URL
+        model = (os.getenv("QWEN_MODEL") or DEFAULT_QWEN_MODEL).strip()
+    else:
+        key = (os.getenv("DEEPSEEK_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or "").strip()
+        base = (os.getenv("WORKSPACE_LLM_BASE_URL") if workspace else None) or os.getenv("DEEPSEEK_BASE_URL")
+        if not base:
+            base = os.getenv("ANTHROPIC_BASE_URL") if not os.getenv("DEEPSEEK_API_KEY") else None
+        base = base or DEFAULT_BASE_URL
+        model = ((os.getenv("WORKSPACE_LLM_MODEL") if workspace else None)
+                 or os.getenv("DEEPSEEK_MODEL") or DEFAULT_MODEL).strip()
     try:
-        normalized_base = normalize_base_url(base or DEFAULT_BASE_URL)
+        normalized_base = normalize_base_url(base)
         proxy, trust = read_proxy_config()
         if not model or len(model) > 100 or any(char.isspace() for char in model):
-            raise ValueError("AI 模型名称无效，请检查 DEEPSEEK_MODEL / WORKSPACE_LLM_MODEL")
+            raise ValueError("AI 模型名称无效，请检查后端模型配置")
     except ValueError as error:
-        return AIConfig(api_key=key, error=str(error))
-    return AIConfig(api_key=key, base_url=normalized_base, model=normalize_model(model), proxy=proxy, trust_env=trust)
+        return AIConfig(api_key=key, provider=provider, error=str(error))
+    return AIConfig(api_key=key, base_url=normalized_base, model=normalize_model(model),
+                    proxy=proxy, trust_env=trust, provider=provider)
 
 
-def provider_error_message(status: int) -> str:
+def load_ai_configs(*, workspace: bool = False) -> tuple[AIConfig, ...]:
+    """Primary then one independent fallback; missing keys do not block recovery."""
+    primary = load_ai_config(workspace=workspace)
+    configs = [primary]
+    enabled = os.getenv("AI_FALLBACK_ENABLED", "true").strip().lower() not in {"false", "0", "no"}
+    if enabled and os.getenv("AI_PROVIDER", "deepseek").strip().lower() in {"deepseek", "qwen"}:
+        configs.append(load_ai_config(workspace=workspace, provider="qwen" if primary.provider == "deepseek" else "deepseek"))
+    return tuple(config for config in configs if config.configured) or (primary,)
+
+
+def provider_refused(payload) -> bool:
+    """Classify explicit content refusals without exposing provider messages."""
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return False
+    for value in (error.get("code"), error.get("type")):
+        if isinstance(value, str):
+            normalized = "".join(char for char in value.lower() if char.isalnum())
+            if any(word in normalized for word in ("inspection", "contentfilter", "contentpolicy", "unsafe", "inappropriatecontent")):
+                return True
+    return False
+
+
+def provider_error_message(status: int, provider: str = "deepseek") -> str:
+    name = "Qwen" if provider == "qwen" else "DeepSeek"
     return {
         400: "AI 请求格式与服务不兼容，请检查 API 地址和模型配置",
-        401: "AI 服务密钥无效，请检查后端 DeepSeek API Key",
-        402: "AI 服务账户余额不足，请检查 DeepSeek 账户余额",
+        401: f"AI 服务密钥无效，请检查后端 {name} API Key",
+        402: f"AI 服务账户余额不足，请检查 {name} 账户余额",
         403: "AI 服务拒绝访问，请检查密钥权限与服务地址",
         404: "AI 接口或模型不存在，请检查后端 API 地址和模型配置",
         422: "AI 模型参数不兼容，请检查后端模型配置",

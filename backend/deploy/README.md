@@ -58,6 +58,46 @@ bash /root/interview-deploy/release.sh deploy 20261010-workspace-v050
 
 发布后的新进程启动会运行事务性增量迁移。脚本等待 `/health` 返回 `status=ok` 且 `version=0.5.0`；这只是应用存活检查，不能替代业务联调。随后应验证公网 HTTPS、鉴权、用户历史归属、迁移记录、流式回答和 WebSocket 反代。检查只读统计即可，不输出简历、对话或账号明细。
 
+## DeepSeek 主服务与 Qwen 自动备用
+
+实时 WebSocket 回答、工作区流式回答、面试准备、简历自我介绍与复盘均支持双服务配置。
+默认优先 DeepSeek；在尚未输出任何正文时，连接失败、超时、限流、服务异常或空响应会尝试一次 Qwen。
+已有正文后中断会保留部分内容并报告失败，不把两个独立生成的答案拼在一起；取消、明确拒绝、参数错误和输出截断不触发切换。
+
+在后端私有 `.env` 中保留原 DeepSeek 配置，并增加：
+
+```dotenv
+AI_PROVIDER=deepseek
+AI_FALLBACK_ENABLED=true
+QWEN_API_KEY=<百炼按量付费 Key>
+QWEN_BASE_URL=https://<业务空间ID>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen3.8-flash
+```
+
+`QWEN_API_KEY` 也兼容 `DASHSCOPE_API_KEY`。Qwen 独立使用自己的地址、密钥和模型；
+客户端的 DeepSeek 模型覆盖、`WORKSPACE_LLM_BASE_URL` 与 `WORKSPACE_LLM_MODEL` 不会覆盖 Qwen。
+两个提供商均沿用显式 `AI_PROXY_URL` / `AI_TRUST_ENV` 网络配置。
+使用 `/compatible-mode/v1`，不要填 `/apps/anthropic`；未配置地址时使用旧 DashScope 北京域名，
+新部署应填写控制台提供的业务空间专属地址。
+
+Qwen 请求显式设置 `enable_thinking=false` 并保留现有回答风格、上下文及输出预算。
+选择 `qwen3.8-flash` 是基于实时回答场景和官方对响应速度的定位；可通过 `QWEN_MODEL` 改为
+`qwen3.7-plus` 做质量对比，不把旧 `qwen-flash` / `qwen-plus` 当作新版模型别名。
+参考：[模型说明](https://help.aliyun.com/zh/model-studio/qwen3-8-flash)、
+[OpenAI 兼容接口](https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope)。
+
+主服务故障期间可临时设置 `AI_PROVIDER=qwen`，让新请求直接使用 Qwen，DeepSeek 成为备用；
+需要单服务时设置 `AI_FALLBACK_ENABLED=false`。配置在进程内缓存，修改后需重启后端。
+网络、限流、服务异常或首正文超时会使该服务进入进程内 30 秒冷却，后续请求优先使用另一路，
+避免持续故障时每道题重复等待。冷却到期后恢复配置的主备顺序；两路均异常时仍按原顺序尝试，
+不会永久禁用任何服务。冷却不在多进程之间共享，不发起后台付费探测，也不并行生成两份答案。
+
+完成代码发布和服务器私有配置更新后，在维护窗口重启 `interview-assistant.service`。
+已登录客户端可调用 `/api/diagnostics/ai` 检查两路模型列表连通性；返回 `providers` 和
+`fallback_configured`，主服务异常但备用可用时返回 `reason_code=fallback_ready`。
+`/health` 只报告是否有有效配置，不发送模型请求；模型列表检查也不代表实际生成成功，
+发布后需用一条不含个人材料的短问题验证真实流式回答。
+
 ## 腾讯普通版主服务与火山备用
 
 实时语音通过后端 `ASR_PROVIDER` 显式选择，未设置时保持旧版 `volcengine`。

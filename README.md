@@ -63,6 +63,9 @@ npm start             # Metro
 | `desktop/.env` | `VITE_API_HOST`（后端地址）、`ANTHROPIC_MODEL` |
 | `backend/.env` | DeepSeek（`ANTHROPIC_*`）、火山豆包（`VOLC_API_KEY`）、SMTP（验证码邮件）、`DATABASE_URL`/`REDIS_URL` |
 
+回答服务支持 Qwen 自动备用，配置 `QWEN_API_KEY`、`QWEN_BASE_URL` 和 `QWEN_MODEL`。
+主备切换与部署步骤见 [后端部署说明](backend/deploy/README.md#deepseek-主服务与-qwen-自动备用)。
+
 ## 部署（生产服务器）
 
 服务器（阿里云 47.108.205.102）采用宝塔面板 + systemd + nginx 反代：

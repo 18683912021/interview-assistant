@@ -20,8 +20,7 @@ from app.routers.interview import router as interview_router
 from app.routers.resume import router as resume_router
 from app.routers.workspace import router as workspace_router
 from app.routers.diagnostics import router as diagnostics_router
-from app.services.ai_config import load_ai_config
-from app.services.ai_diagnostics import ai_status
+from app.services.ai_diagnostics import ai_chain_status
 from app.db import init_db, close_db
 from app.redis import close_redis
 from app.logging_config import configure_logging
@@ -101,7 +100,7 @@ app.include_router(diagnostics_router, prefix="/api")
 @app.get("/health")
 async def health():
     # Liveness never calls a provider; authenticated diagnostics checks readiness.
-    status = ai_status(load_ai_config())
+    status = ai_chain_status()
     return {"status": "ok", "version": "0.5.0", "ai": {
         "configured": status["configured"], "reason_code": status["reason_code"],
     }}

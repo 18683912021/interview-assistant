@@ -11,8 +11,8 @@ from fastapi import FastAPI, HTTPException
 from app.db import get_db
 from app.routers.auth import get_current_user
 from app.routers.diagnostics import router
-from app.services.ai_config import load_ai_config, read_proxy_config
-from app.services.ai_diagnostics import probe_ai
+from app.services.ai_config import load_ai_config, load_ai_configs, read_proxy_config
+from app.services.ai_diagnostics import probe_ai, probe_ai_chain, ai_chain_status
 from app.services import llm_service, workspace_llm
 
 
@@ -152,3 +152,44 @@ async def test_diagnostics_requires_auth_and_unconfigured_does_not_probe():
         assert response.status_code == 200
         assert response.json()["reason_code"] == "unconfigured"
         assert response.json()["reachable"] is None and response.json()["ready"] is False
+
+
+def test_provider_chain_is_independent_and_can_be_reordered_or_disabled(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-test-key")
+    monkeypatch.setenv("QWEN_API_KEY", "qwen-test-key")
+    monkeypatch.setenv("QWEN_BASE_URL", "https://workspace.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
+    monkeypatch.setenv("WORKSPACE_LLM_BASE_URL", "https://deepseek-workspace.example/v1")
+    monkeypatch.setenv("WORKSPACE_LLM_MODEL", "deepseek-pro")
+    primary, fallback = load_ai_configs(workspace=True)
+    assert primary.provider == "deepseek" and fallback.provider == "qwen"
+    assert primary.model == "deepseek-pro" and fallback.model == "qwen3.8-flash"
+    assert fallback.base_url.endswith("/compatible-mode/v1")
+    assert fallback.generation_options() == {"enable_thinking": False}
+    assert "qwen-test-key" not in repr(fallback)
+    monkeypatch.setenv("AI_PROVIDER", "qwen")
+    assert [c.provider for c in load_ai_configs()] == ["qwen", "deepseek"]
+    monkeypatch.setenv("AI_FALLBACK_ENABLED", "false")
+    assert [c.provider for c in load_ai_configs()] == ["qwen"]
+
+
+def test_only_qwen_key_makes_answers_configured(monkeypatch):
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "qwen-test-key")
+    assert [c.provider for c in load_ai_configs()] == ["qwen"]
+    assert ai_chain_status()["configured"]
+    assert llm_service.LLMService().ready
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_reports_backup_readiness_without_exposing_credentials(monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-test-key")
+    monkeypatch.setenv("QWEN_API_KEY", "qwen-test-key")
+    def provider(request):
+        if request.url.host == "api.deepseek.com":
+            return httpx.Response(503, text="private provider body")
+        return httpx.Response(200, json={"data": [{"id": "qwen3.8-flash"}]})
+    mock_provider(monkeypatch, provider)
+    result = await probe_ai_chain()
+    assert result["ready"] and result["provider"] == "qwen"
+    assert result["reason_code"] == "fallback_ready" and result["fallback_configured"]
+    assert len(result["providers"]) == 2
+    assert "test-key" not in json.dumps(result) and "private" not in json.dumps(result)

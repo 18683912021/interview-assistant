@@ -1,4 +1,4 @@
-"""DeepSeek streaming answers, with a non-thinking low-latency default.
+"""DeepSeek/Qwen streaming answers with pre-output provider failover.
 
 Official contract: https://api-docs.deepseek.com/zh-cn/api/create-chat-completion
 The tuple interface is retained for resume generation; completion metadata is
@@ -8,10 +8,12 @@ import asyncio
 import json
 import logging
 import importlib.util
+from contextlib import aclosing
 from typing import Any, AsyncGenerator
 
 import httpx
-from app.services.ai_config import load_ai_config, normalize_model, provider_error_message
+from app.services.ai_config import AIConfig, load_ai_configs, normalize_model, provider_error_message, provider_refused
+from app.services.ai_failover import prioritize_available, mark_available, mark_unavailable
 from app.services.answer_reference import answer_reference
 
 logger = logging.getLogger("llm")
@@ -24,6 +26,14 @@ WRITTEN_ANSWER_TIMEOUT = 120.0
 ANSWER_TOKEN_BUDGETS = {"conversational": 2400, "structured": 3200, "written": 8000}
 ANSWER_TOKEN_BUDGETS["coding"] = ANSWER_TOKEN_BUDGETS["written"]
 MAX_ANSWER_TOKENS = max(ANSWER_TOKEN_BUDGETS.values())
+
+
+class _ProviderFailure(RuntimeError):
+    """Safe user-facing message; provider bodies and secrets never cross this boundary."""
+
+    def __init__(self, message: str, *, retryable: bool = True):
+        super().__init__(message)
+        self.retryable = retryable
 
 
 def answer_preferences(context: dict[str, Any] | None = None) -> tuple[str, str]:
@@ -155,14 +165,15 @@ def build_messages(question: str, track: str | None, language: str,
 
 class LLMService:
     def __init__(self) -> None:
-        self._config = load_ai_config()
+        self._configs = load_ai_configs()
+        self._config = self._configs[0]
         self._api_key = self._config.api_key
         self._base_url = f"{self._config.base_url}/chat/completions"
         self._client: httpx.AsyncClient | None = None
 
     @property
     def ready(self) -> bool:
-        return self._config.configured
+        return any(config.configured for config in self._configs)
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -192,35 +203,64 @@ class LLMService:
         if not self.ready:
             raise RuntimeError(self._config.error or "回答服务未配置 API Key")
         metadata = result_metadata if result_metadata is not None else {}
-        metadata["finish_reason"] = None
-        body = {"model": normalize_model(model or self._config.model), "messages": build_messages(question, track, language, context),
-                "stream": True, "max_tokens": max(1, min(int(max_tokens), MAX_ANSWER_TOKENS)),
-                "thinking": {"type": "disabled"}, "temperature": 0.3}
-        headers = {"Authorization": f"Bearer {self._api_key}",
+        messages = build_messages(question, track, language, context)
+        budget = max(1, min(int(max_tokens), MAX_ANSWER_TOKENS))
+        loop = asyncio.get_running_loop()
+        total_deadline = loop.time() + (WRITTEN_ANSWER_TIMEOUT if answer_preferences(context)[0] in ("written", "coding") else TOTAL_ANSWER_TIMEOUT)
+        configs = prioritize_available(self._configs)
+        for index, config in enumerate(configs):
+            # Existing clients can override DeepSeek models. Never send that model
+            # to Qwen, including when only the fallback key is configured.
+            selected_model = normalize_model(model or config.model) if config.provider == "deepseek" and config is self._configs[0] else config.model
+            metadata.update(finish_reason=None, provider=config.provider, model=selected_model,
+                            fallback_used=config is not self._configs[0])
+            emitted = False
+            stream = self._stream_provider(config, selected_model, messages, budget, metadata, total_deadline)
+            try:
+                async with aclosing(stream):
+                    async for chunk, final in stream:
+                        emitted = emitted or bool(chunk)
+                        if final and metadata.get("finish_reason") in {"stop", "length"}:
+                            mark_available(config)
+                        yield chunk, final
+                return
+            except _ProviderFailure as error:
+                if error.retryable:
+                    mark_unavailable(config)
+                if emitted or not error.retryable or index + 1 == len(configs) or loop.time() >= total_deadline:
+                    raise
+                logger.warning("AI provider %s failed before output; trying %s",
+                               config.provider, configs[index + 1].provider)
+
+    async def _stream_provider(self, config: AIConfig, model: str, messages: list[dict[str, str]],
+                               max_tokens: int, metadata: dict[str, Any], total_deadline: float
+                               ) -> AsyncGenerator[tuple[str, bool], None]:
+        body = {"model": model, "messages": messages, "stream": True, "max_tokens": max_tokens,
+                **config.generation_options(), "temperature": 0.3}
+        headers = {"Authorization": f"Bearer {config.api_key}",
                    "Content-Type": "application/json", "Accept": "text/event-stream"}
         client = await self._get_client()
         loop = asyncio.get_running_loop()
         started = loop.time()
-        total_deadline = started + (WRITTEN_ANSWER_TIMEOUT if answer_preferences(context)[0] in ("written", "coding") else TOTAL_ANSWER_TIMEOUT)
         content_deadline = min(started + FIRST_CONTENT_TIMEOUT, total_deadline)
         received_content = False
         try:
             # HTTP read timeouts restart on bytes, including SSE keepalives.
             # Bound time to usable content independently of the network traffic.
             async with asyncio.timeout_at(content_deadline) as deadline, \
-                    client.stream("POST", self._base_url, json=body, headers=headers) as response:
+                    client.stream("POST", f"{config.base_url}/chat/completions", json=body, headers=headers) as response:
                 if response.status_code != 200:
                     # Never include provider bodies (which may contain credentials
                     # or user material) in client errors or application logs.
-                    await response.aread()
-                    raise RuntimeError(provider_error_message(response.status_code))
+                    raise _ProviderFailure(provider_error_message(response.status_code, config.provider),
+                                           retryable=response.status_code not in {400, 403, 422})
                 async for line in response.aiter_lines():
                     if not line.startswith("data:"):
                         continue
                     data_str = line[5:].strip()
                     if data_str == "[DONE]":
                         if not received_content:
-                            raise RuntimeError("回答服务未返回正文，请重试")
+                            raise _ProviderFailure("回答服务未返回正文，请重试")
                         if metadata["finish_reason"] is None:
                             metadata["finish_reason"] = "stop"
                         deadline.reschedule(None)
@@ -229,23 +269,43 @@ class LLMService:
                     try:
                         data = json.loads(data_str)
                     except json.JSONDecodeError as exc:
-                        raise RuntimeError("回答数据格式异常，请重试") from exc
+                        raise _ProviderFailure("回答数据格式异常，请重试") from None
+                    if not isinstance(data, dict):
+                        raise _ProviderFailure("回答数据格式异常，请重试")
                     if data.get("error"):
-                        raise RuntimeError("回答服务返回错误，请重试")
+                        error = data["error"]
+                        code = str(error.get("code", "")).lower() if isinstance(error, dict) else ""
+                        rejected = provider_refused(data) or any(word in code for word in ("invalid", "permission"))
+                        raise _ProviderFailure("回答服务返回错误，请重试", retryable=not rejected)
                     choices = data.get("choices", [])
                     if not choices:
                         continue
+                    if not isinstance(choices, list) or not isinstance(choices[0], dict):
+                        raise _ProviderFailure("回答数据格式异常，请重试")
                     choice = choices[0]
-                    content = choice.get("delta", {}).get("content") or ""
+                    delta = choice.get("delta") or {}
+                    if not isinstance(delta, dict):
+                        raise _ProviderFailure("回答数据格式异常，请重试")
+                    content = delta.get("content") or ""
+                    if not isinstance(content, str):
+                        raise _ProviderFailure("回答数据格式异常，请重试")
+                    if delta.get("refusal"):
+                        raise _ProviderFailure("AI 服务未能回答此问题", retryable=False)
                     if content.strip():
                         received_content = True
                         content_deadline = min(loop.time() + CONTENT_IDLE_TIMEOUT, total_deadline)
                         deadline.reschedule(content_deadline)
+                    elif not received_content:
+                        # Don't expose leading whitespace or let it renew the
+                        # first-content deadline before deciding whether to fail over.
+                        content = ""
                     finish_reason = choice.get("finish_reason")
                     if finish_reason:
                         metadata["finish_reason"] = finish_reason
+                        if finish_reason in {"insufficient_system_resource", "aborted"} and not received_content:
+                            raise _ProviderFailure("AI 服务生成暂时中断，请重试")
                         if finish_reason == "stop" and not received_content:
-                            raise RuntimeError("回答服务未返回正文，请重试")
+                            raise _ProviderFailure("回答服务未返回正文，请重试")
                     if content or finish_reason:
                         # A generator must not leave a task-cancelling timer armed
                         # while its caller sends a chunk. Keep the absolute deadline
@@ -254,12 +314,14 @@ class LLMService:
                         yield content, bool(finish_reason)
                         if finish_reason:
                             return
+                        if loop.time() >= content_deadline:
+                            raise TimeoutError
                         deadline.reschedule(content_deadline)
-                raise RuntimeError("回答连接提前结束，已保留收到的内容")
+                raise _ProviderFailure("回答连接提前结束，已保留收到的内容")
         except (TimeoutError, httpx.TimeoutException) as exc:
-            raise RuntimeError("回答服务超时，已保留收到的内容") from exc
+            raise _ProviderFailure("回答服务超时，已保留收到的内容") from None
         except httpx.HTTPError as exc:
-            raise RuntimeError("无法连接 AI 服务，请检查后端网络或 AI_PROXY_URL / AI_TRUST_ENV 配置") from exc
+            raise _ProviderFailure("无法连接 AI 服务，请检查后端网络或 AI_PROXY_URL / AI_TRUST_ENV 配置") from None
 
     async def close(self) -> None:
         if self._client is not None:
