@@ -1,3 +1,4 @@
+import {useWorkspaceDraft} from '../utils/WorkspaceDraftContext';
 import {IconButton} from '../components/IconButton';
 import {Select, SelectOption} from '../components/Select';
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
@@ -46,10 +47,11 @@ export default function MaterialsScreen() {
     [editingId, setEditingId] = useState<string | null>(null),
     [originalResume, setOriginalResume] = useState<ResumeVersion | null>(null),
     [originalJob, setOriginalJob] = useState<JobInput | null>(null),
-    [query, setQuery] = useState(''),
     [deletingId, setDeletingId] = useState<string | null>(null);
   const [materialKind, setMaterialKind] = useState<NonNullable<ResumeVersion['kind']>>('resume');
-  const [filterKind, setFilterKind] = useState('all');
+  const [query, setQuery] = useWorkspaceDraft('materials:query', () => '');
+  const [filterKind, setFilterKind] = useWorkspaceDraft('materials:filter', () => 'all');
+  const [pane, setPane] = useWorkspaceDraft<'resumes' | 'jobs'>('materials:pane', () => 'resumes');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const verifiedPromotion = useRef(false);
   const editorForm = useRef<HTMLFormElement>(null);
@@ -214,7 +216,7 @@ export default function MaterialsScreen() {
     modal === 'resume'
       ? originalResume
         ? !unchanged
-        : !!resumeText.trim() || filename !== '个人简历'
+        : !!resumeText.trim() || filename !== '个人简历' || materialKind !== 'resume'
       : originalJob
         ? !unchanged
         : JSON.stringify(normalizeJob(job)) !== JSON.stringify(blankJob);
@@ -269,16 +271,21 @@ export default function MaterialsScreen() {
         </Select>
       </div>
       {error && <ErrorState message={error} retry={() => void load()} />}{' '}
+      <div className="pane-switch" role="group" aria-label="显示资料区域">
+        <button className="btn" aria-pressed={pane === 'resumes'} onClick={() => setPane('resumes')}>资料与准备稿</button>
+        <button className="btn" aria-pressed={pane === 'jobs'} onClick={() => setPane('jobs')}>目标岗位</button>
+      </div>
       <div className="collection-scroll">
       {loading ? (
         <Loading />
       ) : (
-        <div className="materials-grid">
-          <div>
+        <div className="materials-grid" data-pane={pane}>
+          <section className="material-column" data-pane="resumes">
             <div className="section-heading">
               <h2>个人资料与准备稿</h2>
-              <span>{resumes.length} 个版本</span>
+              <span>{filteredResumes.length} 个版本</span>
             </div>
+            <div className="material-list" key={`resumes:${query}:${filterKind}`} role="region" aria-label="资料版本列表" tabIndex={0}>
             {!resumes.length ? (
               <EmptyState
                 icon={<Files size={22} />}
@@ -316,7 +323,7 @@ export default function MaterialsScreen() {
                       修改为新版本
                     </button>
                     <button className="btn btn-quiet danger" disabled={deletingId === resume.id} onClick={() => removeResume(resume)}>
-                      <Trash2 size={16} />删除
+                      {deletingId === resume.id ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />}{deletingId === resume.id ? '删除中…' : '删除'}
                     </button>
                   </footer>
                   {!!older.length && (
@@ -339,8 +346,9 @@ export default function MaterialsScreen() {
                 </article>
               ))
             )}
-          </div>
-          <div>
+            </div>
+          </section>
+          <section className="material-column" data-pane="jobs">
             <div className="section-heading">
               <h2>目标岗位</h2>
               <button className="btn btn-quiet" onClick={() => editJob()}>
@@ -348,6 +356,7 @@ export default function MaterialsScreen() {
                 添加岗位
               </button>
             </div>
+            <div className="material-list" key={`jobs:${query}`} role="region" aria-label="目标岗位列表" tabIndex={0}>
             {!jobs.length ? (
               <EmptyState
                 icon={<BriefcaseBusiness size={23} />}
@@ -394,7 +403,8 @@ export default function MaterialsScreen() {
                 </article>
               ))
             )}
-          </div>
+            </div>
+          </section>
         </div>
       )}
       </div>
@@ -402,8 +412,19 @@ export default function MaterialsScreen() {
         <Modal
           title={modal === 'resume' ? '保存资料版本' : editingId ? '编辑岗位' : '添加岗位'}
           busy={saving}
-          onClose={closeEditor}>
-          <form ref={editorForm} onSubmit={save} noValidate>
+          onClose={closeEditor}
+          footer={
+            <>
+              <button type="button" className="btn" disabled={saving} onClick={closeEditor}>
+                取消
+              </button>
+              <button type="submit" form="material-editor" className="btn btn-primary" disabled={saving || unchanged}>
+                {saving && <LoaderCircle className="spin" />}
+                {saving ? '正在保存…' : '保存'}
+              </button>
+            </>
+          }>
+          <form id="material-editor" ref={editorForm} onSubmit={save} noValidate>
             <fieldset disabled={saving} className="form-fields">
               {modal === 'resume' ? (
                 <>
@@ -492,22 +513,12 @@ export default function MaterialsScreen() {
             </fieldset>
             {formError && <ErrorState message={formError} />}
             {unchanged && <p className="muted small">内容尚未修改，无需重复保存。</p>}
-            <div className="form-actions">
-              <button type="button" className="btn" disabled={saving} onClick={closeEditor}>
-                取消
-              </button>
-              <button className="btn btn-primary" disabled={saving || unchanged}>
-                {saving && <LoaderCircle className="spin" />}
-                {saving ? '正在保存…' : '保存'}
-              </button>
-            </div>
           </form>
         </Modal>
       )}
       {view && (
-        <Modal title={`${view.filename} · v${view.version}`} onClose={() => setView(null)}>
-          <p className="text-document">{view.text}</p>
-          <div className="form-actions">
+        <Modal title={`${view.filename} · v${view.version}`} onClose={() => setView(null)} footer={
+          <>
             <button className="btn btn-quiet danger" disabled={deletingId === view.id} onClick={() => removeResume(view)}><Trash2 size={16} />删除此版本</button>
             <button
               className="btn"
@@ -517,7 +528,9 @@ export default function MaterialsScreen() {
               }}>
               更正为新版本
             </button>
-          </div>
+          </>
+        }>
+          <p className="text-document">{view.text}</p>
         </Modal>
       )}
     </section>

@@ -333,6 +333,7 @@ export default function SettingsScreen() {
               }
             </p>
           </header>
+          <div className="settings-scroll" key={category} role="region" aria-label={`${title}设置`} tabIndex={0}>
           {loading ? (
             <Loading />
           ) : !loaded ? (
@@ -631,24 +632,25 @@ export default function SettingsScreen() {
                   </>
                 )}
               </fieldset>
-              {dirty && (
-                <footer className="settings-save">
-                  <span>有未保存的更改</span>
-                  <div className="settings-save-actions">
-                    <button className="btn" disabled={saving || loggingOut} onClick={undo}>
-                      撤销更改
-                    </button>
-                    <button
-                      className="btn btn-primary"
-                      disabled={saving || loggingOut || (nicknameChanged && !nickname.trim())}
-                      onClick={() => void save()}>
-                      {saving && <LoaderCircle className="spin" />}
-                      {saving ? '正在保存…' : '保存更改'}
-                    </button>
-                  </div>
-                </footer>
-              )}
             </>
+          )}
+          </div>
+          {loaded && dirty && (
+            <footer className="settings-save">
+              <span>有未保存的更改</span>
+              <div className="settings-save-actions">
+                <button className="btn" disabled={saving || loggingOut} onClick={undo}>
+                  撤销更改
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={saving || loggingOut || (nicknameChanged && !nickname.trim())}
+                  onClick={() => void save()}>
+                  {saving && <LoaderCircle className="spin" />}
+                  {saving ? '正在保存…' : '保存更改'}
+                </button>
+              </div>
+            </footer>
           )}
         </div>
       </div>

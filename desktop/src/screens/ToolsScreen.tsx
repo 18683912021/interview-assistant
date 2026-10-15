@@ -1,6 +1,6 @@
 import {Select, SelectOption} from '../components/Select';
 import AnswerBody from '../components/AnswerBody';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {useSearchParams} from 'react-router-dom';
 import {
   ArrowLeft,
@@ -89,6 +89,15 @@ const initialKind = () => null as ToolKind | null;
 export default function ToolsScreen() {
   const requests = useRef(new Map<ToolKind, AbortController>());
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const outputRef = useRef<HTMLDivElement>(null);
+  const followOutput = useRef(true);
+  const [following, setFollowing] = useState(true);
+  const [pane, setPane] = useState<'input' | 'output'>('input');
+  const scrollToLatest = () => {
+    followOutput.current = true;
+    setFollowing(true);
+    if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight;
+  };
   const [inputError, setInputError] = useState('');
   const [params, setParams] = useSearchParams();
   const [kind, setKind] = useWorkspaceDraft<ToolKind | null>('tools:kind', initialKind);
@@ -106,6 +115,16 @@ export default function ToolsScreen() {
   const {toast, confirm} = useToast();
   const draft = drafts[kind || 'intro'];
   const {input, result, jobId, resumeId, error, busy, saving, saved} = draft;
+  useLayoutEffect(() => {
+    if (followOutput.current && outputRef.current && busy) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    }
+  }, [result, busy, pane]);
+  useEffect(() => {
+    setPane('input');
+    followOutput.current = true;
+    setFollowing(true);
+  }, [kind]);
   const update = (patch: Partial<ToolDraft>, key = kind) => {
     if (key) setDrafts(old => ({...old, [key]: {...old[key], ...patch}}));
   };
@@ -164,11 +183,17 @@ export default function ToolsScreen() {
     }
     if (!input.trim() && !selectedResume && !selectedJob) {
       setInputError('请填写内容，或在上方选择简历或岗位');
-      inputRef.current?.focus();
+      setPane('input');
+      requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
     setInputError('');
+    const resultLabel = [selectedJob?.title, selectedResume ? `${selectedResume.filename} · v${selectedResume.version}` : ''].filter(Boolean).join(' · ');
     const requestKind = kind;
+    let received = false;
+    setPane('output');
+    followOutput.current = true;
+    setFollowing(true);
     const controller = new AbortController();
     requests.current.set(requestKind, controller);
     update({busy: true, error: ''}, requestKind);
@@ -180,7 +205,10 @@ export default function ToolsScreen() {
         job_description: selectedJob?.description || '',
         resume_text: selectedResume?.text || '',
       }, text => {
-        if (!controller.signal.aborted) update({result: text, saved: false, generatedFrom: contextKey}, requestKind);
+        if (!controller.signal.aborted && text.trim()) {
+          received = true;
+          update({result: text, saved: false, generatedFrom: contextKey, resultLabel}, requestKind);
+        }
       }, controller.signal);
       if (!value.text.trim()) throw new Error('未收到有效内容，请重试');
       update(
@@ -188,17 +216,12 @@ export default function ToolsScreen() {
           result: value.text,
           saved: false,
           generatedFrom: contextKey,
-          resultLabel: [
-            selectedJob?.title,
-            selectedResume ? `${selectedResume.filename} · v${selectedResume.version}` : '',
-          ]
-            .filter(Boolean)
-            .join(' · '),
+          resultLabel,
         },
         requestKind,
       );
     } catch (e) {
-      if (requests.current.get(requestKind) === controller) update({error: controller.signal.aborted ? '已停止生成，显示的是已收到的部分内容。' : messageOf(e)}, requestKind);
+      if (requests.current.get(requestKind) === controller) update({error: controller.signal.aborted ? (received ? '已停止生成，已收到的内容已保留。' : '已停止生成，尚未收到新内容。') : messageOf(e)}, requestKind);
     } finally {
       if (requests.current.get(requestKind) === controller) {
         requests.current.delete(requestKind);
@@ -230,6 +253,8 @@ export default function ToolsScreen() {
       () => {
         setDrafts(old => ({...old, [target]: emptyDraft()}));
         setEditingResult(false);
+        setInputError('');
+        setPane('input');
       },
     );
   };
@@ -261,8 +286,9 @@ export default function ToolsScreen() {
       {sourceError && (
         <ErrorState message={`资料加载失败：${sourceError}`} retry={() => void loadSources()} />
       )}
+      {kind && error && <ErrorState message={error} />}
       {!kind ? (
-        <>
+        <div className="tools-catalog" role="region" aria-label="小工具列表" tabIndex={0}>
           <div className="tools-grid">
             {(Object.keys(tools) as ToolKind[]).map(key => {
               const value = tools[key],
@@ -300,10 +326,16 @@ export default function ToolsScreen() {
           <p className="notice tool-draft-note">
             切换页面时保留本次草稿。退出账号或关闭窗口前，请将需要的内容保存到资料。
           </p>
-        </>
+        </div>
       ) : (
-        <div className="tool-layout">
+        <>
+        <div className="pane-switch" role="group" aria-label="显示工具区域">
+          <button className="btn" aria-pressed={pane === 'input'} onClick={() => setPane('input')}>填写资料</button>
+          <button className="btn" aria-pressed={pane === 'output'} onClick={() => setPane('output')}>准备稿{busy && <LoaderCircle size={14} className="spin" />}</button>
+        </div>
+        <div className="tool-layout" data-pane={pane}>
           <div className="tool-input">
+            <div className="tool-input-scroll" role="region" aria-label="工具输入资料" tabIndex={0}>
             <fieldset className="form-fields" disabled={busy || saving}>
               <label className="field">
                 目标岗位
@@ -358,7 +390,8 @@ export default function ToolsScreen() {
                 {inputError && <small id="tool-input-error" className="field-error" role="alert">{inputError}</small>}
               </label>
             </fieldset>
-            {error && <ErrorState message={error} />}
+            </div>
+            <div className="tool-input-actions">
             <button
               className="btn btn-primary"
               disabled={busy || saving || loadingSources || !!sourceError}
@@ -366,17 +399,17 @@ export default function ToolsScreen() {
               {busy ? <LoaderCircle className="spin" /> : <ArrowRight />}
               {busy ? '正在整理…' : result ? '重新生成' : '生成内容'}
             </button>
-            {busy && <button className="btn btn-quiet" onClick={() => kind && requests.current.get(kind)?.abort()}>停止生成</button>}
             {busy && (
               <p className="muted small tool-busy-note" role="status">
                 内容正在逐步显示。离开此页会停止生成，已收到的内容会保留。
               </p>
             )}
+            </div>
           </div>
           <div className="tool-output" aria-busy={busy}>
             <div className="tool-output-heading">
               <h2>准备稿</h2>
-              {result && (
+              {busy ? <button className="btn btn-quiet" onClick={() => kind && requests.current.get(kind)?.abort()}>停止生成</button> : result && (
                 <button
                   className="btn btn-quiet"
                   disabled={busy || saving}
@@ -385,6 +418,13 @@ export default function ToolsScreen() {
                 </button>
               )}
             </div>
+            <div className="tool-output-scroll" ref={outputRef} role="region" aria-label="准备稿内容" tabIndex={0}
+              onScroll={event => {
+                const target = event.currentTarget;
+                const nearBottom = target.scrollHeight - target.clientHeight - target.scrollTop < 64;
+                followOutput.current = nearBottom;
+                setFollowing(nearBottom);
+              }}>
             {result ? (
               <>
                 {draft.resultLabel && (
@@ -402,6 +442,7 @@ export default function ToolsScreen() {
                 )}
                 {editingResult ? (
                   <textarea
+                    autoFocus
                     className="tool-result-editor"
                     aria-label="编辑准备稿"
                     value={result}
@@ -416,6 +457,18 @@ export default function ToolsScreen() {
                 <p className="notice">
                   检查并补充真实经历后再保存。保存会创建独立文本资料版本，不覆盖现有简历，也不自动关联当前面试。
                 </p>
+
+              </>
+            ) : busy ? (
+              <Loading text="正在根据所选资料生成内容…" />
+            ) : (
+              <div className="empty-state">
+                <p>生成后可以编辑、复制，或保存到我的资料。</p>
+              </div>
+            )}
+            </div>
+            {busy && !following && <button className="btn tool-latest" onClick={scrollToLatest}>回到最新内容 ↓</button>}
+            {result && (
                 <footer>
                   <button
                     className="btn"
@@ -460,16 +513,10 @@ export default function ToolsScreen() {
                     {saving ? '正在保存…' : saved ? '已保存到资料' : '保存为文本资料'}
                   </button>
                 </footer>
-              </>
-            ) : busy ? (
-              <Loading text="正在根据所选资料生成内容…" />
-            ) : (
-              <div className="empty-state">
-                <p>生成后可以编辑、复制，或保存到我的资料。</p>
-              </div>
             )}
           </div>
         </div>
+        </>
       )}
     </section>
   );

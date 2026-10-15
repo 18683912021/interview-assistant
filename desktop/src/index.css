@@ -775,9 +775,6 @@ textarea::placeholder {
 .tool-output > .empty-state {
   flex: 1;
 }
-.tool-output > :not(.loading-state):not(.empty-state) {
-  flex-shrink: 0;
-}
 .tool-output h2 {
   font-size: 13px;
   margin-bottom: 18px;
@@ -2211,3 +2208,77 @@ html, body, body *, body *::before, body *::after { cursor: default !important; 
 .answer-edited-label { font-size: 11px; }
 
 .required-mark { color: var(--danger, #c54343); margin-left: 3px; }
+
+/* Workspace pages keep navigation and actions visible; only their content scrolls. */
+.page.tools-page, .page.setup-page {min-height: 0; overflow: hidden; display: flex; flex-direction: column;}
+.page.setup-page > .btn {align-self: flex-start; flex-shrink: 0;}
+.page.tools-page > .page-heading, .page.setup-page > .page-heading {flex-shrink: 0;}
+.tools-catalog {flex: 1 1 0; min-height: 0; overflow: auto; padding: 3px 4px 16px;}
+.tool-layout {flex: 1 1 0; min-height: 0; overflow: hidden;}
+.tool-input, .tool-output {display: flex; flex-direction: column; min-height: 0; overflow: hidden;}
+.tool-input-scroll, .tool-output-scroll {flex: 1 1 0; min-height: 0; overflow: auto; padding: 3px 6px 12px 3px;}
+.tool-input-actions {flex-shrink: 0; padding-top: 14px; border-top: 1px solid var(--line);}
+.tool-input-actions > .btn {margin-right: 8px;}
+.tool-output-heading {flex-shrink: 0; margin-bottom: 12px;}
+.tool-output-scroll > .loading-state, .tool-output-scroll > .empty-state {min-height: 100%;}
+.tool-output footer {flex-shrink: 0; margin-top: 12px; gap: 8px;}
+.tool-output footer .btn {padding-inline: 10px;}
+.tool-output .tool-latest {align-self: center; flex-shrink: 0; margin-top: 8px;}
+.tool-result-editor {min-height: 280px; resize: vertical;}
+.pane-switch {display: none; flex-shrink: 0; gap: 4px; padding: 4px; margin-bottom: 14px; border-radius: 8px; background: var(--surface);}
+.pane-switch .btn {flex: 1; justify-content: center; background: transparent; border-color: transparent; color: var(--muted); box-shadow: none;}
+.pane-switch .btn[aria-pressed='true'] {background: var(--bg); color: var(--text); border-color: var(--line); box-shadow: 0 1px 3px var(--shadow);}
+.collection-scroll {display: flex; overflow: hidden; padding-bottom: 0;}
+.collection-scroll > .loading-state {flex: 1;}
+.materials-grid {flex: 1; min-height: 0; min-width: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);}
+.material-column {display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden;}
+.material-column > .section-heading {flex-shrink: 0; min-height: 36px; margin-bottom: 12px;}
+.material-list {flex: 1; min-height: 0; overflow: auto; padding: 3px 6px 12px 3px;}
+.material-card footer {flex-wrap: wrap;}
+.material-card-head > div {min-width: 0; overflow-wrap: anywhere;}
+.material-card-head > svg, .material-version {flex-shrink: 0;}
+.settings-content {overflow: hidden; min-height: 0; padding-bottom: 20px;}
+.settings-inner {display: flex; flex-direction: column; flex: 1; min-height: 0;}
+.settings-heading {flex-shrink: 0; margin-bottom: 20px;}
+.settings-scroll {flex: 1; min-height: 0; overflow: auto; padding: 3px 8px 16px 3px;}
+.settings-scroll > .loading-state {min-height: 100%;}
+.settings-save {position: static; flex-shrink: 0; margin-top: 12px; padding: 14px 0 0;}
+.setup-scroll {flex: 1; min-height: 0; overflow: auto; padding: 3px 8px 20px 3px;}
+.setup-actions {display: flex; align-items: center; flex-wrap: wrap; gap: 12px; flex-shrink: 0; border-top: 1px solid var(--line); padding-top: 14px;}
+.setup-actions .setup-start {width: auto; min-width: 160px; margin: 0; order: 3; margin-left: auto;}
+.setup-actions .setup-requirement {font-size: 12px; color: var(--muted); line-height: 1.7;}
+.tools-catalog, .tool-input-scroll, .tool-output-scroll, .material-list, .settings-scroll, .setup-scroll, .modal-body {overscroll-behavior: contain; scrollbar-gutter: stable; scroll-padding: 12px;}
+.modal {display: flex; flex-direction: column; padding: 0; overflow: hidden;}
+.modal > header {position: static; flex-shrink: 0; padding: 18px 24px; margin: 0;}
+.modal-body {min-height: 0; overflow: auto; padding: 20px 24px;}
+.modal-body .text-document {max-height: none; overflow: visible; overflow-wrap: anywhere;}
+.modal-body .form-actions {bottom: -20px; margin-bottom: -20px; padding-bottom: 20px;}
+.modal-footer {display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; flex-shrink: 0; padding: 14px 24px; border-top: 1px solid var(--line);}
+.records td, .record-name > span:last-child {overflow-wrap: anywhere; min-width: 0;}
+.records-viewport:focus-visible, .material-list:focus-visible, .tools-catalog:focus-visible,
+.tool-input-scroll:focus-visible, .tool-output-scroll:focus-visible, .settings-scroll:focus-visible {outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px;}
+@media (max-width: 900px) {
+  .pane-switch {display: flex;}
+  .materials-grid, .tool-layout {display: flex; flex-direction: column;}
+  .material-column, .tool-input, .tool-output {flex: 1;}
+  .materials-grid[data-pane='resumes'] > [data-pane='jobs'],
+  .materials-grid[data-pane='jobs'] > [data-pane='resumes'],
+  .tool-layout[data-pane='input'] > .tool-output,
+  .tool-layout[data-pane='output'] > .tool-input {display: none;}
+  .tool-output {border: 0; padding: 0;}
+}
+@media (max-height: 650px) {
+  .page.tools-page, .page.collection-page, .page.setup-page {padding-top: 16px; padding-bottom: 16px;}
+  .tools-page .page-heading, .collection-page .page-heading, .setup-page .page-heading {margin-bottom: 14px;}
+  .tools-page .page-heading p, .collection-page .page-heading p, .setup-page .page-heading p {display: none;}
+  .settings-content {padding-top: 18px;}
+  .settings-heading {margin-bottom: 12px;}
+  .tool-back {margin-bottom: 4px;}
+}
+@media (max-width: 560px) {
+  .setup-actions .setup-requirement {flex-basis: 100%;}
+  .setup-actions .setup-start {min-width: 0;}
+  .modal-backdrop {padding: 12px;}
+  .modal {max-height: calc(100dvh - 24px);}
+  .modal > header, .modal-body, .modal-footer {padding-inline: 18px;}
+}

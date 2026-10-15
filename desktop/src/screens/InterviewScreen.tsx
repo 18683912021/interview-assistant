@@ -666,6 +666,7 @@ export default function InterviewScreen() {
             <p>填写面试岗位即可准备开始；关联简历后，回答会更贴合你的经历。</p>
           </div>
         </div>
+        <div className="setup-scroll">
         {error && <ErrorState message={error} retry={() => void load()} />}
         {drafts.length > 0 && (
           <div className="recovery-list">
@@ -825,7 +826,11 @@ export default function InterviewScreen() {
               <CheckCheck size={15} />
               <span>点击气泡后才生成回答 · 对话持续记录</span>
             </div>
-            <button
+          </aside>
+        </div>
+        </div>
+        <footer className="setup-actions">
+          <button
               className="btn btn-primary setup-start"
               disabled={busy}
               onClick={() => void begin()}>
@@ -836,8 +841,7 @@ export default function InterviewScreen() {
             <button className="btn btn-quiet" onClick={() => navigate('/settings?tab=audio')}>
               检查音频设备
             </button>
-          </aside>
-        </div>
+        </footer>
       </section>
     );
 

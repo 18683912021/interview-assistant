@@ -17,11 +17,13 @@ import {AuthContext} from '../utils/AuthContext';
 import {loadDrafts, removeDraft} from '../services/drafts';
 import {useToast} from '../components/Toast';
 import './interview.css';
+const firstPage = () => 1;
 export default function InterviewHistoryScreen() {
   const [records, setRecords] = useState<SessionSummary[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState('');
-  const [page, setPage] = useState(1), [total, setTotal] = useState(0);
+  const [page, setPage] = useWorkspaceDraft('history:page', firstPage);
+  const [total, setTotal] = useState(0);
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   const loadEpoch = useRef(0);
   const [query, setQuery] = useWorkspaceDraft('history:query', () => '');
@@ -30,6 +32,24 @@ export default function InterviewHistoryScreen() {
   const viewport = useRef<HTMLDivElement>(null);
   const initialScroll = useRef(scroll);
   const restored = useRef(false);
+  const resetPosition = () => {
+    initialScroll.current = 0;
+    setScroll(0);
+    if (viewport.current) viewport.current.scrollTop = 0;
+  };
+  const changePage = (next: number) => {
+    resetPosition();
+    setLoading(true);
+    setRecords([]);
+    setPage(next);
+  };
+  const changeQuery = (next: string) => {
+    resetPosition();
+    setLoading(true);
+    setRecords([]);
+    setQuery(next);
+    setPage(1);
+  };
   useLayoutEffect(() => {
     if (!loading && !restored.current && viewport.current) {
       viewport.current.scrollTop = initialScroll.current; restored.current = true;
@@ -72,7 +92,7 @@ export default function InterviewHistoryScreen() {
     } finally {
       if (epoch === loadEpoch.current) setLoading(false);
     }
-  }, [profile?.email, page, query, status]);
+  }, [profile?.email, page, query, status, setPage]);
   useEffect(() => {
     const timer = setTimeout(() => void load(), 200);
     return () => {clearTimeout(timer); loadEpoch.current++;};
@@ -116,13 +136,13 @@ export default function InterviewHistoryScreen() {
             aria-label="搜索面试记录"
             placeholder="搜索面试名称、公司或岗位"
             value={query}
-            maxLength={200} onChange={e => {setQuery(e.target.value); setPage(1);}}
+            maxLength={200} onChange={e => changeQuery(e.target.value)}
           />
-          {query && <IconButton className="icon-btn search-clear" aria-label="清空搜索" onClick={() => setQuery('')}><X size={14} /></IconButton>}
+          {query && <IconButton className="icon-btn search-clear" aria-label="清空搜索" onClick={() => changeQuery('')}><X size={14} /></IconButton>}
         </label>
         <span className="spacer" />
         <span className="muted small record-count" role="status">{loading ? '正在刷新…' : `${total} 场`}</span>
-        <Select aria-label="按状态筛选" value={status} onValueChange={selectedValue => {setStatus(selectedValue); setPage(1);}}>
+        <Select aria-label="按状态筛选" value={status} onValueChange={selectedValue => {resetPosition(); setLoading(true); setRecords([]); setStatus(selectedValue); setPage(1);}}>
           <SelectOption value="all">全部状态</SelectOption>
           <SelectOption value="active">未结束</SelectOption>
           <SelectOption value="completed">已结束</SelectOption>
@@ -226,7 +246,7 @@ export default function InterviewHistoryScreen() {
           text={query || status !== 'all' ? '试试其他关键词或状态。' : '选择岗位与简历，开始记录对话和回答。'}
           action={
             query || status !== 'all' ? (
-              <button className="btn" onClick={() => {setQuery(''); setStatus('all'); setPage(1);}}>清除筛选</button>
+              <button className="btn" onClick={() => {changeQuery(''); setStatus('all');}}>清除筛选</button>
             ) : (
               <button className="btn" onClick={() => navigate('/interview')}>
                 准备一场面试
@@ -238,8 +258,8 @@ export default function InterviewHistoryScreen() {
       </div>
       <nav className="history-pagination" aria-label="面试记录分页">
         <span className="muted small">第 {page} / {Math.max(1, Math.ceil(total / 30))} 页 · 每页 30 场</span>
-        <button className="btn" disabled={loading || page <= 1} onClick={() => {setPage(value => value - 1); viewport.current?.scrollTo({top: 0});}}>上一页</button>
-        <button className="btn" disabled={loading || page * 30 >= total} onClick={() => {setPage(value => value + 1); viewport.current?.scrollTo({top: 0});}}>下一页</button>
+        <button className="btn" disabled={loading || page <= 1} onClick={() => changePage(page - 1)}>上一页</button>
+        <button className="btn" disabled={loading || page * 30 >= total} onClick={() => changePage(page + 1)}>下一页</button>
       </nav>
     </section>
   );

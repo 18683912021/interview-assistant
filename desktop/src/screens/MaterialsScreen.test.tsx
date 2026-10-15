@@ -5,10 +5,10 @@ import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {MemoryRouter} from 'react-router-dom';
 import MaterialsScreen from './MaterialsScreen';
 import {ToastProvider} from '../components/Toast';
-import {deleteResumeVersion, getResumes} from '../api/workspace';
+import {createResume, deleteResumeVersion, getResumes} from '../api/workspace';
 vi.mock('../config', () => ({API_BASE: ''}));
 vi.mock('../api/workspace', async original => ({...await original<typeof import('../api/workspace')>(),
-  getResumes: vi.fn(), getJobs: vi.fn().mockResolvedValue([]), deleteResumeVersion: vi.fn()}));
+  createResume: vi.fn(), getResumes: vi.fn(), getJobs: vi.fn().mockResolvedValue([]), deleteResumeVersion: vi.fn()}));
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal('ResizeObserver', class {observe() {} unobserve() {} disconnect() {}});
@@ -43,4 +43,19 @@ it('older versions are removable and a failed request keeps both versions availa
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', {name: '取消'}));
   expect(screen.getByText('内容 2')).toBeTruthy();
   expect(screen.getByRole('button', {name: '删除 我的经历 v1'})).toBeTruthy();
+});
+
+it('submits a long editor from its fixed footer and keeps field validation inside the editor', async () => {
+  vi.mocked(createResume).mockResolvedValue({id: 'new', version: 1, filename: '个人简历', text: '真实项目经历', kind: 'resume', created_at: '2026-10-15T00:00:00Z'});
+  setup();
+  await userEvent.click(await screen.findByRole('button', {name: '粘贴简历'}));
+  const dialog = screen.getByRole('dialog', {name: '保存资料版本'});
+  await userEvent.click(within(dialog).getByRole('button', {name: '保存'}));
+  expect(createResume).not.toHaveBeenCalled();
+  expect(within(dialog).getByRole('alert').textContent).toContain('请填写简历正文');
+  await userEvent.type(within(dialog).getByRole('textbox', {name: /简历正文/}), '真实项目经历');
+  await userEvent.click(within(dialog).getByRole('button', {name: '保存'}));
+  await screen.findByText('真实项目经历');
+  expect(createResume).toHaveBeenCalledWith('真实项目经历', '个人简历', 'resume');
+  expect(screen.queryByRole('dialog')).toBeNull();
 });

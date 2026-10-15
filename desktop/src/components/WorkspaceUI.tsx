@@ -47,11 +47,13 @@ export function Modal({
   children,
   onClose,
   busy = false,
+  footer,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   busy?: boolean;
+  footer?: ReactNode;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
   const [opener] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -75,7 +77,8 @@ export function Modal({
               <Dialog.Title asChild><h2>{title}</h2></Dialog.Title>
               <Dialog.Close className="icon-btn" disabled={busy} aria-label="关闭弹窗"><X size={18} /></Dialog.Close>
             </header>
-            {children}
+            <div className="modal-body">{children}</div>
+            {footer && <footer className="modal-footer">{footer}</footer>}
           </Dialog.Content>
         </Dialog.Overlay>
       </Dialog.Portal>
