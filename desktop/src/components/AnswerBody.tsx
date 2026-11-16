@@ -1,5 +1,5 @@
 import './AnswerBody.css';
-import {Fragment, useId, useState, type ReactNode} from 'react';
+import {Fragment, memo, useId, useState, type ReactNode} from 'react';
 
 /** A deliberately small Markdown renderer. Content is always React text, never HTML. */
 function inline(text: string): ReactNode[] {
@@ -49,7 +49,7 @@ function tableCells(line: string) {
   if (!cells[cells.length - 1]) cells.pop();
   return cells;
 }
-export default function AnswerBody({text, className = ''}: {text: string; className?: string}) {
+const AnswerBody = memo(function AnswerBody({text, className = ''}: {text: string; className?: string}) {
   const documentId = useId();
   const headings: {id: string; text: string}[] = [];
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
@@ -150,5 +150,6 @@ export default function AnswerBody({text, className = ''}: {text: string; classN
     </details>}
     {blocks}
   </div>;
-}
+});
+export default AnswerBody;
 export {AnswerBody};

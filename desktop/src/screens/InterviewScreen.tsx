@@ -5,7 +5,8 @@ import {SessionSplit} from '../components/SessionSplit';
 import {IconButton} from '../components/IconButton';
 import {AnswerStylePicker} from '../components/AnswerStylePicker';
 import {Select, SelectOption} from '../components/Select';
-import {useCallback, useContext, useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {TranscriptList} from '../components/TranscriptList';
 import {useNavigate, useSearchParams} from 'react-router-dom';
 import {
   ArrowLeft,
@@ -22,7 +23,6 @@ import {
   Mic,
   Monitor,
   Pause,
-  Pencil,
   Play,
   Plus,
   Square,
@@ -160,6 +160,7 @@ export default function InterviewScreen() {
   const [newMessages, setNewMessages] = useState(false);
   const journal = useRef<SessionJournal | null>(null);
   const lastContent = useRef('');
+  const savedView = useRef<unknown[] | null>(null);
 
   useEffect(() => registerShutdownHandler(async () => {
     if (!session || !journal.current) return;
@@ -316,6 +317,7 @@ export default function InterviewScreen() {
     );
     journal.current = writer;
     lastContent.current = signature(session);
+    savedView.current = null;
     writer.recover(session);
     return () => {
       writer.dispose();
@@ -332,9 +334,13 @@ export default function InterviewScreen() {
       conversation: state.conversation,
       answers: state.answers,
     };
-    const content = signature(value);
-    if (content === lastContent.current) return;
-    lastContent.current = content;
+    // Immutable reducer snapshots let us detect changes without serializing all
+    // old answers and transcript text for every partial, timer or token update.
+    const view = [session.status, session.capture_source, session.ended_at, duration,
+      session.preferences, state.conversation, state.answers];
+    const previous = savedView.current;
+    savedView.current = view;
+    if (previous ? view.every((part, index) => part === previous[index]) : signature(value) === lastContent.current) return;
     journal.current.push(value);
   }, [session, state.conversation, state.answers, duration]);
   useEffect(() => {
@@ -439,6 +445,14 @@ export default function InterviewScreen() {
     }
     request([id]);
   };
+  const clickMessageRef = useRef(clickMessage);
+  clickMessageRef.current = clickMessage;
+  const selectMessage = useCallback((id: string) => clickMessageRef.current(id), []);
+  const editMessage = useCallback((message: ConversationMessage) => {
+    setSplitEditing(false);
+    setEditing({id: message.id, text: message.text});
+  }, []);
+  const answeredIds = useMemo(() => JSON.stringify([...new Set(state.answers.flatMap(value => value.source_message_ids))]), [state.answers]);
   const [roleError, setRoleError] = useState('');
   const roleInput = useRef<HTMLInputElement>(null);
   const audioSetup = useRef<HTMLElement>(null);
@@ -1026,55 +1040,8 @@ export default function InterviewScreen() {
                 text="语音将逐句显示。点击想回答的那句话，右侧展开回答；也可以手动添加问题。"
               />
             )}
-            {state.conversation.map(message => (
-              <article
-                className={`chat-message ${message.role}`}
-                key={message.id}
-                data-message={message.id}>
-                <div className="chat-speaker">
-                  <span className="speaker-avatar">
-                    {message.role === 'interviewer' ? '面' : '我'}
-                  </span>
-                  <span>
-                    {message.role === 'interviewer' ? '面试官' : '我'} ·{' '}
-                    {new Date(message.timestamp).toLocaleTimeString('zh-CN', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                    {message.status === 'streaming'
-                      ? ' · 正在说…'
-                      : message.status === 'interrupted'
-                        ? ' · 待确认'
-                        : message.edited
-                          ? ' · 已修正'
-                          : ''}
-                  </span>
-                </div>
-                <button
-                  className={`chat-bubble${multi ? ' multi-select' : ''} ${selected.includes(message.id) ? 'selected' : ''}`}
-                  aria-pressed={selected.includes(message.id)}
-                  onClick={() => clickMessage(message.id)}>
-                  {multi && <span className="bubble-selection" aria-hidden="true">{selected.includes(message.id) && <Check size={13} strokeWidth={3} />}</span>}
-                  <span>{message.text}</span>
-                </button>
-                <div className="bubble-actions">
-                  {state.answers.some(value => value.source_message_ids.includes(message.id)) && (
-                    <span className="bubble-answer-count">
-                      <FileText size={11} /> 有回答
-                    </span>
-                  )}
-                  <button
-                    className="bubble-edit"
-                    aria-label="修正或拆分这句话"
-                    onClick={() => {
-                      setSplitEditing(false);
-                      setEditing({id: message.id, text: message.text});
-                    }}>
-                    <Pencil size={12} /> 修正 / 拆句
-                  </button>
-                </div>
-              </article>
-            ))}
+            <TranscriptList messages={state.conversation} selected={selected} multi={multi}
+              answeredIds={answeredIds} onSelect={selectMessage} onEdit={editMessage} />
           </div>
           {newMessages && (
             <button

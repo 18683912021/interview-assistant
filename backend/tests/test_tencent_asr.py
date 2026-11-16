@@ -31,7 +31,7 @@ def test_signature_matches_sorted_raw_parameters_and_general_engine():
     signature = params.pop("signature")
     canonical = ("asr.cloud.tencent.com/asr/v2/123456?convert_num_mode=1&engine_model_type=16k_zh"
                  "&expired=1700003600&filter_empty_result=0&filter_punc=0&needvad=1&nonce=123"
-                 "&secretid=test-id&timestamp=1700000000&vad_silence_time=1000&voice_format=1&voice_id=voice-1")
+                 "&secretid=test-id&timestamp=1700000000&vad_silence_time=600&voice_format=1&voice_id=voice-1")
     assert signature == base64.b64encode(hmac.new(b"test-key", canonical.encode(), hashlib.sha1).digest()).decode()
     assert params["engine_model_type"] == "16k_zh"
     assert "test-key" not in url
@@ -133,12 +133,80 @@ async def test_full_lifecycle_paces_backlog_flushes_tail_and_resume_uses_new_id(
         assert await session.finish() == "你好。"
         socket = sockets[-1]
         assert socket.closed
-        assert [len(data) for _, data in socket.sent[:-1]] == [6400, 6400, 200]
+        assert [len(data) for _, data in socket.sent[:-1]] == [1280] * 10 + [200]
         assert json.loads(socket.sent[-1][1]) == {"type": "end"}
-        assert socket.sent[1][0] - socket.sent[0][0] >= 0.19
+        assert socket.sent[1][0] - socket.sent[0][0] >= 0.03
         assert session._finished.is_set()
         assert session._send_task.done() and session._recv_task.done()
     assert parse_qs(urlsplit(urls[0]).query)["voice_id"] != parse_qs(urlsplit(urls[1]).query)["voice_id"]
+
+
+@pytest.mark.asyncio
+async def test_half_hour_dual_source_clock_does_not_accumulate_send_cost(monkeypatch):
+    """Virtual 30 minutes, real sender, two streams, nonzero transport cost."""
+    clock = [1.0]
+    class Loop:
+        def time(self): return clock[0]
+    async def sleep(delay): clock[0] += max(0, delay)
+    class Socket:
+        def __init__(self): self.count = 0
+        async def send(self, data):
+            self.count += len(data)
+            clock[0] += .003
+    sessions = [TencentASRSession(source, asyncio.Queue()) for source in ('mic', 'system')]
+    for session in sessions: session._ws = Socket()
+    with monkeypatch.context() as patch:
+        patch.setattr(asyncio, 'get_running_loop', lambda: Loop())
+        patch.setattr(asyncio, 'sleep', sleep)
+        worst = 0
+        for packet in range(45000):
+            clock[0] = max(clock[0], 1 + packet * .04)
+            for session in sessions:
+                await session._send_audio(bytes(1280))
+            worst = max(worst, clock[0] - (1 + packet * .04))
+    assert worst < .02
+    assert all(session._ws.count == 1800 * 32000 for session in sessions)
+
+
+@pytest.mark.asyncio
+async def test_overflow_spills_fifo_without_dropping_or_blocking_other_source():
+    sessions = [TencentASRSession(source, asyncio.Queue()) for source in ('mic', 'system')]
+    originals, outputs = [], [bytearray(), bytearray()]
+    for index, session in enumerate(sessions):
+        session._send_queue = asyncio.Queue(maxsize=2)
+        session._connecting = True  # simulate delayed handshake
+        audio = [bytes([index + packet % 200]) * 1280 for packet in range(300)] + [b'tail']
+        originals.append(b''.join(audio))
+        for pcm in audio:
+            await session.feed_wait(pcm)
+        assert session._send_queue.qsize() == 2
+        assert session._spill is not None
+        session._running = True
+        async def send(pcm, final=False, index=index): outputs[index].extend(pcm)
+        session._send_audio = send
+    await asyncio.gather(*(s._send_queue.put(None) for s in sessions),
+                         *(s._send_loop() for s in sessions))
+    assert [bytes(output) for output in outputs] == originals
+    assert all(s._spill is None and not s._pending_audio for s in sessions)
+
+
+@pytest.mark.asyncio
+async def test_send_failure_keeps_unsent_pending_audio_for_reconnect():
+    session = TencentASRSession('mic', asyncio.Queue())
+    session._running = True
+    session._schedule_reconnect = lambda: None
+    async def fail(pcm, final=False): raise ConnectionError()
+    session._send_audio = fail
+    await session.feed_wait(b'x' * 1280)
+    await session._send_loop()
+    assert session._pending_audio == b'x' * 1280
+    output = bytearray()
+    async def send(pcm, final=False): output.extend(pcm)
+    session._send_audio = send
+    session._running = True
+    await session._send_queue.put(None)
+    await session._send_loop()
+    assert output == b'x' * 1280
 
 
 @pytest.mark.asyncio

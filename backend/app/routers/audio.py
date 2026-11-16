@@ -367,7 +367,7 @@ async def audio_stream(ws: WebSocket):
                     if ack_counter % 10 == 0:
                         await socket.send_json(ack.model_dump())
                     if header.kind == "realtime" and header.source in asr_sessions:
-                        asr_sessions[header.source].feed(pcm)
+                        await asr_sessions[header.source].feed_wait(pcm)
                 except ProtocolError as error:
                     await send_error(socket, error.code, str(error))
     except WebSocketDisconnect:

@@ -35,7 +35,7 @@ def signed_url(app_id: str, secret_id: str, secret_key: str, voice_id: str,
         "convert_num_mode": 1, "engine_model_type": "16k_zh",
         "expired": now + 3600, "filter_empty_result": 0, "filter_punc": 0,
         "needvad": 1, "nonce": secrets.randbelow(1_000_000_000) if nonce is None else nonce,
-        "secretid": secret_id, "timestamp": now, "vad_silence_time": 1000,
+        "secretid": secret_id, "timestamp": now, "vad_silence_time": 600,
         "voice_format": 1, "voice_id": voice_id,
     }
     # Sign sorted, unescaped parameters; URL-encode only for transport.
@@ -55,6 +55,7 @@ class TencentASRSession(StreamingASRSession):
         self._secret_id = os.getenv("TENCENT_ASR_SECRET_ID", "").strip()
         self._secret_key = os.getenv("TENCENT_ASR_SECRET_KEY", "").strip()
         self._next_send_at = 0.0
+        self._packet_bytes = 1280  # forward the client's 40 ms frames immediately
 
     async def _connect(self) -> None:
         self._finished.clear()
@@ -130,14 +131,18 @@ class TencentASRSession(StreamingASRSession):
     async def _send_audio(self, pcm: bytes, final: bool = False) -> None:
         if self._ws is None:
             return
-        # Handshake/reconnect may accumulate audio. Drain at real-time rate,
-        # never burst the queue (Tencent rejects sending faster than real time).
+        # Keep an audio clock, not "send duration + sleep duration". Small send
+        # costs / scheduler lateness must not accumulate over a long interview.
+        # After a real stall, rebase rather than burst seconds of old audio.
         loop = asyncio.get_running_loop()
+        now = loop.time()
+        if not self._next_send_at or now - self._next_send_at > .25:
+            self._next_send_at = now
         if pcm or final:
             await asyncio.sleep(max(0, self._next_send_at - loop.time()))
         if pcm:
             await self._ws.send(pcm)
-            self._next_send_at = loop.time() + len(pcm) / 32000
+            self._next_send_at += len(pcm) / 32000
         if final:
             await asyncio.sleep(max(0, self._next_send_at - loop.time()))
             await self._ws.send(json.dumps({"type": "end"}))

@@ -12,6 +12,7 @@ import os
 import re
 import ssl
 import struct
+import tempfile
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -35,7 +36,7 @@ def configured_resource_id() -> str:
 
 
 RESOURCE_ID = configured_resource_id()
-PACKET_BYTES = 6400  # 200 ms, 16 kHz mono PCM signed 16-bit little-endian
+PACKET_BYTES = 6400  # Volcengine: 200 ms, 16 kHz mono PCM signed 16-bit
 FINISH_CONNECT_TIMEOUT = 3.0
 
 
@@ -165,6 +166,11 @@ class StreamingASRSession:
         self._connect_task = None
         self._finish_task = None
         self._send_queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=250)
+        self._pending_audio = bytearray()
+        self._packet_bytes = PACKET_BYTES
+        self._spill = None
+        self._spill_read = 0
+        self._spill_write = 0
         self._running = False
         self._connecting = False
         self._closing = False
@@ -245,17 +251,55 @@ class StreamingASRSession:
         self._send_task = asyncio.create_task(self._send_loop())
 
     def feed(self, pcm: bytes) -> None:
-        if self._closing or self._provider_error_code is not None or not pcm:
+        self._queue_audio(pcm)
+
+    async def feed_wait(self, pcm: bytes) -> None:
+        self._queue_audio(pcm)
+
+    def _queue_audio(self, pcm: bytes) -> None:
+        """Keep FIFO audio on disk on overload, without blocking the other source.
+
+        The ingress has also persisted the original packet. A spill is private,
+        temporary and bounded by available disk, never an unbounded RAM queue.
+        """
+        if not pcm or self._closing or self._provider_error_code is not None:
             return
         self._audio_received = True
-        try:
-            self._send_queue.put_nowait(pcm)
-        except asyncio.QueueFull:
-            if not self._overflow_reported:
-                self._overflow_reported = True
-                self._emit_error("E_ASR_BACKPRESSURE", "语音识别连接过慢，部分实时转写可能缺失，录音记录仍保留")
         if not self._running and not self._connecting:
             self._schedule_reconnect()
+        if self._spill is None and not self._send_queue.full():
+            self._send_queue.put_nowait(pcm)
+        else:
+            try:
+                if self._spill is None:
+                    self._spill = tempfile.TemporaryFile()
+                    self._spill_read = self._spill_write = 0
+                self._spill.seek(self._spill_write)
+                self._spill.write(struct.pack('>I', len(pcm)) + pcm)
+                self._spill_write = self._spill.tell()
+                if self._send_queue.empty():
+                    self._send_queue.put_nowait(b'')  # wake a waiting sender
+            except OSError:
+                self._emit_error("E_ASR_STORAGE", "语音缓冲无法写入，采集将暂停，请检查服务器存储", recoverable=False)
+                raise
+            if not self._overflow_reported:
+                self._overflow_reported = True
+                self._emit_error("E_ASR_BACKPRESSURE", "语音识别发送暂时落后，音频已缓存在服务器等待处理")
+
+    def _read_spill(self):
+        if self._spill is None:
+            return None
+        self._spill.seek(self._spill_read)
+        size = struct.unpack('>I', self._spill.read(4))[0]
+        pcm = self._spill.read(size)
+        if len(pcm) != size:
+            raise OSError('Incomplete ASR spill')
+        self._spill_read = self._spill.tell()
+        if self._spill_read == self._spill_write:
+            self._spill.close()
+            self._spill = None
+            self._overflow_reported = False
+        return pcm
 
     def _emit_error(self, code: str, message: str, *, recoverable: bool = True, provider_code: int | None = None) -> None:
         try:
@@ -276,17 +320,23 @@ class StreamingASRSession:
                             + struct.pack(">iI", seq, len(pcm)) + pcm)
 
     async def _send_loop(self) -> None:
-        pending = bytearray()
+        pending = self._pending_audio
         try:
             while self._running:
-                pcm = await self._send_queue.get()
+                pcm = self._read_spill() if self._send_queue.empty() and self._spill else await self._send_queue.get()
                 if pcm is None:
+                    while self._spill:
+                        pending.extend(self._read_spill())
+                        while len(pending) >= self._packet_bytes:
+                            await self._send_audio(bytes(pending[:self._packet_bytes]))
+                            del pending[:self._packet_bytes]
                     await self._send_audio(bytes(pending), final=True)
+                    pending.clear()
                     return
                 pending.extend(pcm)
-                while len(pending) >= PACKET_BYTES:
-                    await self._send_audio(bytes(pending[:PACKET_BYTES]))
-                    del pending[:PACKET_BYTES]
+                while len(pending) >= self._packet_bytes:
+                    await self._send_audio(bytes(pending[:self._packet_bytes]))
+                    del pending[:self._packet_bytes]
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -451,7 +501,11 @@ class StreamingASRSession:
         if self._running and self._send_task and not self._send_task.done():
             try:
                 await asyncio.wait_for(self._send_queue.put(None), 1)
-                await asyncio.wait_for(asyncio.shield(self._send_task), 3)
+                # Include buffered audio in the drain budget; do not truncate a
+                # healthy sender simply because a short network stall occurred.
+                backlog = sum(len(p) for p in self._send_queue._queue if p) + len(self._pending_audio)
+                backlog += max(0, self._spill_write - self._spill_read) if self._spill else 0
+                await asyncio.wait_for(asyncio.shield(self._send_task), min(12, 3 + backlog / 32000))
                 await asyncio.wait_for(self._response_done.wait(), 4)
                 confirmed = self._finished.is_set()
             except Exception:
@@ -466,4 +520,7 @@ class StreamingASRSession:
         if self._ws:
             await self._ws.close()
             self._ws = None
+        if self._spill:
+            self._spill.close()
+            self._spill = None
         return "\n".join(self._all_text.values())
