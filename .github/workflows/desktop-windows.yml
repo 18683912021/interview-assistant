@@ -79,6 +79,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Verify long dual-channel transcript rendering in Electron
+        run: node scripts/check-transcript-render.cjs
+
       - name: Lint
         run: pnpm lint --quiet
 
