@@ -24,6 +24,7 @@ from app.services.ai_config import read_proxy_config
 from app.services.stt_streaming import ASRProtocolError, ASRResponse, StreamingASRSession
 
 logger = logging.getLogger("stt_streaming")
+DRAFT_ACTIVITY_IDLE_SECONDS = 1.2
 
 
 def signed_url(app_id: str, secret_id: str, secret_key: str, voice_id: str,
@@ -56,6 +57,8 @@ class TencentASRSession(StreamingASRSession):
         self._secret_key = os.getenv("TENCENT_ASR_SECRET_KEY", "").strip()
         self._next_send_at = 0.0
         self._recovery_send_at = 0.0
+        self._active_draft_key = None
+        self._active_text_at = 0.0
         self._packet_bytes = 1280  # forward the client's 40 ms frames immediately
 
     async def _connect(self) -> None:
@@ -67,6 +70,8 @@ class TencentASRSession(StreamingASRSession):
         self._segments = {}
         self._next_send_at = 0.0
         self._recovery_send_at = 0.0
+        self._active_draft_key = None
+        self._active_text_at = 0.0
         proxy, trust_env = read_proxy_config("ASR")
         # Never log the signed URL, raw provider response, or exception message.
         self._ws = await websockets.connect(
@@ -152,6 +157,13 @@ class TencentASRSession(StreamingASRSession):
             duration = len(pcm) / 32000
             self._next_send_at += duration
             self._recovery_send_at = loop.time() + duration / 2
+            # PCM continues through pauses. Use that existing worker to retire
+            # a stalled *activity label*, without waiting for another ASR event
+            # or inventing a final sentence. No timer gates text delivery.
+            if self._active_draft_key is not None and loop.time()-self._active_text_at >= DRAFT_ACTIVITY_IDLE_SECONDS:
+                key = self._active_draft_key
+                self._active_draft_key = None
+                await self._retire_drafts(before=int(key)+1)
         if final:
             await asyncio.sleep(max(0, self._next_send_at - loop.time()))
             await self._ws.send(json.dumps({"type": "end"}))
@@ -187,12 +199,18 @@ class TencentASRSession(StreamingASRSession):
         # Retiring another utterance must not change this one's revision.
         existing = self._segments.get(key)
         superseded = any(int(old) > index for old in self._segments)
+        stalled = bool(existing and existing.get('recognition_status') == 'pending' and existing['text'] == text)
+        if final and self._active_draft_key == key:
+            self._active_draft_key = None
+        elif not final and not superseded and (not existing or existing['text'] != text):
+            self._active_draft_key = key
+            self._active_text_at = asyncio.get_running_loop().time()
         event = {"type": "transcription", "text": text, "source": self._source,
                  "utterance_id": f"{self._stream_id}:{self._source}:{index}",
                  "revision": existing["revision"] + 1 if existing else 1,
                  "start_time": start, "end_time": end, "is_final": final,
                  "provider_final": final, "stream_id": self._stream_id, "timing_pending": False,
-                 "recognition_status": 'done' if final else 'pending' if superseded else 'streaming'}
+                 "recognition_status": 'done' if final else 'pending' if superseded or stalled else 'streaming'}
         if self.diagnostics:
             event['diagnostic_timing'] = self.diagnostic_timing()
         self._segments[key] = event

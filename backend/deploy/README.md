@@ -133,6 +133,9 @@ ASR_TRUST_ENV=false
 `slice_type=2` 确认该句；流结束 `final=1` 仅确认连接收尾。重连使用新 `voice_id`。
 新句开始、空确认和上游重连时，旧的非最终草稿会发送 `recognition_status=pending`，
 保留原文与原句 ID；它不等于 `is_final=true`，迟到的非空最终结果仍能修订同一句。
+腾讯草稿连续 1.2 秒没有文字进展时，现有音频发送任务也会将其活动状态转为 `pending`，
+避免短音或噪声草稿一直显示“转写中”。这不是句子确认，也不拆分文本；仅更新时间戳不会
+重新激活旧草稿，新文字则立即恢复更新，最终结果仍以供应商的 `slice_type=2` 为准。
 新桌面端先收到带 `asr_pending=true` 的 `session_ready`，再等待双路握手完成的
 `asr_ready`（含 `ready` 与 `sources`）才开始采集。老客户端可以忽略新增字段和事件，
 新客户端连接旧服务时仍兼容旧 `session_ready`，但不具备这项启动防积压保护。

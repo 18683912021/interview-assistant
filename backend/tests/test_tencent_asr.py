@@ -122,6 +122,45 @@ async def test_new_sentence_retires_only_same_source_and_late_final_still_confir
     assert system._segments['0']['recognition_status'] == 'streaming'
 
 
+@pytest.mark.asyncio
+async def test_stalled_activity_retires_without_delaying_words_and_late_updates_resume(monkeypatch):
+    clock = [1.0]
+    class Loop:
+        def time(self): return clock[0]
+    async def sleep(delay): clock[0] += max(0, delay)
+    class Socket:
+        async def send(self, data): pass
+    queue = asyncio.Queue()
+    mic, system = (TencentASRSession(source, queue) for source in ('mic','system'))
+    mic._ws = system._ws = Socket()
+    with monkeypatch.context() as patch:
+        patch.setattr(asyncio, 'get_running_loop', lambda: Loop())
+        patch.setattr(asyncio, 'sleep', sleep)
+        await mic._consume(response(text='第一个字'))
+        assert queue.get_nowait()['recognition_status'] == 'streaming'  # no wait
+        clock[0] = 1.8
+        await system._consume(response(text='对方还在说'))
+        queue.get_nowait()
+        clock[0] = 2.3
+        await mic._send_audio(bytes(1280))
+        pending = queue.get_nowait()
+        assert pending['text'] == '第一个字' and pending['recognition_status'] == 'pending'
+        assert not pending['is_final']
+        await system._send_audio(bytes(1280))
+        assert queue.empty() and system._segments['0']['recognition_status'] == 'streaming'
+        # Timestamp-only provider updates must not reactivate stale words.
+        await mic._consume(response(text='第一个字', end=300))
+        assert queue.get_nowait()['recognition_status'] == 'pending'
+        await mic._consume(response(text='第一个字后继续说', end=500))
+        resumed = queue.get_nowait()
+        assert resumed['recognition_status'] == 'streaming' and resumed['revision'] > pending['revision']
+        await mic._consume(response(kind=2, text='完整句子。', end=600))
+        assert queue.get_nowait()['is_final']
+        clock[0] += 2
+        await mic._send_audio(bytes(1280))
+        assert queue.empty()
+
+
 @pytest.mark.parametrize("raw", ["[]", "null", "{}", '{"code":"0"}', b"binary", "bad-json"])
 def test_malformed_provider_packets_are_rejected(raw):
     with pytest.raises(ASRProtocolError):
