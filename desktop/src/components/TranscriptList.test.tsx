@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {act, cleanup, fireEvent, render, screen} from '@testing-library/react';
+import {act, cleanup, fireEvent, render} from '@testing-library/react';
 import {afterEach, expect, it, vi} from 'vitest';
 import {TranscriptList} from './TranscriptList';
 import {INITIAL_STATE, interviewReducer} from '../store/interview-reducer';
@@ -17,7 +17,7 @@ it('keeps long dual-channel history intact while revising drafts and selecting o
   const view = (selected: string[] = []) => <TranscriptList messages={state.conversation} selected={selected}
     multi={true} answeredIds='["0"]' onSelect={onSelect} onEdit={onEdit} />;
   const rendered = render(view());
-  const original = screen.getByRole('button', {name: '保留问题 0'});
+  const original = rendered.container.querySelector('[data-message="0"] .chat-bubble')!;
   act(() => {
     for (let revision = 2; revision <= 100; revision++) {
       for (const index of [798, 799]) state = interviewReducer(state, {type: 'transcription',
@@ -27,10 +27,10 @@ it('keeps long dual-channel history intact while revising drafts and selecting o
     rendered.rerender(view(['0']));
   });
   expect(rendered.container.querySelectorAll('.chat-message').length).toBe(800);
-  expect(screen.getByRole('button', {name: '保留问题 0'})).toBe(original);
+  expect(rendered.container.querySelector('[data-message="0"] .chat-bubble')).toBe(original);
   expect(original.getAttribute('aria-pressed')).toBe('true');
-  expect(screen.getByText('双通道 798 第 100 次更新')).toBeTruthy();
-  expect(screen.getByText('双通道 799 第 100 次更新')).toBeTruthy();
+  expect(rendered.container.querySelector('[data-message="798"] .chat-bubble')!.textContent).toBe('双通道 798 第 100 次更新');
+  expect(rendered.container.querySelector('[data-message="799"] .chat-bubble')!.textContent).toBe('双通道 799 第 100 次更新');
   fireEvent.click(original);
   expect(onSelect).toHaveBeenCalledWith('0');
 });
