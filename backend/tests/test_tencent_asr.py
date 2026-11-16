@@ -190,6 +190,45 @@ async def test_half_hour_dual_source_clock_does_not_accumulate_send_cost(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_dual_source_recovers_repeated_delivery_stalls_without_moving_audio_clock(monkeypatch):
+    """A pause in delivery must not become permanent extra latency per pause."""
+    clock = [1.0]
+    class Loop:
+        def time(self): return clock[0]
+    async def sleep(delay): clock[0] += max(0, delay)
+    class Socket:
+        def __init__(self): self.sent = []
+        async def send(self, data):
+            self.sent.append((clock[0], data))
+            clock[0] += .001
+    sessions = [TencentASRSession(source, asyncio.Queue()) for source in ('mic', 'system')]
+    for session in sessions: session._ws = Socket()
+    recovered_lags = []
+    with monkeypatch.context() as patch:
+        patch.setattr(asyncio, 'get_running_loop', lambda: Loop())
+        patch.setattr(asyncio, 'sleep', sleep)
+        for packet in range(1500):
+            captured_at = 1 + packet * .04
+            # Public real-time input delivered in a batch after a 600 ms
+            # transport stall, six times; both sources retain every byte.
+            delayed = packet % 250 < 15 and packet >= 250
+            available_at = 1 + (packet // 250 * 250 + 15) * .04 if delayed else captured_at
+            clock[0] = max(clock[0], available_at)
+            for source, session in enumerate(sessions):
+                await session._send_audio(bytes([source + packet % 200]) * 1280)
+            if packet % 250 == 100:
+                recovered_lags.append(clock[0] - captured_at)
+    assert max(recovered_lags) < .08
+    for source, session in enumerate(sessions):
+        sent = session._ws.sent
+        assert b''.join(data for _, data in sent) == b''.join(
+            bytes([source + packet % 200]) * 1280 for packet in range(1500))
+        # Recovery is bounded, rather than dumping an entire old buffer at once.
+        assert max(sum(len(data) / 32000 for at, data in sent if end - 1 < at <= end)
+                   for end, _ in sent) < 2.12
+
+
+@pytest.mark.asyncio
 async def test_overflow_spills_fifo_without_dropping_or_blocking_other_source():
     sessions = [TencentASRSession(source, asyncio.Queue()) for source in ('mic', 'system')]
     originals, outputs = [], [bytearray(), bytearray()]

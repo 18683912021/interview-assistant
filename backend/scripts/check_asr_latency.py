@@ -19,7 +19,7 @@ async def check(args):
         sample = audio.readframes(audio.getnframes())
     frames = round(args.seconds * 25)
     # Silence at each repetition exercises stop/start sentence detection too.
-    clip = sample + bytes(32000)
+    clip = sample + bytes(round(args.gap_ms * 32))
     pcm = (clip * (frames * 1280 // len(clip) + 1))[:frames * 1280]
     queue = asyncio.Queue()
     sources = ('mic', 'system') if args.dual else ('mic',)
@@ -29,12 +29,16 @@ async def check(args):
     digests = {source: hashlib.sha256() for source in sources}
     latest = {source: 0 for source in sources}
     worst = {source: 0 for source in sources}
+    send_lags = {source: [] for source in sources}
     for session in sessions:
         original = session._send_audio
         async def send(data, final=False, session=session, original=original):
             await original(data, final)
             stats[session._source]['bytes'] += len(data)
             digests[session._source].update(data)
+            if data:
+                send_lags[session._source].append(max(0, (time.monotonic() - started) * 1000
+                    - stats[session._source]['bytes'] / 32))
         session._send_audio = send
     await asyncio.gather(*(session.connect() for session in sessions))
     started = time.monotonic()
@@ -57,6 +61,8 @@ async def check(args):
     try:
         for index in range(frames):
             await asyncio.sleep(max(0, started + index * .04 - time.monotonic()))
+            if args.stall_ms and index and index % round(args.stall_every * 25) == 0:
+                await asyncio.sleep(args.stall_ms / 1000)
             data = pcm[index * 1280:(index + 1) * 1280]
             for session in sessions:
                 await session.feed_wait(data)
@@ -77,6 +83,8 @@ async def check(args):
         item['all_audio_sent_in_order'] = item['bytes'] == len(pcm) and digests[source].hexdigest() == expected
         item['last_result_end_ms'] = latest[source]
         item['worst_partial_lag_ms'] = round(worst[source])
+        item['final_send_lag_ms'] = round(send_lags[source][-1])
+        item['max_send_lag_ms'] = round(max(send_lags[source]))
     result = {'duration_seconds': args.seconds, 'sources': stats}
     print(json.dumps(result, indent=2), flush=True)
     if args.report: Path(args.report).write_text(json.dumps(result, indent=2) + '\n')
@@ -89,9 +97,13 @@ if __name__ == '__main__':
     parser.add_argument('--wav', required=True)
     parser.add_argument('--seconds', type=int, default=180)
     parser.add_argument('--dual', action='store_true')
+    parser.add_argument('--gap-ms', type=int, default=1000)
+    parser.add_argument('--stall-ms', type=int, default=0)
+    parser.add_argument('--stall-every', type=int, default=10)
     parser.add_argument('--report')
     args = parser.parse_args()
     assert 1 <= args.seconds <= 3600
+    assert 0 <= args.gap_ms <= 10000 and 0 <= args.stall_ms <= 5000 and args.stall_every >= 5
     from dotenv import load_dotenv
     load_dotenv(args.env)
     asyncio.run(check(args))

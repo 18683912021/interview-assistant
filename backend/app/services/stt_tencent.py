@@ -55,6 +55,7 @@ class TencentASRSession(StreamingASRSession):
         self._secret_id = os.getenv("TENCENT_ASR_SECRET_ID", "").strip()
         self._secret_key = os.getenv("TENCENT_ASR_SECRET_KEY", "").strip()
         self._next_send_at = 0.0
+        self._recovery_send_at = 0.0
         self._packet_bytes = 1280  # forward the client's 40 ms frames immediately
 
     async def _connect(self) -> None:
@@ -65,6 +66,7 @@ class TencentASRSession(StreamingASRSession):
         self._stream_id = str(uuid.uuid4())
         self._segments = {}
         self._next_send_at = 0.0
+        self._recovery_send_at = 0.0
         proxy, trust_env = read_proxy_config("ASR")
         # Never log the signed URL, raw provider response, or exception message.
         self._ws = await websockets.connect(
@@ -132,18 +134,22 @@ class TencentASRSession(StreamingASRSession):
     async def _send_audio(self, pcm: bytes, final: bool = False) -> None:
         if self._ws is None:
             return
-        # Keep an audio clock, not "send duration + sleep duration". Small send
-        # costs / scheduler lateness must not accumulate over a long interview.
-        # After a real stall, rebase rather than burst seconds of old audio.
+        # Preserve the original audio clock across delivery stalls. Rebasing it
+        # to "now" strands old audio at a permanent delay even after recovery.
+        # Normal input stays at 1:1. Only overdue audio catches up, capped at 2:1
+        # (below the provider's 3 seconds / second error limit), without skipping
+        # silence, changing sample rate or discarding any queued speech.
         loop = asyncio.get_running_loop()
         now = loop.time()
-        if not self._next_send_at or now - self._next_send_at > .25:
+        if not self._next_send_at:
             self._next_send_at = now
         if pcm or final:
-            await asyncio.sleep(max(0, self._next_send_at - loop.time()))
+            await asyncio.sleep(max(0, max(self._next_send_at, self._recovery_send_at) - now))
         if pcm:
             await self._ws.send(pcm)
-            self._next_send_at += len(pcm) / 32000
+            duration = len(pcm) / 32000
+            self._next_send_at += duration
+            self._recovery_send_at = loop.time() + duration / 2
         if final:
             await asyncio.sleep(max(0, self._next_send_at - loop.time()))
             await self._ws.send(json.dumps({"type": "end"}))

@@ -36,7 +36,7 @@ def _load() -> None:
     from importlib import import_module
     from app.services.tracks.common import TRACK as common_track
 
-    merged_terms: dict[str, list[str]] = dict(common_track.get("terms", {}))
+    merged_terms = {term: list(variants) for term, variants in common_track.get("terms", {}).items()}
 
     for path in _TRACK_FILES:
         if path.endswith(".common"):

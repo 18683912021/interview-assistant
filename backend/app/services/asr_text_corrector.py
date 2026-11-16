@@ -75,7 +75,6 @@ def _generate_variants(term: str) -> list[str]:
 _TERM_VARIANTS: dict[str, list[str]] = {}  # lazy-loaded from tracks
 _CORRECTIONS: list[tuple[str, str]] = []
 _CORRECTIONS_BY_LEN: list[tuple[int, str, str]] = []
-_LOADED = False
 
 
 _TRACK_LOADED: str | None = None  # 当前已加载的 track_key
@@ -86,13 +85,22 @@ def _load_terms(track_key: str | None = None) -> None:
     key = track_key or "common"
     if _TRACK_LOADED == key:
         return
+    _TERM_VARIANTS, _CORRECTIONS, _CORRECTIONS_BY_LEN = _terms_for_track(key)
     _TRACK_LOADED = key
+
+
+@lru_cache(maxsize=64)
+def _terms_for_track(key: str):
+    """Keep one compiled dictionary per track, instead of rebuilding whenever
+    different users alternate ASR events on the server's shared event loop.
+    Never extend the lists owned by the source dictionaries.
+    """
     from app.services.tracks import get_track
     from app.services.tracks.common import TRACK as common_track
 
-    terms: dict[str, list[str]] = dict(common_track.get("terms", {}))
-    if track_key:
-        track = get_track(track_key)
+    terms = {term: list(variants) for term, variants in common_track.get("terms", {}).items()}
+    if key != "common":
+        track = get_track(key)
         if track:
             for term, variants in track.get("terms", {}).items():
                 if term in terms:
@@ -100,19 +108,18 @@ def _load_terms(track_key: str | None = None) -> None:
                 else:
                     terms[term] = list(variants)
 
-    _TERM_VARIANTS = terms
-    _CORRECTIONS = _build_lookup()
-    _CORRECTIONS = [(w, c) for w, c in _CORRECTIONS if len(w) > 1]
-    _CORRECTIONS_BY_LEN = sorted(
-        [(len(w), w, c) for w, c in _CORRECTIONS],
+    corrections = [(w, c) for w, c in _build_lookup(terms) if len(w) > 1]
+    corrections_by_len = sorted(
+        [(len(w), w, c) for w, c in corrections],
         key=lambda x: -x[0],
     )
     logger.info("ASR 纠正器已加载 track=%s，%d 个术语", key, len(terms))
+    return terms, corrections, corrections_by_len
 
 
-def _build_lookup() -> list[tuple[str, str]]:
+def _build_lookup(terms: dict[str, list[str]]) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
-    for term, variants in _TERM_VARIANTS.items():
+    for term, variants in terms.items():
         seen: set[str] = set()
         for v in variants:
             v_norm = v.strip()
