@@ -137,6 +137,7 @@ export function useAudioCapture() {
           revision?: number;
           start_time?: number;
           end_time?: number;
+          recognition_status?: 'streaming' | 'pending' | 'done';
         };
         if (typeof evt.text !== 'string') return;
         dispatch({
@@ -149,6 +150,7 @@ export function useAudioCapture() {
           revision: evt.revision,
           startTime: evt.start_time,
           endTime: evt.end_time,
+          recognitionStatus: evt.recognition_status,
         });
       }),
       api.onLLMStart(raw => {
@@ -187,6 +189,8 @@ export function useAudioCapture() {
       api.onStreamState(raw => {
         const evt = raw as {state?: typeof state.streamState; message?: string};
         if (evt.state) dispatch({type: 'streamState', value: evt.state, message: evt.message});
+        if (evt.state === 'degraded' || evt.state === 'reconnecting')
+          dispatch({type: 'retire_transcriptions'});
         if ((evt.state === 'dead' || evt.state === 'closed') && !stoppingRef.current) {
           pauseForLoss('音频连接已断开，本次采集已暂停；未确认的片段已保留，请重连后继续。');
         }

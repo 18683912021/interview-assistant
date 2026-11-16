@@ -25,6 +25,17 @@ const answer: ConversationAnswer = {
   context_version: 1,
 };
 describe('speech bubbles', () => {
+  it('keeps superseded drafts as pending and accepts their late final without affecting the other channel', () => {
+    let state = interviewReducer(INITIAL_STATE, utterance());
+    state = interviewReducer(state, utterance({source:'mic', utteranceId:'mic:0', text:'我的草稿'}));
+    state = interviewReducer(state, utterance({revision:2, recognitionStatus:'pending'}));
+    expect(state.conversation.map(message => message.status)).toEqual(['interrupted','streaming']);
+    state = interviewReducer(state, utterance({revision:3, isFinal:true, text:'最终确认。'}));
+    expect(state.conversation.map(message => message.status)).toEqual(['done','streaming']);
+    state = interviewReducer(state, {type:'retire_transcriptions'});
+    expect(state.conversation.map(message => message.status)).toEqual(['done','interrupted']);
+    expect(state.conversation[1]!.text).toBe('我的草稿');
+  });
   it('splits a corrected utterance in place while preserving old answers and ignoring late ASR edits', () => {
     let state = interviewReducer(
       INITIAL_STATE,

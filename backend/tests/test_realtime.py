@@ -840,13 +840,22 @@ async def test_provider_empty_completion_is_failed_not_a_blank_completed_answer(
 async def test_both_sources_finalize_concurrently_before_session_stopped_ack(monkeypatch, tmp_path):
     finalized = set()
     both_started = asyncio.Event()
+    connecting = set()
+    both_connecting = asyncio.Event()
+    allow_connect = asyncio.Event()
     async def authenticate(_): return "owner@test.local"
     async def authorize(*_): pass
 
     class FakeASR:
         def __init__(self, source, queue):
             self.source, self.queue, self.task = source, queue, None
-        async def connect(self): pass
+            self._running = False
+        async def connect(self):
+            connecting.add(self.source)
+            if len(connecting) == 2:
+                both_connecting.set()
+            await allow_connect.wait()
+            self._running = True
         async def finish(self):
             if self.task is None:
                 self.task = asyncio.create_task(self._finish())
@@ -875,9 +884,16 @@ async def test_both_sources_finalize_concurrently_before_session_stopped_ack(mon
     await socket.recv()
     session_id = str(uuid4())
     await socket.send({"type": "session_start", "session_id": session_id, "source_mode": "both"})
-    assert (await socket.recv())["type"] == "session_ready"
+    session_ready = await socket.recv()
+    assert session_ready['type'] == 'session_ready' and session_ready['asr_pending']
+    await asyncio.wait_for(both_connecting.wait(), 1)
     await socket.send({"type": "config", "llm": {"enabled": True}})
-    assert (await socket.recv())["track"] is None
+    assert (await socket.recv())['type'] == 'config_ack'
+    recognition_ready = asyncio.create_task(socket.recv())
+    await asyncio.sleep(0)
+    assert not recognition_ready.done()
+    allow_connect.set()
+    assert (await recognition_ready)['ready'] is True
     for source in ("mic", "system"):
         await socket.send({"type": "track_start", "session_id": session_id, "source": source,
                            "format": {"sample_rate": 16000, "bit_depth": 16, "channels": 1}})

@@ -58,6 +58,7 @@ class TencentASRSession(StreamingASRSession):
         self._packet_bytes = 1280  # forward the client's 40 ms frames immediately
 
     async def _connect(self) -> None:
+        await self._retire_drafts()
         self._finished.clear()
         self._response_done.clear()
         self._provider_error_code = None
@@ -165,18 +166,25 @@ class TencentASRSession(StreamingASRSession):
         if existing and existing["is_final"]:
             return  # duplicate or late draft must not revert a confirmed bubble.
         if not text:
-            # Empty/no-speech callbacks do not confirm the text of an old draft.
+            # A new empty start or an empty final ends activity, but does not
+            # certify the words in a previous nonempty draft.
+            await self._retire_drafts(before=index + (1 if final else 0))
             return
         start, end = result.get("start_time", 0), result.get("end_time", 0)
         if type(start) is not int or type(end) is not int or start < 0 or end < 0:
             raise ASRProtocolError("Invalid Tencent timestamps")
         if existing and (existing["text"], existing["is_final"], existing["end_time"]) == (text, final, end):
             return
+        await self._retire_drafts(before=index)
+        # Retiring another utterance must not change this one's revision.
+        existing = self._segments.get(key)
+        superseded = any(int(old) > index for old in self._segments)
         event = {"type": "transcription", "text": text, "source": self._source,
                  "utterance_id": f"{self._stream_id}:{self._source}:{index}",
                  "revision": existing["revision"] + 1 if existing else 1,
                  "start_time": start, "end_time": end, "is_final": final,
-                 "provider_final": final, "stream_id": self._stream_id, "timing_pending": False}
+                 "provider_final": final, "stream_id": self._stream_id, "timing_pending": False,
+                 "recognition_status": 'done' if final else 'pending' if superseded else 'streaming'}
         self._segments[key] = event
         self._all_text[event["utterance_id"]] = text
         await self._tx_queue.put(event)

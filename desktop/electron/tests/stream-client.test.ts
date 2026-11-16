@@ -19,6 +19,23 @@ import { AudioCaptureManager } from '../audio/audio-capture';
 afterEach(() => vi.useRealTimers());
 
 describe('desktop audio WebSocket boundary', () => {
+  it('retains an early recognition-ready event and clears it for the next session', async () => {
+    const client=new StreamClient();
+    const connected=client.connect('ws://127.0.0.1:8010/api/ws/audio/stream','test-token');
+    const socket=sockets.at(-1);
+    socket.emit('message',Buffer.from('{"type":"ready"}'),false);
+    await connected;
+    client.sendControl({type:'session_start',session_id:'first'});
+    socket.emit('message',Buffer.from('{"type":"asr_ready","ready":true,"session_id":"first"}'),false);
+    expect(await client.waitForControl('asr_ready')).toMatchObject({ready:true,session_id:'first'});
+    client.sendControl({type:'session_start',session_id:'second'});
+    let settled=false;
+    const waiting=client.waitForControl('asr_ready').then(value=>{settled=true;return value;});
+    await Promise.resolve();expect(settled).toBe(false);
+    socket.emit('message',Buffer.from('{"type":"asr_ready","ready":true,"session_id":"second"}'),false);
+    expect(await waiting).toMatchObject({session_id:'second'});
+    client.disconnect();
+  });
   it('authenticates in headers and decodes text Buffer frames with request IDs', async () => {
     const client = new StreamClient();
     const chunks: any[] = [];

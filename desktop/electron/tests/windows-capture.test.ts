@@ -10,6 +10,8 @@ const fixture = vi.hoisted(() => ({
   connectError: null as Error | null,
   frameError: null as Error | null,
   stopConfirmation: null as Promise<void> | null,
+  asrPending: false,
+  asrConfirmation: null as Promise<{ready: boolean}> | null,
 }));
 
 vi.mock('../audio/macos-loopback.js', () => ({createMacLoopback: fixture.createNative}));
@@ -33,6 +35,8 @@ vi.mock('../audio/stream-client.js', async () => {
       }
       async waitForControl(type: string) {
         if (type === 'session_stopped') await fixture.stopConfirmation;
+        if (type === 'session_ready') return {asr_pending: fixture.asrPending};
+        if (type === 'asr_ready') return await fixture.asrConfirmation;
         return {};
       }
       sendControl(message: Record<string, unknown>) {
@@ -90,6 +94,8 @@ beforeEach(() => {
   fixture.connectError = null;
   fixture.frameError = null;
   fixture.stopConfirmation = null;
+  fixture.asrPending = false;
+  fixture.asrConfirmation = null;
   vi.stubGlobal(
     'process',
     new Proxy(process, {
@@ -107,6 +113,39 @@ afterEach(async () => {
 });
 
 describe('Windows native capture lifecycle without recording hardware', () => {
+  it.each(['win32', 'darwin'])('waits for both recognizers before recording on %s', async platform => {
+    vi.stubGlobal('process', new Proxy(process, {get:(target,key,receiver) => key === 'platform' ? platform : Reflect.get(target,key,receiver)}));
+    const native = nativeDevice();
+    fixture.createNative.mockReturnValue(native);
+    fixture.asrPending = true;
+    let ready!: (value: {ready:boolean}) => void;
+    fixture.asrConfirmation = new Promise(resolve => {ready=resolve;});
+    const capture = manager();
+    const starting = start(capture);
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+    expect(capture.getState()).toBe('preparing');
+    expect(native.start).not.toHaveBeenCalled();
+    capture.pushMicFrame(Buffer.alloc(1280));
+    expect(fixture.frames).toHaveLength(0);
+    ready({ready:true});
+    await starting;
+    expect(capture.getState()).toBe('capturing');
+    expect(native.start).toHaveBeenCalledOnce();
+    capture.pushMicFrame(Buffer.alloc(1280));
+    expect(fixture.frames).toHaveLength(1);
+  });
+
+  it('releases resources and never records when a recognizer fails to become ready', async () => {
+    const native = nativeDevice();
+    fixture.createNative.mockReturnValue(native);
+    fixture.asrPending = true;
+    fixture.asrConfirmation = Promise.resolve({ready:false});
+    const capture=manager();
+    await expect(start(capture)).rejects.toThrow('语音识别尚未就绪');
+    expect(native.start).not.toHaveBeenCalled();
+    expect(native.stop).toHaveBeenCalledOnce();
+    expect(capture.getState()).toBe('idle');
+  });
   it('rejects invalid sources before loading devices or opening a connection', async () => {
     const capture = manager();
     await expect(

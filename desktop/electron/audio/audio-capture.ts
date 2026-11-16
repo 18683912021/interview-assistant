@@ -133,8 +133,8 @@ export class AudioCaptureManager extends EventEmitter {
     this.source = source;
     this.sessionId = sessionId;
     this.startedAtUtc = new Date().toISOString();
-    this.state = 'capturing';
-    this.emit('captureState', { state: 'capturing', startedAtUtc: this.startedAtUtc });
+    this.state = 'preparing';
+    this.emit('captureState', { state: 'preparing' });
 
     const needs = {
       mic: source === 'mic' || source === 'both',
@@ -165,13 +165,23 @@ export class AudioCaptureManager extends EventEmitter {
     const sessionReady = this.stream.waitForControl('session_ready');
     this.stream.sendControl({ type: 'session_start', session_id: sessionId, source_mode: source });
     try {
-      await sessionReady;
+      const session = await sessionReady;
+      // New servers distinguish API readiness from both paid ASR handshakes.
+      // No recording/forwarding starts while speech would merely queue behind
+      // provider connection setup. Older servers remain compatible.
+      if (session.asr_pending) {
+        const recognition = await this.stream.waitForControl('asr_ready', 20000);
+        if (recognition.ready !== true) throw new Error('语音识别尚未就绪，请重试');
+      }
       if (generation !== this.captureGeneration) throw new Error('启动已取消');
     } catch (error) {
       if (generation !== this.captureGeneration) throw error;
       this.stream.disconnect(); this.releaseNativeCapture(); this.sessionId = null;
       this.state = 'idle'; this.emit('captureState', { state: 'idle' }); throw error;
     }
+    this.startedAtUtc = new Date().toISOString();
+    this.state = 'capturing';
+    this.emit('captureState', { state: 'capturing', startedAtUtc: this.startedAtUtc });
     for (const s of ['mic', 'system'] as TrackName[]) {
       if (!needs[s]) continue;
       this.stream.sendControl({

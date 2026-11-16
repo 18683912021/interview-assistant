@@ -12,7 +12,7 @@ const Bubble = memo(function Bubble({message, multi, selected, answered, onSelec
     <div className="chat-speaker">
       <span className="speaker-avatar">{message.role === 'interviewer' ? '面' : '我'}</span>
       <span>{message.role === 'interviewer' ? '面试官' : '我'} · {time}
-        {message.status === 'streaming' ? ' · 正在说…' : message.status === 'interrupted' ? ' · 待确认' : message.edited ? ' · 已修正' : ''}
+        {message.status === 'streaming' ? ' · 转写中…' : message.status === 'interrupted' ? ' · 待确认' : message.edited ? ' · 已修正' : ''}
       </span>
     </div>
     <button className={`chat-bubble${multi ? ' multi-select' : ''} ${selected ? 'selected' : ''}`}

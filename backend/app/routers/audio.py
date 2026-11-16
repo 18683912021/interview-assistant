@@ -212,11 +212,16 @@ async def audio_stream(ws: WebSocket):
             asr_sessions[src] = session
             try:
                 await session.connect()
+                return session._running
             except Exception:
                 await socket.send_json({"type": "error", "code": "E_ASR_UNAVAILABLE",
                     "message": f"{src} 语音识别连接失败，请检查网络与后端配置后重试",
                     "stage": "transcription", "source": src, "recoverable": False})
-        await asyncio.gather(*(open_source(src) for src in ("mic", "system") if source_mode in (src, "both")))
+                return False
+        sources = [src for src in ("mic", "system") if source_mode in (src, "both")]
+        ready = await asyncio.gather(*(open_source(src) for src in sources))
+        await socket.send_json({'type': 'asr_ready', 'session_id': str(v1_session.session_id),
+                                'ready': all(ready), 'sources': sources})
 
     async def finish_asr(source=None):
         targets = [s for key, s in asr_sessions.items() if source is None or key == source]
@@ -326,7 +331,7 @@ async def audio_stream(ws: WebSocket):
                             if sender_task:
                                 await asyncio.wait_for(transcription_queue.join(), 3)
                         was_new = v1_session is None
-                        v1_session = await handle_control_message(socket, payload, v1_session, owner_root, capture_id)
+                        v1_session = await handle_control_message(socket, payload, v1_session, owner_root, capture_id, asr_pending=_ASR_READY)
                         if was_new and v1_session is not None:
                             active_key = (email, str(v1_session.session_id))
                             _active_sessions.setdefault(active_key, set()).add(stop_deleted_session)
@@ -441,6 +446,7 @@ async def handle_control_message(
     session: V1AudioSession | None,
     owner_root=None,
     capture_id=None,
+    asr_pending=False,
 ) -> V1AudioSession | None:
     message_type = payload.get("type")
 
@@ -464,6 +470,7 @@ async def handle_control_message(
             {
                 "type": "session_ready",
                 "session_id": str(session.session_id),
+                "asr_pending": asr_pending,
             }
         )
         return session

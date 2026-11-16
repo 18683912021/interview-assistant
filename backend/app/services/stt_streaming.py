@@ -199,6 +199,7 @@ class StreamingASRSession:
             self._connecting = False
 
     async def _connect(self) -> None:
+        await self._retire_drafts()
         self._finished.clear()
         self._response_done.clear()
         self._provider_error_code = None
@@ -310,6 +311,20 @@ class StreamingASRSession:
             self._tx_queue.put_nowait(event)
         except asyncio.QueueFull:
             logger.warning("ASR output queue full")
+
+    async def _retire_drafts(self, before=None) -> None:
+        """Stop presenting superseded/ended drafts as active speech, without
+        claiming the provider confirmed their text. Late finals still revise
+        the same utterance and keep its text/source identity intact.
+        """
+        for key, event in tuple(self._segments.items()):
+            if event['is_final'] or event.get('recognition_status') == 'pending':
+                continue
+            if before is not None and int(key) >= before:
+                continue
+            pending = {**event, 'revision': event['revision'] + 1, 'recognition_status': 'pending'}
+            self._segments[key] = pending
+            await self._tx_queue.put(pending)
 
     async def _send_audio(self, pcm: bytes, final: bool = False) -> None:
         if self._ws is None:
@@ -512,6 +527,12 @@ class StreamingASRSession:
                 pass
         if not confirmed and self._provider_error_code is None and (self._audio_received or any(not segment["is_final"] for segment in self._segments.values())):
             self._emit_error("E_ASR_FINAL_TIMEOUT", "转写收尾未确认，最后一段保留为草稿")
+        try:
+            await asyncio.wait_for(self._retire_drafts(), .5)
+        except asyncio.TimeoutError:
+            # A disconnected/slow client must not retain paid ASR resources.
+            # This is a status-only event; original audio/text stays preserved.
+            pass
         self._running = False
         for task in (self._send_task, self._recv_task):
             if task and not task.done():

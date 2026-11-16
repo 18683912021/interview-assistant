@@ -24,6 +24,7 @@ export class StreamClient extends EventEmitter {
   private url = '';
   private token = '';
   private ready = false;
+  private lastAsrReady: Record<string, unknown> | null = null;
   private generation = 0;
   private retryCount = 0;
   private retryTimer: NodeJS.Timeout | null = null;
@@ -65,6 +66,7 @@ export class StreamClient extends EventEmitter {
     }
 
     this.ready = false;
+    this.lastAsrReady = null;
 
     let ws: StreamSocket;
     try {
@@ -180,6 +182,7 @@ export class StreamClient extends EventEmitter {
   /** 发送 JSON 控制消息（连接未就绪时静默丢弃） */
   sendControl(msg: object): void {
     if (!this.ready || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if ('type' in msg && msg.type === 'session_start') this.lastAsrReady = null;
     this.ws.send(JSON.stringify(msg));
   }
 
@@ -194,6 +197,7 @@ export class StreamClient extends EventEmitter {
   }
 
   waitForControl(type: string, timeoutMs = 10000): Promise<any> {
+    if (type === 'asr_ready' && this.lastAsrReady) return Promise.resolve(this.lastAsrReady);
     return new Promise((resolve, reject) => {
       const cleanup = () => {
         clearTimeout(timer);
@@ -207,7 +211,8 @@ export class StreamClient extends EventEmitter {
       };
       const listener = (msg: any) => {
         if (msg.type === type) { cleanup(); resolve(msg); }
-        else if (msg.type === 'error' && ['E_AUTH', 'E_SESSION_ACCESS', 'E_SESSION_STATE', 'E_CONTROL_MESSAGE'].includes(msg.code)) {
+        else if (msg.type === 'error' && (['E_AUTH', 'E_SESSION_ACCESS', 'E_SESSION_STATE', 'E_CONTROL_MESSAGE'].includes(msg.code)
+          || (type === 'asr_ready' && msg.stage === 'transcription' && msg.recoverable === false))) {
           cleanup(); reject(new Error(msg.message));
         }
       };
@@ -227,6 +232,7 @@ export class StreamClient extends EventEmitter {
     let msg: any;
     try { msg = JSON.parse(text); } catch { return; }
 
+    if (msg.type === 'asr_ready') this.lastAsrReady = msg;
     this.emit('controlMessage', msg);
     switch (msg.type) {
       case 'ready':

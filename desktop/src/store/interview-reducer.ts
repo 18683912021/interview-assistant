@@ -28,6 +28,7 @@ export type Action =
       revision?: number;
       startTime?: number;
       endTime?: number;
+      recognitionStatus?: 'streaming' | 'pending' | 'done';
     }
   | {type: 'edit_message'; id: string; text: string}
   | {type: 'split_message'; id: string; parts: {id: string; text: string}[]}
@@ -47,6 +48,7 @@ export type Action =
   | {type: 'cancel_answer'; requestId: string}
   | {type: 'hydrate'; conversation: ConversationMessage[]; answers: ConversationAnswer[]}
   | {type: 'settle'; keepAnswers?: boolean}
+  | {type: 'retire_transcriptions'}
   | {type: 'reset'};
 
 export const INITIAL_STATE: ControllerState = {
@@ -124,6 +126,9 @@ export function interviewReducer(state: ControllerState, action: Action): Contro
       };
     case 'add_message':
       return {...state, conversation: [...state.conversation, action.message]};
+    case 'retire_transcriptions':
+      return {...state, conversation: state.conversation.map(message =>
+        message.status === 'streaming' ? {...message, status: 'interrupted'} : message)};
     case 'split_message': {
       const parts = action.parts.filter(part => part.text.trim());
       const original = state.conversation.find(message => message.id === action.id);
@@ -189,7 +194,7 @@ export function interviewReducer(state: ControllerState, action: Action): Contro
           (action.utteranceId ? `${action.source}:${action.utteranceId}` : genId(role)),
         role,
         text,
-        status: action.isFinal ? 'done' : 'streaming',
+        status: action.isFinal ? 'done' : action.recognitionStatus === 'pending' ? 'interrupted' : 'streaming',
         timestamp: previous?.timestamp ?? action.timestamp,
         source: action.source,
         utteranceId: action.utteranceId,

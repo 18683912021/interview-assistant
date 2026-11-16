@@ -77,9 +77,30 @@ async def test_stream_final_does_not_falsely_confirm_draft_and_sources_are_isola
         await session._consume(response())
         await session._consume(response(kind=2, text=""))
         await session._consume(ASRResponse({"final": 1}, is_last=True))
-    events = [queue.get_nowait(), queue.get_nowait()]
+    events = [queue.get_nowait() for _ in range(queue.qsize())]
     assert not any(e["is_final"] for e in events)
-    assert events[0]["utterance_id"] != events[1]["utterance_id"]
+    assert events[0]["utterance_id"] != events[2]["utterance_id"]
+    assert events[1]['recognition_status'] == events[3]['recognition_status'] == 'pending'
+
+
+@pytest.mark.asyncio
+async def test_new_sentence_retires_only_same_source_and_late_final_still_confirms():
+    queue = asyncio.Queue()
+    mic = TencentASRSession('mic', queue)
+    system = TencentASRSession('system', queue)
+    await mic._consume(response(index=0, text='待确认的短音'))
+    await system._consume(response(index=0, text='对方还在说'))
+    await mic._consume(response(index=1, kind=0, text=''))
+    events = [queue.get_nowait() for _ in range(queue.qsize())]
+    assert len(events) == 3
+    assert events[-1]['source'] == 'mic' and events[-1]['recognition_status'] == 'pending'
+    assert not events[-1]['is_final'] and events[-1]['text'] == events[0]['text']
+    await mic._consume(response(index=1, text='第二句'))
+    await mic._consume(response(index=0, kind=2, text='前一句确认。'))
+    events = [queue.get_nowait() for _ in range(queue.qsize())]
+    assert events[-1]['utterance_id'].endswith(':mic:0') and events[-1]['is_final']
+    assert events[-1]['revision'] > events[0]['revision']
+    assert system._segments['0']['recognition_status'] == 'streaming'
 
 
 @pytest.mark.parametrize("raw", ["[]", "null", "{}", '{"code":"0"}', b"binary", "bad-json"])
