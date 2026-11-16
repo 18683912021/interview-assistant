@@ -13,6 +13,7 @@ import re
 import ssl
 import struct
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -184,6 +185,11 @@ class StreamingASRSession:
         self._provider_error_code: int | None = None
         self._overflow_reported = False
         self._audio_received = False
+        self.diagnostics = False
+        self._diagnostic_input_bytes = 0
+        self._diagnostic_sent_bytes = 0
+        self._diagnostic_ingest_at = 0
+        self._diagnostic_received_at = 0
 
     async def connect(self) -> None:
         if self._closing:
@@ -266,6 +272,9 @@ class StreamingASRSession:
         if not pcm or self._closing or self._provider_error_code is not None:
             return
         self._audio_received = True
+        if self.diagnostics:
+            self._diagnostic_input_bytes += len(pcm)
+            self._diagnostic_ingest_at = round(time.time()*1000)
         if not self._running and not self._connecting:
             self._schedule_reconnect()
         if self._spill is None and not self._send_queue.full():
@@ -323,8 +332,16 @@ class StreamingASRSession:
             if before is not None and int(key) >= before:
                 continue
             pending = {**event, 'revision': event['revision'] + 1, 'recognition_status': 'pending'}
+            if self.diagnostics:
+                pending['diagnostic_timing'] = {**self.diagnostic_timing(), 'status_only': True}
             self._segments[key] = pending
             await self._tx_queue.put(pending)
+
+    def diagnostic_timing(self):
+        return {'provider_received_at_ms':self._diagnostic_received_at,
+                'last_ingest_at_ms':self._diagnostic_ingest_at,
+                'sent_audio_ms':self._diagnostic_sent_bytes/32,
+                'queued_audio_ms':max(0, self._diagnostic_input_bytes-self._diagnostic_sent_bytes)/32}
 
     async def _send_audio(self, pcm: bytes, final: bool = False) -> None:
         if self._ws is None:
@@ -379,6 +396,8 @@ class StreamingASRSession:
     async def _recv_loop(self) -> None:
         try:
             async for raw in self._ws:
+                if self.diagnostics:
+                    self._diagnostic_received_at = round(time.time()*1000)
                 response = self._parse_response(raw)
                 if response.error_code is not None:
                     self._reject_response(response)

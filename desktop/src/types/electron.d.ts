@@ -27,8 +27,10 @@ interface ElectronAPI {
     }>;
     clearAnswer(): Promise<void>;
     sendControl(msg: unknown): Promise<unknown>;
-    sendMicFrame(frame: Uint8Array): void;
-    sendSystemFrame(frame: Uint8Array): void;
+    diagnosticsEnabled?(): Promise<boolean>;
+    reportRenderMetric?(metric: unknown): void;
+    sendMicFrame(frame: Uint8Array, timing?: {renderer_at_ms: number; worklet_queue_ms: number; input_latency_ms: number}): void;
+    sendSystemFrame(frame: Uint8Array, timing?: {renderer_at_ms: number; worklet_queue_ms: number; input_latency_ms: number}): void;
     onState(cb: (data: unknown) => void): () => void;
     onTranscription(cb: (data: unknown) => void): () => void;
     onLLMStart(cb: (data: unknown) => void): () => void;

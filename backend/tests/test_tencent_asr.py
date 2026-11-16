@@ -54,6 +54,25 @@ def test_explicit_provider_selection_preserves_volc_fallback(monkeypatch, creden
 
 
 @pytest.mark.asyncio
+async def test_opt_in_timing_separates_input_queue_from_provider_results():
+    queue = asyncio.Queue()
+    session = TencentASRSession('system', queue)
+    await session._consume(response())
+    assert 'diagnostic_timing' not in queue.get_nowait()
+    session.diagnostics = True
+    session._connecting = True
+    session._queue_audio(bytes(2560))
+    session._diagnostic_sent_bytes = 1280
+    session._diagnostic_received_at = 1234
+    await session._consume(response(text='公开计时测试', end=200))
+    timing = queue.get_nowait()['diagnostic_timing']
+    assert timing['queued_audio_ms'] == timing['sent_audio_ms'] == 40
+    assert timing['provider_received_at_ms'] == 1234
+    assert timing['last_ingest_at_ms'] > 0
+    assert all(isinstance(value, (int,float)) for value in timing.values())
+
+
+@pytest.mark.asyncio
 async def test_drafts_revise_one_bubble_and_sentence_ids_separate_bubbles():
     queue = asyncio.Queue()
     session = TencentASRSession("system", queue)

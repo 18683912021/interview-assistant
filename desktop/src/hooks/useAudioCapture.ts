@@ -1,4 +1,4 @@
-import {useReducer, useCallback, useEffect, useRef, useState} from 'react';
+import {useReducer, useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {interviewReducer, INITIAL_STATE, genId} from '../store/interview-reducer';
 import {MAIN_STREAM_URL, STREAM_DIRECT_ADDRESS} from '../config';
 import {
@@ -27,6 +27,7 @@ type AudioHandle = {
   node: AudioWorkletNode;
   flushAck?: () => void;
 };
+type FrameTiming = {renderer_at_ms: number; worklet_queue_ms: number; input_latency_ms: number};
 async function flushAudio(handle: AudioHandle | null): Promise<boolean> {
   if (!handle) return true;
   return new Promise(resolve => {
@@ -72,6 +73,7 @@ export function useAudioCapture() {
   const startEpoch = useRef(0);
   const preparedKey = useRef<string | null>(null);
   const forwarding = useRef(false);
+  const renderMetrics = useRef<{id: number; utterance: string; revision: number; source: string; received: number}[]>([]);
   const [settling, setSettling] = useState(false);
   const [echoMode, setEchoMode] = useState<MicrophoneEchoMode | null>(null);
   const [preparation, setPreparation] = useState<Partial<Record<'mic' | 'system', AudioPreparationStep>>>({});
@@ -138,8 +140,14 @@ export function useAudioCapture() {
           start_time?: number;
           end_time?: number;
           recognition_status?: 'streaming' | 'pending' | 'done';
+          diagnostic_id?: number;
         };
         if (typeof evt.text !== 'string') return;
+        if (Number.isSafeInteger(evt.diagnostic_id) && evt.utterance_id && api.reportRenderMetric) {
+          if (renderMetrics.current.length >= 512) renderMetrics.current.shift();
+          renderMetrics.current.push({id:evt.diagnostic_id!, utterance:evt.utterance_id,
+            source:evt.source, revision:evt.revision ?? 0, received:Date.now()});
+        }
         dispatch({
           type: 'transcription',
           text: evt.text,
@@ -216,8 +224,24 @@ export function useAudioCapture() {
     };
   }, [api, pauseForLoss]);
 
+  useLayoutEffect(() => {
+    if (!renderMetrics.current.length) return;
+    const committedAt = Date.now();
+    const batch = renderMetrics.current.splice(0);
+    const committed = new Map(state.conversation.map(message => [`${message.source}:${message.utteranceId}`, message]));
+    requestAnimationFrame(() => {
+      const frameAt = Date.now();
+      for (const metric of batch) {
+        const message = committed.get(`${metric.source}:${metric.utterance}`);
+        if (!message || (message.revision ?? 0) < metric.revision) continue;
+        api?.reportRenderMetric?.({id:metric.id, renderer_received_at_ms:metric.received,
+          committed_at_ms:committedAt, frame_at_ms:frameAt, coalesced:(message.revision ?? 0)>metric.revision});
+      }
+    });
+  }, [api, state.conversation]);
+
   const attachPipeline = useCallback(
-    async (stream: MediaStream, send: (frame: Uint8Array) => void, epoch: number) => {
+    async (stream: MediaStream, send: (frame: Uint8Array, timing?: FrameTiming) => void, epoch: number) => {
       const ctx = new AudioContext({sampleRate: 16000});
       try {
         await ctx.audioWorklet.addModule('./mic-processor.js');
@@ -227,16 +251,26 @@ export function useAudioCapture() {
           numberOfOutputs: 0,
         });
         const handle: AudioHandle = {ctx, stream, node};
-        node.port.onmessage = (event: MessageEvent<ArrayBuffer | {type?: string}>) => {
+        const diagnostics = await api?.diagnosticsEnabled?.().catch(() => false);
+        if (diagnostics) node.port.postMessage({type:'diagnostics', enabled:true});
+        node.port.onmessage = (event: MessageEvent<ArrayBuffer | {type?: string; samples?: ArrayBuffer; audio_time_end?: number}>) => {
+          let samplesBuffer: ArrayBuffer;
+          let timing: FrameTiming | undefined;
           if (!(event.data instanceof ArrayBuffer)) {
             if (event.data?.type === 'flushed') handle.flushAck?.();
-            return;
+            if (event.data?.type !== 'audio-frame' || !(event.data.samples instanceof ArrayBuffer)) return;
+            samplesBuffer = event.data.samples;
+            timing = {renderer_at_ms:Date.now(),
+              worklet_queue_ms:Math.max(0, (ctx.currentTime-(event.data.audio_time_end ?? ctx.currentTime))*1000),
+              input_latency_ms:((stream.getAudioTracks()[0]?.getSettings() as MediaTrackSettings & {latency?: number})?.latency ?? 0)*1000};
+          } else {
+            samplesBuffer = event.data;
           }
-          const samples = new Float32Array(event.data);
+          const samples = new Float32Array(samplesBuffer);
           const pcm = new Int16Array(samples.length);
           for (let i = 0; i < samples.length; i++)
             pcm[i] = Math.round(Math.max(-1, Math.min(1, samples[i] ?? 0)) * 32767);
-          if (forwarding.current) send(new Uint8Array(pcm.buffer));
+          if (forwarding.current) send(new Uint8Array(pcm.buffer), timing);
         };
         source.connect(node);
         await ctx.resume();
@@ -261,7 +295,7 @@ export function useAudioCapture() {
         throw error;
       }
     },
-    [pauseForLoss],
+    [api, pauseForLoss],
   );
 
   const prepare = useCallback(
@@ -314,12 +348,12 @@ export function useAudioCapture() {
           progress,
         );
         if (epoch !== startEpoch.current) throw new Error('启动已取消');
-        preparedMic = await attachPipeline(streams.mic, frame => api.sendMicFrame(frame), epoch);
+        preparedMic = await attachPipeline(streams.mic, (frame, timing) => api.sendMicFrame(frame, timing), epoch);
         if (epoch !== startEpoch.current) throw new Error('启动已取消');
         if (streams.system) {
           pipelineSource = 'system';
-          preparedSystem = await attachPipeline(streams.system, frame =>
-            api.sendSystemFrame(frame), epoch,
+          preparedSystem = await attachPipeline(streams.system, (frame, timing) =>
+            api.sendSystemFrame(frame, timing), epoch,
           );
         }
         if (epoch !== startEpoch.current) throw new Error('启动已取消');

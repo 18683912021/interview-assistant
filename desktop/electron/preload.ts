@@ -28,8 +28,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listSystemOutputs: () => ipcRenderer.invoke('audio:list-system-outputs'),
     clearAnswer: () => ipcRenderer.invoke('audio:clear-answer'),
     sendControl: (msg: unknown) => ipcRenderer.invoke('audio:send-control', msg),
-    sendMicFrame: (frame: Uint8Array) => ipcRenderer.send('audio:mic-frame', frame),
-    sendSystemFrame: (frame: Uint8Array) => ipcRenderer.send('audio:system-frame', frame),
+    diagnosticsEnabled: () => ipcRenderer.invoke('audio:diagnostics-enabled'),
+    reportRenderMetric: (metric: unknown) => ipcRenderer.send('audio:render-metric', metric),
+    sendMicFrame: (frame: Uint8Array, timing?: unknown) => ipcRenderer.send('audio:mic-frame', frame, timing),
+    sendSystemFrame: (frame: Uint8Array, timing?: unknown) => ipcRenderer.send('audio:system-frame', frame, timing),
     onState: (cb: (data: unknown) => void) => {
       const listener = (_: unknown, data: unknown) => cb(data);
       ipcRenderer.on('audio:state', listener);

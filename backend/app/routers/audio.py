@@ -206,9 +206,10 @@ async def audio_stream(ws: WebSocket):
                 await terminate_connection("E_AUTH_UNAVAILABLE", "暂时无法确认会话权限，采集已停止", 1011, wait=False)
                 return
 
-    async def start_asr(source_mode):
+    async def start_asr(source_mode, diagnostics=False):
         async def open_source(src):
             session = create_asr_session(src, transcription_queue)
+            session.diagnostics = diagnostics
             asr_sessions[src] = session
             try:
                 await session.connect()
@@ -340,7 +341,7 @@ async def audio_stream(ws: WebSocket):
                             if llm_service.ready:
                                 background_tasks.add(asyncio.create_task(llm_service.warmup()))
                             if _ASR_READY:
-                                background_tasks.add(asyncio.create_task(start_asr(v1_session.source_mode)))
+                                background_tasks.add(asyncio.create_task(start_asr(v1_session.source_mode, payload.get('diagnostics') is True)))
                             else:
                                 await socket.send_json({"type": "error", "code": "E_ASR_UNAVAILABLE",
                                     "message": "语音识别未配置，请检查后端所选语音服务的凭据；可手动输入问题",
@@ -568,6 +569,8 @@ async def _transcription_sender(ws, queue: asyncio.Queue, track=None):
                     except Exception:
                         corrected = raw_text
                     event = {**event, "raw_text": raw_text, "text": corrected}
+                if 'diagnostic_timing' in event:
+                    event = {**event, 'diagnostic_timing':{**event['diagnostic_timing'], 'server_sent_at_ms':round(_time.time()*1000)}}
                 await ws.send_json(event)
             finally:
                 queue.task_done()

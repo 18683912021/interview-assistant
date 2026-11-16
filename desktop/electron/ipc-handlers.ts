@@ -16,10 +16,11 @@ import { app } from 'electron';
 import { mainWindow, restartApplication } from './main.js';
 import {getWindowPrivacy, hideWindows} from './windows/window-privacy.js';
 import {registerScreenshotIPC} from './screenshot/capture.js';
+import {audioLatencyDiagnostics, type FrameTiming} from './audio/latency-diagnostics.js';
 
 const storage = new DesktopStorage(app.getPath('userData'));
 
-export const flushStorage = (): Promise<void> => storage.flush();
+export const flushStorage = async (): Promise<void> => { await storage.flush(); await audioLatencyDiagnostics.close(); };
 
 // ── 端口检查工具 ──
 export function checkPort(port: number): Promise<boolean> {
@@ -33,6 +34,9 @@ export function checkPort(port: number): Promise<boolean> {
 }
 
 export function registerIpcHandlers(): void {
+  audioLatencyDiagnostics.configure(app.getPath('userData'));
+  ipcMain.handle('audio:diagnostics-enabled', () => audioLatencyDiagnostics.requested());
+  ipcMain.on('audio:render-metric', (_event, metric: unknown) => audioLatencyDiagnostics.rendered(metric));
   registerScreenshotIPC(() => mainWindow);
   // 窗口可能已销毁（用户关闭/重建窗口时 mainWindow 仍指向旧实例），
   // webContents.send 会抛 "Object has been destroyed" 导致主进程崩溃
@@ -203,12 +207,12 @@ export function registerIpcHandlers(): void {
   });
 
   // 渲染进程麦克风 PCM16 帧（16kHz mono，AudioContext 已归一化）→ 主进程统一推流
-  ipcMain.on('audio:mic-frame', (_e, data: Uint8Array | ArrayBuffer) => {
-    audioCapture.pushMicFrame(Buffer.from(data as any));
+  ipcMain.on('audio:mic-frame', (_e, data: Uint8Array | ArrayBuffer, timing?: FrameTiming) => {
+    audioCapture.pushMicFrame(Buffer.from(data as any), timing);
   });
 
   // 渲染进程系统音频 PCM16 帧（macOS getDisplayMedia/SCK 采集）→ 主进程统一推流
-  ipcMain.on('audio:system-frame', (_e, data: Uint8Array | ArrayBuffer) => {
-    audioCapture.pushSystemFrame(Buffer.from(data as any));
+  ipcMain.on('audio:system-frame', (_e, data: Uint8Array | ArrayBuffer, timing?: FrameTiming) => {
+    audioCapture.pushSystemFrame(Buffer.from(data as any), timing);
   });
 }

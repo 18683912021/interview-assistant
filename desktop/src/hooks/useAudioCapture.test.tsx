@@ -17,6 +17,22 @@ function microphone() {
 afterEach(() => {cleanup(); delete window.electronAPI; vi.unstubAllGlobals();});
 
 describe('cancelled capture preparation', () => {
+  it('acknowledges an actual committed transcript without sending its words to diagnostics', () => {
+    let transcript!: (event: unknown) => void;
+    const off = () => () => {};
+    const report = vi.fn();
+    window.electronAPI = {audio:{onState:off, onTranscription:(callback: typeof transcript) => {transcript=callback; return () => {};},
+      onLLMStart:off, onLLMChunk:off, onLLMDone:off, onStreamState:off, onLevels:off, onError:off,
+      stopCapture:vi.fn().mockResolvedValue(undefined), cancelSystemAudioCheck:vi.fn().mockResolvedValue(undefined),
+      reportRenderMetric:report}} as unknown as NonNullable<Window['electronAPI']>;
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {callback(0); return 1;});
+    const {result} = renderHook(() => useAudioCapture());
+    act(() => transcript({text:'private transcript',source:'mic',utterance_id:'one',revision:1,is_final:false,diagnostic_id:7}));
+    expect(result.current.state.conversation[0]?.text).toBe('private transcript');
+    expect(report).toHaveBeenCalledWith({id:7,renderer_received_at_ms:expect.any(Number),
+      committed_at_ms:expect.any(Number),frame_at_ms:expect.any(Number),coalesced:false});
+    expect(JSON.stringify(report.mock.calls)).not.toContain('private');
+  });
   it.each(['permission', 'worklet'])('a stale %s result cannot clear a newer prepared microphone', async stage => {
     const oldMic = microphone(), newMic = microphone();
     const permission = deferred<MediaStream>(), worklet = deferred<void>();

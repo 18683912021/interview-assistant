@@ -17,6 +17,7 @@ import { StreamClient, type StreamState } from './stream-client.js';
 import { createWindowsLoopback, type WasapiCapture } from './windows-loopback.js';
 import { createMacLoopback } from './macos-loopback.js';
 import { StreamingPcmNormalizer } from './windows-pcm.js';
+import {audioLatencyDiagnostics, type FrameTiming} from './latency-diagnostics.js';
 
 export type CaptureState = 'idle' | 'preparing' | 'capturing' | 'completed';
 export type CaptureSource = 'mic' | 'system' | 'both';
@@ -69,7 +70,7 @@ export class AudioCaptureManager extends EventEmitter {
       this.emit('streamState', { state: s, message });
     });
     this.stream.on('transcription', (m: any) => {
-      this.emit('transcription', m);
+      this.emit('transcription', audioLatencyDiagnostics.transcription(m));
     });
     this.stream.on('llmStart', (m: { request_id?: string; question_text?: string }) => {
       if (typeof m.request_id === 'string' && this.currentAnswer?.request_id !== m.request_id) {
@@ -128,6 +129,7 @@ export class AudioCaptureManager extends EventEmitter {
       ? createWindowsLoopback(systemDeviceId)
       : source !== 'mic' && process.platform === 'darwin' && !systemDeviceId ? createMacLoopback() : null;
     const generation = ++this.captureGeneration;
+    audioLatencyDiagnostics.begin(sessionId);
     this.nativeCapture = systemCapture;
     this.currentAnswer = null;
     this.source = source;
@@ -163,7 +165,8 @@ export class AudioCaptureManager extends EventEmitter {
 
     // ── 2. 发起会话（会话就绪后补发，避免握手竞态） ──
     const sessionReady = this.stream.waitForControl('session_ready');
-    this.stream.sendControl({ type: 'session_start', session_id: sessionId, source_mode: source });
+    this.stream.sendControl({ type: 'session_start', session_id: sessionId, source_mode: source,
+      ...(audioLatencyDiagnostics.enabled ? {diagnostics:true} : {}) });
     try {
       const session = await sessionReady;
       // New servers distinguish API readiness from both paid ASR handshakes.
@@ -270,21 +273,21 @@ export class AudioCaptureManager extends EventEmitter {
   }
 
   /** renderer 麦克风帧（16kHz mono int16，经 IPC 送入），对齐移动端 native 帧语义 */
-  pushMicFrame(buffer: Buffer): void {
+  pushMicFrame(buffer: Buffer, timing?: FrameTiming): void {
     if (this.state !== 'capturing') return;
     if (!this.tracks.has('mic')) return;
     // 已是 16kHz mono int16：sourceStep = 1，无插值开销
-    this.pushNorm('mic', normalizePcm(buffer, 16000, 1));
+    this.pushNorm('mic', normalizePcm(buffer, 16000, 1), timing);
   }
 
   /** renderer 系统音频帧（macOS getDisplayMedia 16kHz mono int16，经 IPC 送入） */
-  pushSystemFrame(buffer: Buffer): void {
+  pushSystemFrame(buffer: Buffer, timing?: FrameTiming): void {
     // Windows owns this source in WASAPI; accepting renderer loopback frames
     // there could double or cross-route system audio.
     if (process.platform !== 'darwin' || this.nativeCapture) return;
     if (this.state !== 'capturing') return;
     if (!this.tracks.has('system')) return;
-    this.pushNorm('system', normalizePcm(buffer, 16000, 1));
+    this.pushNorm('system', normalizePcm(buffer, 16000, 1), timing);
   }
 
   /** 发送 JSON 控制消息（llm_query / config 等） */
@@ -406,9 +409,10 @@ export class AudioCaptureManager extends EventEmitter {
   }
 
   /** 归一化后数据入 accumulator + RMS 累积 */
-  private pushNorm(source: TrackName, norm: Buffer): void {
+  private pushNorm(source: TrackName, norm: Buffer, timing?: FrameTiming): void {
     const t = this.tracks.get(source);
     if (!t || norm.length === 0) return;
+    audioLatencyDiagnostics.input(source, norm, t.offsetBytes/32, timing);
     for (let i = 0; i < norm.length; i += 2) {
       const s = norm.readInt16LE(i);
       t.rmsSum += s * s;

@@ -147,6 +147,8 @@ class TencentASRSession(StreamingASRSession):
             await asyncio.sleep(max(0, max(self._next_send_at, self._recovery_send_at) - now))
         if pcm:
             await self._ws.send(pcm)
+            if self.diagnostics:
+                self._diagnostic_sent_bytes += len(pcm)
             duration = len(pcm) / 32000
             self._next_send_at += duration
             self._recovery_send_at = loop.time() + duration / 2
@@ -191,6 +193,8 @@ class TencentASRSession(StreamingASRSession):
                  "start_time": start, "end_time": end, "is_final": final,
                  "provider_final": final, "stream_id": self._stream_id, "timing_pending": False,
                  "recognition_status": 'done' if final else 'pending' if superseded else 'streaming'}
+        if self.diagnostics:
+            event['diagnostic_timing'] = self.diagnostic_timing()
         self._segments[key] = event
         self._all_text[event["utterance_id"]] = text
         await self._tx_queue.put(event)

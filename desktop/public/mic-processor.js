@@ -18,7 +18,9 @@ class MicCaptureProcessor extends AudioWorkletProcessor {
     this.buffer = new Float32Array(FRAME); // 当前累积缓冲
     this.count = 0;                        // 已累积样本数
     this.stopped = false;
+    this.diagnostics = false;
     this.port.onmessage = ({ data }) => {
+      if (data?.type === 'diagnostics') {this.diagnostics = data.enabled === true; return;}
       if (!data || data.type !== 'flush') return;
       // Freeze this capture before acknowledging, so audio produced after the
       // user's stop cannot arrive behind the terminal acknowledgement.
@@ -48,7 +50,9 @@ class MicCaptureProcessor extends AudioWorkletProcessor {
       if (this.count === FRAME) {
         const buf = this.buffer.buffer;
         this.buffer = new Float32Array(FRAME); // 先换新缓冲再转移，视图不指向已转移内存
-        this.port.postMessage(buf, [buf]);    // 所有权转移，主线程零拷贝接收
+        this.port.postMessage(this.diagnostics
+          ? {type: 'audio-frame', samples: buf, audio_time_end: currentTime + i / sampleRate}
+          : buf, [buf]); // 所有权转移，主线程零拷贝接收
         this.count = 0;
       }
     }
