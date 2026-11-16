@@ -27,7 +27,10 @@ function View() {
     <div className="fixture-answer" style={{overflow:'auto', minHeight:0}}><AnswerBody text={state.answers[0]?.text ?? ''} /></div>
   </div>;
 }
-const paint = () => new Promise<number>(resolve => requestAnimationFrame(() => resolve(performance.now())));
+const paint = () => new Promise<number>((resolve,reject) => {
+  const timeout=setTimeout(() => reject(new Error('Compositor did not schedule a frame within 1 second')),1000);
+  requestAnimationFrame(() => {clearTimeout(timeout); resolve(performance.now());});
+});
 const row = (index: number) => document.querySelector(`[data-message="${index % 2 ? 'mic' : 'system'}:${index}"]`);
 async function run() {
   const timings: number[] = [];

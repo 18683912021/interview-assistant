@@ -47,7 +47,11 @@ if (!process.versions.electron) {
     app.exit(result.messages===1000 && result.historyNodePreserved && result.latestBothVisible && result.layoutFollowPassed ? 0 : 1);
   });
   app.whenReady().then(()=>{
-    const win = new BrowserWindow({show:false,width:1200,height:800,webPreferences:{preload,backgroundThrottling:false}});
+    // A hidden Windows HWND can stop compositor frame callbacks after native
+    // resizing even with timer throttling disabled. Exercise a real visible
+    // test window on the CI desktop; no account, microphone or capture is used.
+    const win = new BrowserWindow({show:process.platform==='win32',width:1200,height:800,
+      webPreferences:{preload,backgroundThrottling:false}});
     win.loadFile(path.join(tmp,'index.html'));
   });
 }
