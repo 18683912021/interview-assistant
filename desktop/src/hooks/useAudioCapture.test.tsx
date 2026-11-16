@@ -30,7 +30,7 @@ describe('cancelled capture preparation', () => {
     act(() => transcript({text:'private transcript',source:'mic',utterance_id:'one',revision:1,is_final:false,diagnostic_id:7}));
     expect(result.current.state.conversation[0]?.text).toBe('private transcript');
     expect(report).toHaveBeenCalledWith({id:7,renderer_received_at_ms:expect.any(Number),
-      committed_at_ms:expect.any(Number),frame_at_ms:expect.any(Number),coalesced:false});
+      committed_at_ms:expect.any(Number),frame_at_ms:expect.any(Number),in_view:false,coalesced:false});
     expect(JSON.stringify(report.mock.calls)).not.toContain('private');
   });
   it.each(['permission', 'worklet'])('a stale %s result cannot clear a newer prepared microphone', async stage => {

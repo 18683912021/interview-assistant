@@ -31,14 +31,20 @@ if (!process.versions.electron) {
         ipcRenderer.on('fixture:'+name, listener); return () => ipcRenderer.removeListener('fixture:'+name, listener);};
     audio.stopCapture = async () => {}; audio.cancelSystemAudioCheck = async () => {};
     contextBridge.exposeInMainWorld('electronAPI', {audio});
-    contextBridge.exposeInMainWorld('renderFixture', {publish: events => ipcRenderer.invoke('fixture:publish', events)});
+    contextBridge.exposeInMainWorld('renderFixture', {publish: events => ipcRenderer.invoke('fixture:publish', events),
+      resize:(width,height) => ipcRenderer.invoke('fixture:resize',width,height)});
     contextBridge.exposeInMainWorld('reportRenderCheck', result=>ipcRenderer.send('render-check',result));`);
   ipcMain.handle('fixture:publish', (event, events) => {
     for (const [name, payload] of events) event.sender.send('fixture:'+name, payload);
   });
+  ipcMain.handle('fixture:resize', (event, width, height) => {
+    const window = event.sender.getOwnerBrowserWindow();
+    window.setSize(width,height);
+    return window.getContentSize();
+  });
   ipcMain.once('render-check',(_event,result)=>{
     console.log(JSON.stringify(result));
-    app.exit(result.messages===1000 && result.historyNodePreserved && result.latestBothVisible ? 0 : 1);
+    app.exit(result.messages===1000 && result.historyNodePreserved && result.latestBothVisible && result.layoutFollowPassed ? 0 : 1);
   });
   app.whenReady().then(()=>{
     const win = new BrowserWindow({show:false,width:1200,height:800,webPreferences:{preload,backgroundThrottling:false}});

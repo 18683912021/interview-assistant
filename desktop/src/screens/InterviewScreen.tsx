@@ -63,6 +63,7 @@ import {sessionContentSignature as signature} from '../services/session-content'
 import {checkAIReadiness} from '../api/diagnostics';
 import {enumerateAudioInputs, type AudioInputDevice} from '../utils/audioDevices';
 import {microphoneEchoMessage} from '../services/microphone-capture';
+import {useTranscriptFollow} from '../hooks/useTranscriptFollow';
 import {
   desktopPlatform,
   listSystemOutputs,
@@ -153,11 +154,11 @@ export default function InterviewScreen() {
   useEffect(() => {
     if (manual && !manualRecognizing) manualInput.current?.focus();
   }, [manual, manualRecognizing]);
-  const chatScroll = useRef<HTMLDivElement>(null),
-    following = useRef(true);
+  const {scrollRef: chatScroll, newMessages, toLatest, scrollHandlers} = useTranscriptFollow(
+    state.conversation, `${session?.id}:${compact}:${pane}`, !!session && !loading,
+  );
   const answerScroll = useRef<HTMLDivElement>(null),
     answerPositions = useRef<Record<string, number>>({});
-  const [newMessages, setNewMessages] = useState(false);
   const journal = useRef<SessionJournal | null>(null);
   const lastContent = useRef('');
   const savedView = useRef<unknown[] | null>(null);
@@ -375,12 +376,6 @@ export default function InterviewScreen() {
     if (state.captureState === 'paused' && session?.status === 'active')
       setSession(value => (value ? {...value, status: 'interrupted'} : value));
   }, [state.captureState, session?.status]);
-  useEffect(() => {
-    const el = chatScroll.current;
-    if (!el) return;
-    if (following.current) el.scrollTop = el.scrollHeight;
-    else setNewMessages(true);
-  }, [state.conversation]);
   const answer = state.answers.find(value => value.id === answerId);
   useLayoutEffect(() => {
     if (answerScroll.current)
@@ -1026,13 +1021,7 @@ export default function InterviewScreen() {
             className="chat-scroll"
             tabIndex={0} aria-label="现场对话列表"
             ref={chatScroll}
-            onScroll={() => {
-              const el = chatScroll.current;
-              if (el) {
-                following.current = el.scrollHeight - el.scrollTop - el.clientHeight < 55;
-                if (following.current) setNewMessages(false);
-              }
-            }}>
+            {...scrollHandlers}>
             {!state.conversation.length && (
               <EmptyState
                 icon={<AudioLines size={24} />}
@@ -1046,12 +1035,7 @@ export default function InterviewScreen() {
           {newMessages && (
             <button
               className="new-messages"
-              onClick={() => {
-                following.current = true;
-                setNewMessages(false);
-                if (chatScroll.current)
-                  chatScroll.current.scrollTop = chatScroll.current.scrollHeight;
-              }}>
+              onClick={toLatest}>
               <ArrowDown size={13} />
               有新对话，回到最新
             </button>

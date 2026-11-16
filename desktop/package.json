@@ -1,6 +1,6 @@
 {
   "name": "audio-capture",
-  "version": "0.5.26",
+  "version": "0.5.27",
   "description": "Interview workspace for preparation, live assistance, and review",
   "private": true,
   "packageManager": "pnpm@9.15.0",

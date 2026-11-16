@@ -84,6 +84,7 @@ export class AudioLatencyDiagnostics {
       safe[key] = number;
     }
     safe.coalesced = data.coalesced === true;
+    safe.in_view = data.in_view === true;
     this.record('rendered', safe);
   }
 }

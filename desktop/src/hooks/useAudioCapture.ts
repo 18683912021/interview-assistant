@@ -231,11 +231,18 @@ export function useAudioCapture() {
     const committed = new Map(state.conversation.map(message => [`${message.source}:${message.utteranceId}`, message]));
     requestAnimationFrame(() => {
       const frameAt = Date.now();
+      const rows = new Map(Array.from(document.querySelectorAll<HTMLElement>('[data-message]'), element => [element.dataset.message, element]));
       for (const metric of batch) {
         const message = committed.get(`${metric.source}:${metric.utterance}`);
         if (!message || (message.revision ?? 0) < metric.revision) continue;
+        const row = rows.get(message.id);
+        const bounds = row?.getBoundingClientRect();
+        const viewport = row?.closest('.chat-scroll')?.getBoundingClientRect();
+        const inView = !!bounds && !!viewport && bounds.width>0 && bounds.height>0 &&
+          viewport.height>0 && bounds.bottom>viewport.top && bounds.top<viewport.bottom;
         api?.reportRenderMetric?.({id:metric.id, renderer_received_at_ms:metric.received,
-          committed_at_ms:committedAt, frame_at_ms:frameAt, coalesced:(message.revision ?? 0)>metric.revision});
+          committed_at_ms:committedAt, frame_at_ms:frameAt, in_view:inView,
+          coalesced:(message.revision ?? 0)>metric.revision});
       }
     });
   }, [api, state.conversation]);
